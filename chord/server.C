@@ -314,23 +314,20 @@ vnode_impl::register_upcall (int progno, cbupcall_t cb)
 void 
 vnode_impl::fill_user_args (user_args *a)
 {
-  a->myID = myID;
-  a->myindex = myindex;
-  a->coords = me_->coords ();
+  a->me_ = me_;
 }
 
 user_args::~user_args () { 
   if (args) xdr_delete (prog->tbl[procno].xdr_arg, args);
-};
+}
 
 void 
 user_args::fill_from (chord_node *from)
 { 
   dorpc_arg *t_arg = transport_header ();
-  from->x = t_arg->src_id;
-  from->r.port = t_arg->src_port;
-  from->vnode_num = t_arg->src_vnode_num;
-  from->coords = t_arg->src_coords;
+  *from = make_chord_node (t_arg->src);
+#if 0
+  /**** I don't think this is needed any more ****/
   const struct sockaddr_in *sa = (struct sockaddr_in *)sbp->getsa ();
   if (sa) {
     from->r.hostname = inet_ntoa (sa->sin_addr);
@@ -358,6 +355,7 @@ user_args::fill_from (chord_node *from)
     if (!hasname)
       warn << "XXX cannot run fill_from on stream (?) connection\n";
   }
+#endif /* 0 */
 }
 
 void 
@@ -389,15 +387,8 @@ user_args::reply (void *res)
   //stuff into a transport wrapper
   dorpc_res *rpc_res = New dorpc_res (DORPC_OK);
 
-  rpc_res->resok->src_id = myID;
+  me_->fill_node (rpc_res->resok->src);
   rpc_res->resok->send_time_echo = send_time;
-  rpc_res->resok->src_vnode_num = myindex;
-  rpc_res->resok->src_coords.setsize (coords.size ());
-  for (unsigned int i = 0; i < coords.size (); i++)
-    rpc_res->resok->src_coords[i] = (int)(coords[i]);
-
-  rpc_res->resok->progno = prog->progno;
-  rpc_res->resok->procno = procno;
   rpc_res->resok->results.setsize (res_len);
   if (res_len > 0) {
     memcpy (rpc_res->resok->results.base (), marshalled_res, res_len);
@@ -560,16 +551,9 @@ vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno,
   ptr<dorpc_arg> arg = New refcounted<dorpc_arg> ();
 
   //header
-  arg->dest_id = l->id ();
-  arg->src_id = myID;
-  arg->src_port = chordnode->get_port ();
-  arg->src_vnode_num = myindex;
-  
-  vec<float> me = me_->coords ();
-  assert (me.size ());
-  arg->src_coords.setsize (me.size());
-  for (size_t i = 0; i < me.size (); i++)
-    arg->src_coords[i] = (int32_t) me[i];
+
+  l->fill_node (arg->dest);
+  me_->fill_node (arg->src);
   
   arg->progno = prog.progno;
   arg->procno = procno;
@@ -659,8 +643,9 @@ vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc,
   else {
     float distance = l->distance ();
     vec<float> u_coords;
-    for (unsigned int i = 0; i < res->resok->src_coords.size (); i++) {
-      float c = ((float)res->resok->src_coords[i]);
+    chord_node n = make_chord_node (res->resok->src);
+    for (unsigned int i = 0; i < n.coords.size (); i++) {
+      float c = ((float)n.coords[i]);
       u_coords.push_back (c);
     }
 

@@ -6,9 +6,8 @@
 
 static const unsigned int TIMEOUT = 70;
 
-int dgram_fd = -1;
-ptr<axprt_dgram> dgram_xprt;
-ptr<aclnt> c;
+static int dgram_fd = -1;
+static ptr<axprt_dgram> dgram_xprt;
 
 void
 doRPCcb (xdrproc_t proc, dorpc_res *res, void *out, aclnt_cb cb, clnt_stat err);
@@ -39,8 +38,7 @@ void
 doRPC (const chord_node &n, const rpc_program &prog,
        int procno, const void *in, void *out, aclnt_cb cb)
 {
-  if (c == NULL)
-    c = get_aclnt (n.r.hostname, n.r.port);
+  ptr<aclnt> c = get_aclnt (n.r.hostname, n.r.port);
   if (c == NULL)
     fatal << "Couldn't get aclnt for " << n.r.hostname << "\n";
   
@@ -48,9 +46,15 @@ doRPC (const chord_node &n, const rpc_program &prog,
   ptr<dorpc_arg> arg = New refcounted<dorpc_arg> ();
 
   //header
-  arg->dest_id = n.x;
-  arg->src_id = bigint (0);
-  arg->src_vnode_num = 0;
+  struct sockaddr_in saddr;
+  bzero(&saddr, sizeof (sockaddr_in));
+  saddr.sin_family = AF_INET;
+  inet_aton (n.r.hostname.cstr (), &saddr.sin_addr);
+
+  arg->dest.machine_order_ipv4_addr = ntohl (saddr.sin_addr.s_addr);
+  arg->dest.machine_order_port_vnnum = (n.r.port << 16) | n.vnode_num;
+  //leave coords as random.
+  bzero (&arg->src, sizeof (arg->src));
   arg->progno = prog.progno;
   arg->procno = procno;
   
@@ -83,8 +87,11 @@ doRPCcb (xdrproc_t proc, dorpc_res *res, void *out, aclnt_cb cb, clnt_stat err)
 
   if (err) {
     warnx << "doRPC: err = " << err << "\n";
-  } else if (!proc (x.xdrp (), out))
-    fatal << "failed to unmarshall result\n";
+  } else if (!proc (x.xdrp (), out)) {
+    warnx << "failed to unmarshall result\n";
+    cb (RPC_CANTSEND);
+    return;
+  }
 
   cb (err);
   delete res;

@@ -81,9 +81,7 @@ struct user_args {
   u_int64_t init_time;
 
   //info about the vnode that will reply
-  chordID myID;
-  int myindex;
-  vec<float> coords;
+  ptr<location> me_;
 
   user_args (svccb *s, void *a, const rpc_program *pr, int p, u_int64_t st) : 
     args (a), procno (p), sbp (s), prog (pr), send_time (st), 

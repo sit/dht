@@ -323,11 +323,10 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
     break;
   case TRANSPORTPROC_DORPC:
     {
-      //v (the destination chordID) is at the top of the header
-      chordID *v = sbp->template getarg<chordID> ();
-      vnode *vnodep = vnodes[*v];
+      chordID v = make_chordID (arg->dest);
+      vnode *vnodep = vnodes[v];
       if (!vnodep) {
-	trace << "unknown vnode " << *v << " for procedure "
+	trace << "unknown vnode " << v << " for procedure "
 	      << sbp->proc ()
 	      << " (" << arg->progno << "." << arg->procno << ").\n";
 	sbp->replyref (rpcstat (DORPC_UNKNOWNNODE));
@@ -353,7 +352,7 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
       if (!proc (x.xdrp (), unmarshalled_args)) {
 	warn << "dispatch: error unmarshalling arguments: "
 	     << arg->progno << "." << arg->procno 
-	     << " from " << *v <<"\n";
+	     << " from " << v <<"\n";
         xdr_delete (prog->tbl[arg->procno].xdr_arg, unmarshalled_args);
 	sbp->replyref (rpcstat (DORPC_MARSHALLERR));
 	return;
@@ -364,7 +363,7 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
 				     prog, arg->procno, arg->send_time);
       vnodep->fill_user_args (ua);
       if (!vnodep->progHandled (arg->progno)) {
-	trace << "dispatch to vnode " << *v << " doesn't handle "
+	trace << "dispatch to vnode " << v << " doesn't handle "
 	      << arg->progno << "." << arg->procno << "\n";
 	ua->replyref (chordstat (CHORD_NOHANDLER));
       } else {	      

@@ -438,21 +438,9 @@ vnode_impl::donotify (user_args *sbp, chord_nodearg *na)
 {
   ndonotify++;
 
-  chord_node s;
-  sbp->fill_from (&s);
-  s.x = make_chordID (s.r.hostname, s.r.port, s.vnode_num);
-  dorpc_arg *t = sbp->transport_header ();
-  if (s.x != t->src_id) {
-    // predecessor not who it says it is
-    warn << t->src_id << " is really " << s.x << ", reject!\n";
-    chordstat res = CHORD_ERRNOENT;
-    sbp->reply (&res);
-  }
-  else {
-    predecessors->update_pred (make_chord_node (na->n));
-    chordstat res = CHORD_OK;
-    sbp->reply (&res);
-  }
+  predecessors->update_pred (make_chord_node (na->n));
+  chordstat res = CHORD_OK;
+  sbp->reply (&res);
 }
 
 void

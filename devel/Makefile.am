@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.31 2004/01/22 06:00:58 fdabek Exp $
+# $Id: Makefile.am,v 1.32 2004/05/03 16:30:09 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -12,7 +12,7 @@ noinst_PROGRAMS = typetest $(VIS) builddb dbdump coords dhc_test
 
 noinst_HEADERS = rpclib.h
 
-walk_SOURCES = walk.C
+walk_SOURCES = walk.C rpclib.C
 walk_LDADD = ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
 
 coords_SOURCES = walk_coords.C

@@ -1,103 +1,18 @@
 #include "chord.h"
+#include "rpclib.h"
 #include <id_utils.h>
 #include "misc_utils.h"
 #include "math.h"
-#include "rxx.h"
-#include "async.h"
-#include "transport_prot.h"
+#include <async.h>
 
 #define TIMEOUT 10
 
 chordID wellknown_ID = -1;
-ptr<axprt_dgram> dgram_xprt;
 
 bool verify = false;
 vec<chord_node> sequential;
 
 void getsucc_cb (chordID n, chord_nodelistextres *res, clnt_stat err);
-void doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_cb cb, 
-	      clnt_stat err);
-void
-setup () 
-{
-  int dgram_fd = inetsocket (SOCK_DGRAM);
-  if (dgram_fd < 0) fatal << "Failed to allocate dgram socket\n";
-  dgram_xprt = axprt_dgram::alloc (dgram_fd, sizeof(sockaddr), 230000);
-  if (!dgram_xprt) fatal << "Failed to allocate dgram xprt\n";
-}
-
-ptr<aclnt>
-get_aclnt (str host, unsigned short port)
-{
-  sockaddr_in saddr;
-  bzero(&saddr, sizeof(sockaddr_in));
-  saddr.sin_family = AF_INET;
-  inet_aton (host.cstr (), &saddr.sin_addr);
-  saddr.sin_port = htons (port);
-
-  ptr<aclnt> c = aclnt::alloc (dgram_xprt, transport_program_1, 
-			       (sockaddr *)&(saddr));
-
-  return c;
-}
-
-void
-doRPC (chordID to, str host, u_short port, int procno, const void *in, void *out, aclnt_cb cb)
-{
-  ptr<aclnt> c = get_aclnt (host, port);
-  if (c == NULL) 
-    fatal << "doRPC: couldn't aclnt::alloc\n";
-
- //form the transport RPC
-  ptr<dorpc_arg> arg = New refcounted<dorpc_arg> ();
-
-  //header
-  arg->dest_id = to;
-  arg->src_id = bigint (0);
-  arg->src_vnode_num = 0;
-  arg->progno = chord_program_1.progno;
-  arg->procno = procno;
-  
-  //marshall the args ourself
-  xdrproc_t inproc = chord_program_1.tbl[procno].xdr_arg;
-  xdrsuio x (XDR_ENCODE);
-  if ((!inproc) || (!inproc (x.xdrp (), (void *)in))) {
-    fatal << "failed to marshall args\n";
-  } else {
-    int args_len = x.uio ()->resid ();
-    arg->args.setsize (args_len);
-    void *marshalled_args = suio_flatten (x.uio ());
-    memcpy (arg->args.base (), marshalled_args, args_len);
-    free (marshalled_args);
-
-    dorpc_res *res = New dorpc_res (DORPC_OK);
-
-    c->timedcall (TIMEOUT, TRANSPORTPROC_DORPC, 
-		  arg, res, wrap (&doRPCcb, to, procno, res, out, cb));
-    
-  }
-}  
-
-
-void
-doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_cb cb, 
-	 clnt_stat err)
-{
-  if (err) {
-    cb (err);
-    return;
-  }
-  
-  xdrmem x ((char *)res->resok->results.base (), 
-	    res->resok->results.size (), XDR_DECODE);
-  xdrproc_t proc = chord_program_1.tbl[procno].xdr_res;
-  assert (proc);
-  if (!proc (x.xdrp (), out)) {
-    warnx << "failed to unmarshall result\n";
-    cb (RPC_CANTSEND);
-  } else 
-    cb (err);
-}
 
 void
 verify_succlist (const vec<chord_node> &zs)
@@ -156,11 +71,11 @@ verify_succlist (const vec<chord_node> &zs)
 }
 
 void
-getsucc (chordID n, str host, u_short port)
+getsucc (const chord_node &n)
 {
   chord_nodelistextres *res = New chord_nodelistextres ();
-  doRPC (n, host, port, CHORDPROC_GETSUCC_EXT, &n, res,
-	 wrap (&getsucc_cb, n, res));
+  doRPC (n, chord_program_1, CHORDPROC_GETSUCC_EXT, &n.x, res,
+	 wrap (&getsucc_cb, n.x, res));
 }
 
 void
@@ -175,7 +90,7 @@ getsucc_cb (chordID id, chord_nodelistextres *res, clnt_stat err)
       fatal << "too many consecutive failures.\n";
     }
     next = sequential[0];
-    getsucc (next.x, next.r.hostname, next.r.port);
+    getsucc (next);
     return;
   }
 
@@ -212,7 +127,7 @@ getsucc_cb (chordID id, chord_nodelistextres *res, clnt_stat err)
   
   if (next.x != zs[1].x)
     warnx << "XXX succlist had wrong successor!!!\n";
-  getsucc (next.x, next.r.hostname, next.r.port);
+  getsucc (next);
 }
 
 void 
@@ -225,8 +140,6 @@ int
 main (int argc, char** argv) 
 {
   setprogname (argv[0]);
-  random_init ();
-  setup ();
 
   str host = "not set";
   unsigned short port = 0;
@@ -275,7 +188,7 @@ main (int argc, char** argv)
   wellknown_node.r.port = port;
   wellknown_node.vnode_num = 0;
   sequential.push_back (wellknown_node);
-  getsucc (wellknown_ID, host, port);
+  getsucc (wellknown_node);
 
 
   amain ();

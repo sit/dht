@@ -96,6 +96,7 @@ struct f_node {
 
   str host, hostname;
   unsigned short port;
+  unsigned short vnode_num;
   chord_nodelistextres *fingers;
   chord_nodeextres *predecessor;
   debruijn_res *debruijn;
@@ -108,6 +109,7 @@ struct f_node {
 
   f_node (const chord_node &n) :
     ID (n.x), host (n.r.hostname), hostname(""), port (n.r.port),
+    vnode_num (n.vnode_num),
     fingers (NULL), predecessor (NULL), debruijn (NULL),
     successors (NULL), toes (NULL),
     selected (true), highlight (false)
@@ -119,7 +121,7 @@ struct f_node {
   }
 
   f_node (chordID i, str h, unsigned short p) :
-    ID (i), host (h), port (p), selected (true), highlight (false) { 
+    ID (i), host (h), port (p), selected (true), highlight (false), vnode_num (0) { 
     draw = check_get_state ();
     fingers = NULL;
     predecessor = NULL;
@@ -311,6 +313,7 @@ add_node (str host, unsigned short port)
   n.x = make_chordID (host, port);
   n.r.hostname = host;
   n.r.port = port;
+  n.vnode_num = 0; // Only for initial node.
   n.coords.clear ();
   f_node *nu = add_node (n);
   return nu;
@@ -341,8 +344,8 @@ doRPCcb (chordID ID, xdrproc_t outproc, dorpc_res *res, void *out, aclnt_cb cb, 
     return;
   
   nu->coords.clear ();
-  for (unsigned int i = 0; i < res->resok->src_coords.size (); i++)
-    nu->coords.push_back (((float)res->resok->src_coords[i]));
+  for (unsigned int i = 0; i < 3; i++)
+    nu->coords.push_back (((float)res->resok->src.coords[i]));
 
   xdrmem x ((char *)res->resok->results.base (), 
 	    res->resok->results.size (), XDR_DECODE);
@@ -366,9 +369,16 @@ doRPC (f_node *nu, const rpc_program &prog, int procno, const void *in, void *ou
   ptr<dorpc_arg> arg = New refcounted<dorpc_arg> ();
 
   //header
-  arg->dest_id = nu->ID;
-  arg->src_id = bigint (0);
-  arg->src_vnode_num = 0;
+  struct sockaddr_in saddr;
+  bzero(&saddr, sizeof (sockaddr_in));
+  saddr.sin_family = AF_INET;
+  inet_aton (nu->host.cstr (), &saddr.sin_addr);
+
+  arg->dest.machine_order_ipv4_addr = ntohl (saddr.sin_addr.s_addr);
+  arg->dest.machine_order_port_vnnum = (nu->port << 16) | nu->vnode_num;
+  //leave coords as random.
+  bzero (&arg->src, sizeof (arg->src));
+
   arg->progno = prog.progno;
   arg->procno = procno;
   

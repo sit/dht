@@ -2,7 +2,6 @@
 #include "misc_utils.h"
 #include <id_utils.h>
 #include "math.h"
-#include "rxx.h"
 #include "async.h"
 #include "transport_prot.h"
 
@@ -41,9 +40,9 @@ get_aclnt (str host, unsigned short port)
 }
 
 void
-doRPC (chordID to, str host, u_short port, int procno, const void *in, void *out, aclnt_coords_cb cb)
+doRPC (const chord_node &n, int procno, const void *in, void *out, aclnt_coords_cb cb)
 {
-  ptr<aclnt> c = get_aclnt (host, port);
+  ptr<aclnt> c = get_aclnt (n.r.hostname, n.r.port);
   if (c == NULL) 
     fatal << "doRPC: couldn't aclnt::alloc\n";
 
@@ -51,9 +50,15 @@ doRPC (chordID to, str host, u_short port, int procno, const void *in, void *out
   ptr<dorpc_arg> arg = New refcounted<dorpc_arg> ();
 
   //header
-  arg->dest_id = to;
-  arg->src_id = bigint (0);
-  arg->src_vnode_num = 0;
+  struct sockaddr_in saddr;
+  bzero(&saddr, sizeof (sockaddr_in));
+  saddr.sin_family = AF_INET;
+  inet_aton (n.r.hostname.cstr (), &saddr.sin_addr);
+
+  arg->dest.machine_order_ipv4_addr = ntohl (saddr.sin_addr.s_addr);
+  arg->dest.machine_order_port_vnnum = (n.r.port << 16) | n.vnode_num; 
+  //leave coords as random.
+  bzero (&arg->src, sizeof (arg->src));
   arg->progno = chord_program_1.progno;
   arg->procno = procno;
   
@@ -72,10 +77,8 @@ doRPC (chordID to, str host, u_short port, int procno, const void *in, void *out
     dorpc_res *res = New dorpc_res (DORPC_OK);
 
     c->timedcall (TIMEOUT, TRANSPORTPROC_DORPC, 
-		  arg, res, wrap (&doRPCcb, to, procno, res, out, cb));
-    
+		  arg, res, wrap (&doRPCcb, n.x, procno, res, out, cb));
   }
-
 }  
 
 
@@ -87,10 +90,8 @@ doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_coords_cb cb,
   if (err) fatal << "RPC err\n";
 
   vec<float> coords;
-  for (unsigned int i = 0; i < res->resok->src_coords.size (); i++)
-    coords.push_back ((float)res->resok->src_coords[i]);
-
-  assert (coords.size () == 3);
+  for (unsigned int i = 0; i < 3; i++)
+    coords.push_back ((float)res->resok->src.coords[i]);
 
   xdrmem x ((char *)res->resok->results.base (), 
 	    res->resok->results.size (), XDR_DECODE);
@@ -105,13 +106,13 @@ doRPCcb (chordID ID, int procno, dorpc_res *res, void *out, aclnt_coords_cb cb,
 }
 
 void
-getsucc (chordID n, str host, u_short port)
+getsucc (const chord_node &n)
 {
   chord_nodelistextres *res = New chord_nodelistextres ();
   u_int64_t start = getusec ();
 
-  doRPC (n, host, port, CHORDPROC_GETSUCC_EXT, &n, res,
-	 wrap (&getsucc_cb, n, host, res, start));
+  doRPC (n, CHORDPROC_GETSUCC_EXT, &n.x, res,
+	 wrap (&getsucc_cb, n.x, n.r.hostname, res, start));
 }
 
 
@@ -134,17 +135,14 @@ getsucc_cb (chordID dest, str desthost,
   }
 
   chord_node z = make_chord_node (res->resok->nlist[1].n);
-  chordID n    = z.x;
-  str host     = z.r.hostname;
-  u_short port = z.r.port;
   
   // wrapped around ring. done.
-  if (n == wellknown_ID) {
+  if (z.x == wellknown_ID) {
     warnx << getusec () << "--------------------------\n";
     exit (0);
   }
 
-  getsucc (n, host, port);
+  getsucc (z);
 }
 
 void 
@@ -196,8 +194,12 @@ main (int argc, char** argv)
     usage ();
     
   wellknown_ID = make_chordID (host, port, 0);
-  getsucc (wellknown_ID, host, port);
-
+  chord_node wellknown_node;
+  wellknown_node.x = wellknown_ID;
+  wellknown_node.r.hostname = host;
+  wellknown_node.r.port = port;
+  wellknown_node.vnode_num = 0;
+  getsucc (wellknown_node);
 
   amain ();
 }

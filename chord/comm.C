@@ -44,7 +44,6 @@
 #include <location.h>
 #include "modlogger.h"
 #include "coord.h"
-#include <transport_prot.h>
 
 ihash<str, rpcstats, &rpcstats::key, &rpcstats::h_link> rpc_stats_tab;
 
