@@ -291,7 +291,7 @@ locationtable::insert (const chordID &n, sfs_hostname s, int p,
 }
 
 void
-locationtable::cacheloc (const chordID &x, net_address &r, cbchallengeID_t cb)
+locationtable::cacheloc (const chordID &x, const net_address &r, cbchallengeID_t cb)
 {
   // char *state;
   locwrap *lx = locs[x];

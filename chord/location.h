@@ -137,7 +137,7 @@ class locationtable : public virtual refcount {
   void insertgood (const chordID &n, sfs_hostname s, int p);
   void insert (const chordID &n, sfs_hostname s, int _p,
 	       cbchallengeID_t cb);
-  void cacheloc (const chordID &x, net_address &r, cbchallengeID_t cb);
+  void cacheloc (const chordID &x, const net_address &r, cbchallengeID_t cb);
   void pinpredlist (const chordID &x);
   void pinsucclist (const chordID &x);
   void pinsucc (const chordID &x);
