@@ -535,7 +535,7 @@ Kademlia::do_lookup(lookup_args *largs, lookup_result *lresult)
     closer::n = largs->key;
     assert(lresult->results.size() <= Kademlia::k);
     for(set<k_nodeinfo*, closer>::const_iterator i = lresult->results.begin(); i != lresult->results.end(); ++i) {
-      KDEBUG(2) << "do_lookup: finished? looking at " << printID(*i)->id << endl;
+      KDEBUG(2) << "do_lookup: finished? looking at " << printID((*i)->id) << endl;
 
       // asked_all has to be false if there's any node in the resultset that we
       // haven't queried yet
