@@ -11,10 +11,17 @@ import time
 import sha
 import random
 import asyncore
+import getopt
 
+# H2BLK defines the number of hashes per interior block
+#  this is the branching factor of the tree
 H2BLK = 4
+
+# BY2BLK = the number of bytes in blocks at the root of the tree
+#          DHash is optimized to store 8K blocks
 BY2BLK = 8192
 
+# convert a hexadecimal string into a bigint
 def ascii2bigint(s):
     a = map(lambda x: int(x,16), s)
     v = 0L
@@ -23,53 +30,76 @@ def ascii2bigint(s):
 	v = v | d
     return v
 
+# fetcher: download the file named by rootkey
+#          file is stored as a venti-style tree
+#  args:
+#     levels - height of Venti tree
+#     nops - number of operations to do in parallel (ignored!)
+#     rootkey - ID of the block at the top of the tree
+#     client - async RPC object
 class fetcher:
-    def __init__ (self, client, rootkey, levels, nops):
+    def __init__ (self, client, rootkey, levels, iofile, nops):
         self.client = client
 	self.nops = nops
+        # keys holds the IDs of blocks we need to fetch
+        # could be: rootblock, internal block IDs, data block IDs...
 	self.keys = [(ascii2bigint(rootkey), int(levels), 0)]
-	self.f = open("out", "w")
-	self.outstanding = 0
+	self.f = open(iofile, "w")
+        self.outstanding = 0
         self.complete = 0
-
+        
     def go(self):
-	self.getnextblock()
+        self.getnextblock()
 
+    # get the next block the reschedule myself to get another
     def getnextblock (self):
+        #if no keys left to fetch, exit
 	if (len(self.keys) == 0):
-	    print "everything is done! happy kitty:)"
+	    print "done."
 	    self.client.close()
 	    return
 
+        # setup the argument for the call to DHash
         arg = dhashgateway_prot.dhash_retrieve_arg ()
+        # get the next key from the array
 	(id, level, off) = self.keys.pop()
         arg.blockID = id
         arg.ctype   = dhash_types.DHASH_CONTENTHASH
         arg.options = 0
         arg.guess   = chord_types.bigint(0)
 
+        # we time each fetch for diagnostics: record start time
         start = time.time()
         try:
             self.outstanding += 1
+            # the RPC client will call self.process when the block comes back
             res = self.client (dhashgateway_prot.DHASHPROC_RETRIEVE, arg,
                                lambda x: self.process(start, arg, level, off, x))
             if res is not None:
-#                self.process (start, arg, res)
-#                above seems like a copy paste error
-                 sys.exit (-1)                
+                 # something went badly wrong
+                 sys.exit (-1)
+                 
         except RPC.UnpackException, e:
             print_exc ()
 
-	print "%x start retrieving" % id
+	print "start retrieving %x" % id
 
+
+    # process a returned block
+    # args:
+    #   start: start time
+    #   arg: argument used to find this block
+    #   level: level block was retrieved from
+    #   off: offset of this block in the file
+    #   res: result of RPC
     def process (self, start, arg, level, off, res):
-        print " in process status %d" % res.status
         self.outstanding -= 1
         self.complete    += 1
         if res.status != dhash_types.DHASH_OK:
             print "%x retrieve failed!" % arg.blockID
         else:
             blk = res.resok.block
+            # print some diagnostics
             for t in res.resok.times:
                 print t,
             print '/', res.resok.errors, res.resok.retries, '/',
@@ -77,21 +107,30 @@ class fetcher:
             for id in res.resok.path:
                 print id,
 
-	    if level == 0: #data block
+            # this was a data block, write the info to the output file
+	    if level == 0:
 	        self.f.seek(off)
 		self.f.write(blk)
-	    else:   
+	    else:
+                # internal node
 	        s = 0
 	        offset = off
 		assert(res.resok.len >= 20)
+                # add all of the keys in this node to the
+                # list of keys to be fetched
 	        while s < res.resok.len:
 		    hash = blk[s:s+20]
-		    print chord_types.str2bigint(hash), " offset ", offset, " level ", level-1
-		    self.keys.append((chord_types.str2bigint(hash), level-1, offset))
+		    self.keys.append((chord_types.str2bigint(hash),
+                                      level-1, offset))
 		    s += 20
+                    # update the offset for each key
 		    offset += (H2BLK**(level - 1))*BY2BLK
+
+        # get another block
         self.getnextblock()
 
+
+# fileobj: convert a file into a tree
 class fileobj:
     def __init__(self, filename):
 	self.f = open(filename, "rb")
@@ -101,6 +140,7 @@ class fileobj:
         self.eoflag = False
         self.rootkey = ""
 
+    # return a block from the tree
     def next_block(self):
 	if self.level == 0:
            data = self.f.read(BY2BLK)
@@ -109,7 +149,6 @@ class fileobj:
            else:
                self.hashes.append(sha.sha(data))
 	       sd = sha.sha(data).digest()
-	       print "hash is ", chord_types.str2bigint(sd), " offset ", self.f.tell()-len(data), " sz", len(data)
 	       return data
         if self.level > 0: 
 	   hashdata = ""
@@ -127,17 +166,22 @@ class fileobj:
 	       self.nexthash = []
 	       self.level += 1
 	   return hashdata
-        
+
+    # returns true if the entire tree has been output
     def eof(self):
         return self.eoflag       
 
+    # below functions only valid if eoflag == true
+    # returns the key of the root of the tree
     def root(self):
         return self.rootkey
 
+    # returns the height of the tree
     def rootlevel(self):
         return self.level    
 
 
+#helper class for storer (and perhaps a high-performance fetcher?)
 class actor:
     def __init__ (self, client, f, nops):
         self.client = client
@@ -149,23 +193,22 @@ class actor:
 
     def go (self):
         if self.going: return
-        # print "going out: %d comp: %d" % (self.outstanding, self.complete)
         self.going = 1
         while (self.outstanding < self.nops and self.f.eof() == 0):
             self.inject()
-            # print "injected out: %d comp: %d" % (self.outstanding, self.complete)
+
         self.going = 0
-        # print "gone"
         if self.outstanding == 0 and self.f.eof() == True:
-            #sys.exit(0)
+            #output root key and level
 	    print str(chord_types.bigint(self.f.root())) + ":" + str(self.f.rootlevel())
             self.client.close()
 
-
+# store a file (inherits from actor)
 class storer (actor):
     def inject (self):
         arg = dhashgateway_prot.dhash_insert_arg ()
-        
+
+        # get the next block and insert it
         arg.block   = self.f.next_block()
         sobj        = sha.sha(arg.block)
         arg.blockID = chord_types.bigint(sobj.digest())
@@ -185,6 +228,8 @@ class storer (actor):
         except RPC.UnpackException, e:
             print_exc ()
 
+    # process the result of the RPC
+    # (mainly only error codes)
     def process (self, start, arg, res):
         end = time.time()
         self.outstanding -= 1
@@ -198,37 +243,45 @@ class storer (actor):
             print
         self.go()
 
+# main
 if __name__ == "__main__":
-    if len(sys.argv) < 6:
-        print """usage: dbm host port file <f or s> nops
-        host and port indicate where lsd is listening for RPCs
-        file is the file to insert
-        <f or s> selects fetch or store
-        nops indicates number of parallel operations to use
-        seed is the seed for the PRNG"""
-        sys.exit(1)
+    try:
+        opts, cmdv = getopt.getopt(sys.argv[1:], "h:n:f:s:o:")
+    except getopt.GetoptError:
+        # print help information and exit:
+        print "filestore -h host:port -[f|s] -n nops -F file [-K key:level]"
+        sys.exit(2)
 
-    host = sys.argv[1]
-    port = int(sys.argv[2])
-    mode = sys.argv[4]
-    nops = int(sys.argv[5])
+    nops = 1
+    for o, a in opts:
+        if o == '-h':
+            (host, sport) = a.split (":")
+            port = int(sport)
+        if o == '-s':
+            mode = 's'
+            iofile = a
+        if o == '-o':
+            iofile = a
+            print "will write output to %s" % iofile
+        if o == '-f':
+            mode = 'f'
+            (root, level) = a.split(":")
+        if o == '-n':
+            nops = int(a)
     
     if mode not in ['f', 's']:
         sys.stderr.write ("Unknown mode '%s'; bailing.\n" % (mode))
         sys.exit (1)
     
-    # XXX redirect stdout to point to whereever file wants you to go.
+    #create the client
     try:
         client = RPC.AClient(dhashgateway_prot,
                              dhashgateway_prot.DHASHGATEWAY_PROGRAM, 1,
                              host, port)
         if mode == 'f':
-	    (root, level) = sys.argv[3].split(":")
-            print root
-	    print "level %d " % int(level)
-	    a = fetcher (client, root, level, nops)
+	    a = fetcher (client, root, level, iofile, nops)
         elif mode == 's':
-            file = fileobj(sys.argv[3])
+            file = fileobj(iofile)
             a = storer (client, file, nops)
     except (socket.error, EOFError, IOError), e:
         print_exc()

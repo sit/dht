@@ -446,9 +446,9 @@ class AClient(ClientBase,asynchat.async_chat):
         if cb is None:
             raise TypeError, "Must pass cb to async client"
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.connect_cb = cb
         self.connect((self.host, self.port))
         self.set_terminator(None)
-        self.connect_cb = cb
         return None
 
     def handle_reply(self):
