@@ -185,7 +185,7 @@ distance(chordID a, chordID b)
 {
   if (a < b) return (b - a);
   else {
-    bigint t = bigint(1) << 160;
+    bigint t = bigint(1) << NBIT;
     return (t - a) + b;
   }
 }
@@ -195,6 +195,35 @@ diff (chordID a, chordID b)
 {
   chordID diff = (b - a);
   if (diff > 0) return diff;
-  else return (bigint(1) << 160) - diff;
+  else return (bigint(1) << NBIT) - diff;
 }
 
+u_long
+topbits (int n, chordID a)
+{
+  assert (n <= 32);
+  chordID x = a >> (NBIT - n);
+  return x.getui ();
+}
+
+u_long
+n1bits (u_long n)
+{
+  u_long t = 0;
+  for (int i = 0; i < 32; i++) {
+    if (0x1 & n) t++;
+    n = n >> 1;
+  }
+  return t;
+}
+
+u_long
+log2 (u_long n)
+{
+  u_long l = 0;
+  for (int i = 0; i < 32; i++) {
+    if (0x1 & n) l = i;
+    n = n >> 1;
+  }
+  return l;
+}

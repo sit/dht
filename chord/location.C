@@ -33,6 +33,17 @@ locationtable::locationtable (ptr<chord> _chordnode, int set_rpcdelay,
   nconnections = 0;
   size_cachedlocs = 0;
   size_connections = 0;
+  nvnodes = 0;
+  nnodes = 0;
+  nnodessum = 0;
+}
+
+void
+locationtable::replace_estimate (u_long o, u_long n)
+{
+  assert (nvnodes > 0);
+  nnodessum = nnodessum - o + n;
+  nnodes = nnodessum / nvnodes;
 }
 
 void
@@ -109,33 +120,49 @@ locationtable::betterpred1 (chordID current, chordID target, chordID candidate)
   return between (current, target, candidate);
 }
 
+// assumes some of form of the triangle equality!
 bool
-locationtable::betterpred2 (chordID current, chordID target, chordID newpred)
+locationtable::betterpred2 (chordID myID, chordID current, chordID target, 
+			    chordID newpred)
 { 
-  location *c = getlocation (current);
-  location *n = getlocation (newpred);
-  if ((c->nrpc == 0) || (n->nrpc == 0)) {
-    return between (current, target, newpred);
-  } else {
-    float cdelay = c->rpcdelay / c->nrpc;
-    float ndelay = n->rpcdelay / n->nrpc;
-    float delayratio = cdelay/ndelay;
-    // fprintf (stderr, "cdelay %f ndelay %f delayratio %f\n", cdelay, ndelay, 
-    //     delayratio);
-    chordID cdiff = distance (c->n, target);
-    chordID ndiff = distance (n->n, target);
-    double cd = 1; // cdiff.getdouble ();  XXX requires changes to bigint.h
-    double nd = 1; // ndiff.getdouble ();  XXX
-    double diffratio = cd / nd;
-    // fprintf (stderr, "cdiff: %f ndiff %f diffratio %f\n", cd, nd, 
-    //     diffratio);
-    if ((delayratio <= 1) && (diffratio <= 1)) 
-      return 0; // c is closer in chord space and time
-    else if ((delayratio > 1) && (diffratio > 1))
-      return 1; // n is closer in chord space and time
-    else   // true, if n is closer in time than in space
-      return (delayratio > diffratio);
+  // #avg hop latency
+  // #estimate the number of nodes to figure how many bits to compare
+  bool r = false;
+  if (between (myID, target, newpred)) { // is newpred a possible pred?
+    location *c = getlocation (current);
+    location *n = getlocation (newpred);
+    if ((current == myID) && (newpred != myID)) {
+      r = true;
+    } else if ((c->nrpc == 0) || (n->nrpc == 0)) {
+      r = between (current, target, newpred);
+    } else {
+      // char buf1 [1024];
+      // char buf2 [1024];
+      u_long nbit;
+      if (nnodes <= 1) nbit = 0;
+      else nbit = log2 (nnodes / log2 (nnodes));
+      u_long t1 = topbits (nbit, target);
+      u_long t2 = topbits (nbit, current);
+      u_long t3 = topbits (nbit, newpred);
+      u_long h1 = (t1 > t2) ? t1 - t2 : t2 - t1;
+      u_long h2 = (t1 > t3) ? t1 - t3 : t3 - t1;
+      //      sprintf (buf1, "\nnbit %lu t1 0x%lx t2 0x%lx t3 0x%lx h1 0x%lx h2 0x%lx h1 %lu h2 %lu\n",
+      //       nbit, t1, t2, t3, h1, h2, n1bits(h1), n1bits(h2));
+      if (n1bits (h2) > n1bits (h1)) {  // newpred corrects more bits
+	r = true;
+      } else if (n1bits (h2) == n1bits (h1)) {
+	float cdelay = c->rpcdelay / c->nrpc;
+	float ndelay = n->rpcdelay / n->nrpc;
+	//	sprintf (buf2, " cdelay %f ndelay %f\n", cdelay, ndelay);
+	r = ndelay < cdelay;
+	if (r) {
+	  // warnx << "betterpred2 is " << r << " c " << current << " t " << target 
+	  // << " n " << newpred << buf1 << buf2;
+	}
+      }
+    }
   }
+  return r;
 }
 
 chordID

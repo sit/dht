@@ -121,6 +121,10 @@ class locationtable : public virtual refcount {
   u_int64_t nrpcfailed;
   unsigned nconnections;
 
+  u_long nnodessum;
+  u_long nnodes;
+  unsigned nvnodes;
+
   qhash<long, svccb *> octbl;
   unsigned long last_xid;
   
@@ -142,7 +146,10 @@ class locationtable : public virtual refcount {
   locationtable (ptr<chord> _chordnode, int set_rpcdelay, int _max_cache,
 		 int _max_connections);
   bool betterpred1 (chordID current, chordID target, chordID newpred);
-  bool betterpred2 (chordID current, chordID target, chordID newpred);
+  bool betterpred2 (chordID myID, chordID current, chordID target, 
+		    chordID newpred);
+  void incvnodes () { nvnodes++; };
+  void replace_estimate (u_long o, u_long n);
   void insert (chordID &_n, sfs_hostname _s, int _p, chordID &_source);
   location *getlocation (chordID &x);
   void deleteloc (chordID &n);

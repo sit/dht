@@ -2,6 +2,7 @@
 - test lookups during joins
 - test inserts during joins
 
+- server selection
 - implement nodeID identification
 - reimplement alert
 - smart implementation of location table

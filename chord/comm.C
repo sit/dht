@@ -263,7 +263,7 @@ locationtable::stats ()
 {
   char buf[1024];
 
-  warnx << "LOCATION TABLE STATS\n";
+  warnx << "LOCATION TABLE STATS: estimate # nodes " << nnodes << "\n";
   warnx << "total # of RPCs: good " << nrpc << " failed " << nrpcfailed << "\n";
     fprintf(stderr, "       Average latency: %f\n", ((float) (rpcdelay/nrpc)));
   warnx << "total # of connections opened: " << nconnections << "\n";

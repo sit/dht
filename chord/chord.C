@@ -39,6 +39,7 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   succlist[0].alive = true;
   nsucc = 0;
   stable = 0;
+  locations->incvnodes ();
   locations->increfcnt (myID);
   for (int i = 1; i <= NBIT; i++) {
     succlist[i].alive = false;
@@ -53,6 +54,7 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   predecessor.n = myID;
   predecessor.alive = true;
 
+  nnodes = 0;
   ngetsuccessor = 0;
   ngetpredecessor = 0;
   nfindsuccessor = 0;
@@ -135,6 +137,7 @@ void
 vnode::stats ()
 {
   warnx << "VIRTUAL NODE STATS " << myID << "\n";
+  warnx << "# estimated node in ring " << nnodes << "\n";
   warnx << "# getsuccesor requests " << ndogetsuccessor << "\n";
   warnx << "# getpredecessor requests " << ndogetpredecessor << "\n";
   warnx << "# findclosestpred requests " << ndofindclosestpred << "\n";
@@ -148,7 +151,7 @@ vnode::stats ()
   warnx << "# findsuccessor calls " << nfindsuccessor << "\n";
   warnx << "# hops for findsuccessor " << nhops << "\n";
   {
-    char buf[1024];
+    char buf[100];
     sprintf (buf, "   Average # hops: %f\n", ((float)(nhops/nfindsuccessor)));
     warnx << buf;
   }
@@ -215,6 +218,34 @@ vnode::findpredfinger (chordID &x)
   return p;
 }
 
+chordID 
+vnode::findpredfinger2 (chordID &x)
+{
+  chordID p = myID;
+  for (int i = 1; i <= NBIT; i++) {
+    if ((finger_table[i].first.alive) && 
+	locations->betterpred2 (myID, p, x, finger_table[i].first.n)) {
+      p = finger_table[i].first.n;
+    }
+  }
+  // warnx << "findpredfinger2: " << myID << " of " << x << " is " << p << "\n";
+  return p;
+}
+
+u_long
+vnode::estimate_nnodes () 
+{
+  u_long n;
+  chordID d = diff (myID, succlist[nsucc].n);
+  if ((d > 0) && (nsucc > 0)) {
+    chordID s = d / nsucc;
+    chordID c = bigint (1) << NBIT;
+    chordID q = c / s;
+    n = q.getui ();
+  } else n = 1;
+  return n;
+}
+
 chordID
 vnode::lookup_closestpred (chordID &x)
 {
@@ -279,7 +310,8 @@ vnode::stabilize_finger (int f)
 
   if (i == 0) {
     if (stable == 1) {
-      warnx << gettime () << " stabilize: " << myID << " stable!\n";
+      warnx << gettime () << " stabilize: " << myID 
+	    << " stable! with estimate # nodes " << nnodes << "\n";
       print ();
     } 
     stable++;
@@ -405,6 +437,9 @@ vnode::stabilize_getsucclist_cb (int i, chordID s, net_address r,
       if ((i+1) > nsucc) nsucc = i+1;
       //      locations->checkrefcnt (5);
     }
+    u_long n = estimate_nnodes ();
+    locations->replace_estimate (nnodes, n);
+    nnodes = n;
   }
 }
 

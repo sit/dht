@@ -36,5 +36,8 @@
  bool betweenrightincl (chordID &a, chordID &b, chordID &n);
  chordID diff(chordID a, chordID b);
  chordID distance(chordID a, chordID b);
+ u_long topbits (int n, chordID a);
+ u_long n1bits (u_long n);
+ u_long log2 (u_long n);
  void warnt(char *msg);
 #endif /* _CHORD_UTIL_H */

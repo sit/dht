@@ -38,7 +38,7 @@
 #include <location.h>
 
 #define NBIT     160     // size of Chord identifiers in bits
-#define NIMM     NBIT    // number of immediate successors
+#define NIMM     32      // log of # vnodes
 
 typedef int cb_ID;
 
@@ -93,26 +93,27 @@ class vnode : public virtual refcount  {
 
   qhash<unsigned long, cbdispatch_t> dispatch_table;
 
-  unsigned ngetsuccessor;
-  unsigned ngetpredecessor;
-  unsigned nfindsuccessor;
-  unsigned nhops;
-  unsigned nmaxhops;
-  unsigned nfindpredecessor;
-  unsigned nfindsuccessorrestart;
-  unsigned nfindpredecessorrestart;
-  unsigned ntestrange;
-  unsigned nnotify;
-  unsigned nalert;
-  unsigned ngetfingers;
+  u_long nnodes;	  // estimate of the number of chord nodes
+  u_long ngetsuccessor;
+  u_long ngetpredecessor;
+  u_long nfindsuccessor;
+  u_long nhops;
+  u_long nmaxhops;
+  u_long nfindpredecessor;
+  u_long nfindsuccessorrestart;
+  u_long nfindpredecessorrestart;
+  u_long ntestrange;
+  u_long nnotify;
+  u_long nalert;
+  u_long ngetfingers;
 
-  unsigned ndogetsuccessor;
-  unsigned ndogetpredecessor;
-  unsigned ndofindclosestpred;
-  unsigned ndonotify;
-  unsigned ndoalert;
-  unsigned ndotestrange;
-  unsigned ndogetfingers;
+  u_long ndogetsuccessor;
+  u_long ndogetpredecessor;
+  u_long ndofindclosestpred;
+  u_long ndonotify;
+  u_long ndoalert;
+  u_long ndotestrange;
+  u_long ndogetfingers;
 
   timecb_t *stabilize_tmo;
   vec<cbaction_t> actionCallbacks;
@@ -121,6 +122,9 @@ class vnode : public virtual refcount  {
   void updatefingers (chordID &x, net_address &r);
   void replacefinger (node *n);
   void print ();
+  u_long estimate_nnodes ();
+  chordID findpredfinger (chordID &x);
+  chordID findpredfinger2 (chordID &x);
 
   int stabilize_succlist (int s);
   int stabilize_finger (int f);
@@ -197,7 +201,6 @@ class vnode : public virtual refcount  {
 
   // For other modules
   int countrefs (chordID &x);
-  chordID findpredfinger (chordID &x);
   chordID findsuccfinger (chordID &x);
   void deletefingers (chordID &x);
   void stats (void);
