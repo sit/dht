@@ -13,11 +13,11 @@
 
 /*
  * TODO
- * XXX Timeout recursive requests that have been outstanding for "too long"
  * XXX Come up with a way to pass succs_desired into the iterator.
  */
 route_recchord::route_recchord (ptr<vnode> vi, chordID xi) : 
   route_iterator (vi, xi),
+  started_ (false),
   routeid_ (get_nonce ())
 {
 }
@@ -27,6 +27,7 @@ route_recchord::route_recchord (ptr<vnode> vi, chordID xi,
 				int uc_procno,
 				ptr<void> uc_args) : 
   route_iterator (vi, xi, uc_prog, uc_procno, uc_args),
+  started_ (false),
   routeid_ (get_nonce ())
 {
 }
@@ -40,6 +41,28 @@ long
 route_recchord::get_nonce ()
 {
   return random_getword ();
+}
+
+bool
+route_recchord::started () const
+{
+  return started_;
+}
+
+const timespec &
+route_recchord::start_time () const
+{
+  return start_time_;
+}
+
+void
+route_recchord::handle_timeout ()
+{
+  chordID myID = v->my_ID ();
+  trace << myID << ": handle_timeout (" << routeid_ << ", " << x << ")\n";
+  done = true;
+  r = CHORD_RPCFAILURE;
+  cb (done);
 }
 
 void
@@ -124,6 +147,8 @@ route_recchord::first_hop (cbhop_t cbi, ptr<chordID> guess)
   v->doRPC (p, recroute_program_1, RECROUTEPROC_ROUTE,
 	    ra, res,
 	    wrap (this, &route_recchord::first_hop_cb, deleted, ra, res, p));
+  
+  clock_gettime (CLOCK_REALTIME, &start_time_);
 }
 
 void

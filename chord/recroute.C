@@ -22,14 +22,20 @@ template<class T>
 recroute<T>::recroute (ref<chord> _chord,
 		       ref<rpc_manager> _rpcm,
 		       ref<location> _l)
-  : T (_chord, _rpcm, _l)
+  : T (_chord, _rpcm, _l),
+    sweep_cb (NULL)
 {
   addHandler (recroute_program_1, wrap (this, &recroute<T>::dispatch));
+  sweep_cb = delaycb (60, 0, wrap (this, &recroute<T>::sweeper));
 }
 
 template<class T>
 recroute<T>::~recroute ()
 {
+  if (sweep_cb) {
+    timecb_remove (sweep_cb);
+    sweep_cb = NULL;
+  }
   route_recchord *r = routers.first ();
   route_recchord *rn = NULL;
   while (r != NULL) {
@@ -38,6 +44,34 @@ recroute<T>::~recroute ()
     delete r;
     r = rn;
   }
+}
+
+template<class T>
+void
+recroute<T>::sweeper ()
+{
+  sweep_cb = NULL;
+  
+  timespec now;
+  clock_gettime (CLOCK_REALTIME, &now);
+  timespec maxtime;
+  maxtime.tv_sec = 60; // XXX hardcoded constant. let all return w/i 60s.
+
+  route_recchord *r = routers.first ();
+  route_recchord *rn = NULL;
+  while (r != NULL) {
+    rn = routers.next (r);
+    if (r->started ()) {
+      timespec st = r->start_time ();
+      if (now - st > maxtime) {
+	routers.remove (r);
+	r->handle_timeout ();
+      }
+    }
+    r = rn;
+  }
+  
+  sweep_cb = delaycb (maxtime.tv_sec, wrap (this, &recroute<T>::sweeper));
 }
 
 template<class T>

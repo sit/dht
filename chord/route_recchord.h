@@ -5,7 +5,7 @@
 #include <ihash.h>
 
 class location;
-struct timecb_t;
+struct timespec;
 struct user_args;
 struct recroute_complete_arg;
 
@@ -13,6 +13,9 @@ struct recroute_complete_arg;
  * A recursive variant of Chord routing.
  */
 class route_recchord : public route_iterator {
+  timespec start_time_;
+  bool started_;
+  
   static long get_nonce ();
   void first_hop_cb (ptr<bool> del,
 		     ptr<recroute_route_arg> ra,
@@ -38,6 +41,10 @@ class route_recchord : public route_iterator {
   ptr<location> pop_back ();
 
   void handle_complete (user_args *sbp, recroute_complete_arg *ca);
+  void handle_timeout ();
+  
+  bool started () const;
+  const timespec &start_time () const;
 };
 
 #endif /* !_ROUTE_RECCHORD_H_ */

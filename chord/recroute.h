@@ -9,6 +9,7 @@
 template<class T>
 class recroute : public T {
  private:
+  timecb_t *sweep_cb;
   ihash<long, route_recchord,
     &route_recchord::routeid_, &route_recchord::hlink_> routers;
   
@@ -27,6 +28,8 @@ class recroute : public T {
   void docomplete (user_args *sbp, recroute_complete_arg *ca);
 
   void route_cb (cbroute_t cb, route_iterator *ri, bool done);
+
+  void sweeper ();
   
  public:
   static ref<vnode> produce_vnode (ref<chord> _chordnode,
