@@ -3,6 +3,6 @@
 
 ROUTING_MODE=debruijn
 NUMLSDS=1
-NUMVNODES=10
+NUMVNODES=16
 
 . $srcdir/hopcount-runner.sh
