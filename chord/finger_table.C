@@ -26,7 +26,7 @@ finger_table::init (ptr<vnode> v, ptr<locationtable> locs, chordID ID)
     starts[i] = successorID (myID, i);
     fingers[i] = myID;
     locations->pinsucc (starts[i]);
-    locations->pinsucclist (starts[i]);
+    // locations->pinsucclist (starts[i]);
   }
 
 }
@@ -226,10 +226,12 @@ finger_table::stabilize_findsucc_cb (chordID dn, int i,
     while (i < NBIT && finger (i) == succs[0].x)
       i++;
     f = i;
+#if 0
     // XXX this number 3 should probably be configured elsewhere.
     //     see vnode_impl::closestcoordpred
     for (u_int j = 0; j < 3 && j < succs.size (); j++)
       locations->insert (succs[j]);
+#endif /* 0 */
   }
 }
 
