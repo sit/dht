@@ -87,7 +87,7 @@ ChordFinger::fix_fingers()
 void
 ChordFinger::reschedule_stabilizer(void *x)
 {
-  printf("%s stabilizing\n",ts());
+  printf("%s start stabilizing\n",ts());
   if (!node()->alive()) {
     _stab_running = false;
     return;

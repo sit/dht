@@ -13,7 +13,7 @@ using namespace std;
 extern bool vis;
 extern bool static_sim;
 
-#undef CHORD_DEBUG
+#define CHORD_DEBUG
 Chord::Chord(Node *n, Args& a, LocTable *l)
   : DHTProtocol(n), _isstable (false)
 {
@@ -226,6 +226,7 @@ Chord::find_successors(CHID key, uint m, bool is_lookup)
 	nr.v.clear();
 	return nr.v;
       }
+      record_stat(2);
       timeout++;
       assert(route.size() >=2 && route.size() < 15);
       if (route.size () > 1) {
@@ -577,7 +578,7 @@ Chord::fix_successor()
 
   if (!ok) {
 #ifdef CHORD_DEBUG
-    printf("%s fix_successor old (%llu) succcessor (%u,%qx) died\n", ts(), t, succ1.ip, succ1.id);
+    printf("%s fix_successor old succcessor (%u,%qx) died\n", ts(), succ1.ip, succ1.id);
 #endif
     loctable->del_node(succ1);
     return me;
