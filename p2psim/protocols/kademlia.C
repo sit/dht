@@ -976,6 +976,14 @@ k_nodes::insert(Kademlia::NodeID n, bool touch)
   checkrep(false);
 }
 // }}}
+// {{{ k_nodes::clear
+void
+k_nodes::clear()
+{
+  nodes.clear();
+  _nodes_by_id.clear();
+}
+// }}}
 // {{{ k_nodes::erase
 /*
  * pre: n is in the flyweight. n is contained in this k_nodes.
@@ -1145,6 +1153,7 @@ k_bucket::k_bucket(k_bucket *parent, Kademlia *k) : leaf(true), parent(parent)
   nodes = New k_nodes(this);
   assert(nodes);
   replacement_cache = New set<k_nodeinfo*, Kademlia::younger>;
+  assert(replacement_cache);
   checkrep();
 }
 // }}}
@@ -1338,10 +1347,12 @@ k_bucket::collapse()
   KDEBUG(2) << "k_bucket::collapse" << endl;
   checkrep();
 
-  if(!leaf)
+  if(!leaf) {
+    child[0]->collapse();
+    child[1]->collapse();
     leaf = true;
-  else {
-    nodes->nodes.clear();
+  } else {
+    nodes->clear();
     replacement_cache->clear();
   }
 
@@ -1367,9 +1378,16 @@ k_bucket::divide(unsigned depth)
   leaf = false;
   if(!child[0])
     child[0] = New k_bucket(this);
+  child[0]->leaf = true;
+  child[0]->nodes->clear();
+  child[0]->replacement_cache->clear();
+  assert(child[0]);
+
   if(!child[1])
     child[1] = New k_bucket(this);
-  assert(child[0]);
+  child[1]->leaf = true;
+  child[1]->nodes->clear();
+  child[1]->replacement_cache->clear();
   assert(child[1]);
 
   // divide k-bucket
@@ -1390,7 +1408,7 @@ k_bucket::divide(unsigned depth)
     child[1]->divide(depth+1);
 
   replacement_cache->clear();
-  nodes->nodes.clear();
+  nodes->clear();
 
   checkrep();
 }
@@ -1564,6 +1582,9 @@ k_stabilized::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftr
 void
 k_finder::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftright)
 {
+  if(!k->leaf)
+    return;
+
   k->checkrep();
   for(Kademlia::nodeinfo_set::const_iterator i = k->nodes->nodes.begin(); i != k->nodes->nodes.end(); ++i)
     if((*i)->id == _n)
@@ -1605,6 +1626,9 @@ k_delete::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftright
 void
 k_check::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftright)
 {
+  if(!k->leaf)
+    return;
+
   k->checkrep();
 
   set<Protocol*> l = Network::Instance()->getallprotocols(k->kademlia()->proto_name());
@@ -1645,6 +1669,9 @@ void
 k_collect_closest::execute(k_bucket *k, string prefix, unsigned depth, unsigned leftright)
 {
   k->checkrep();
+
+  if(!k->leaf)
+    return;
 
   // for debugging purposes only
   Kademlia::NodeID _id = k->kademlia()->id();

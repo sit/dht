@@ -286,6 +286,7 @@ public:
   bool inrange(Kademlia::NodeID) const;
   bool full() const { return nodes.size() >= Kademlia::k; }
   bool empty() const { return !nodes.size(); }
+  void clear();
   inline void checkrep(bool = true) const;
 
   nodeset_t nodes;
