@@ -264,7 +264,7 @@ chord::dispatch (svccb *sbp)
       vnode *vnodep = vnodes[fa->v.n];
       assert (vnodep);
       ntestrange++;
-      vnodep->dotestandfind (sbp, fa);
+      vnodep->dotestrange_findclosestpred (sbp, fa);
     }
     break;
   case CHORDPROC_GETFINGERS: 

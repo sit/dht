@@ -361,7 +361,7 @@ vnode::doget_predecessor (svccb *sbp)
 }
 
 void
-vnode::dotestandfind (svccb *sbp, chord_testandfindarg *fa) 
+vnode::dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa) 
 {
   ndotestrange++;
   chordID x = fa->x;
@@ -371,19 +371,23 @@ vnode::dotestandfind (svccb *sbp, chord_testandfindarg *fa)
       betweenrightincl(myID, finger_table[1].first.n, x) ) {
     res = New chord_testandfindres (CHORD_INRANGE);
     warnt("CHORD: testandfind_inrangereply");
-    warnx << "dotestandfind: " << myID << " succ of " << x << " is " 
-	  << finger_table[1].first.n << "\n";
+    //    warnx << "dotestrange_findclosestpred: " << myID << " succ of " << x 
+    //  << " is " << finger_table[1].first.n << "\n";
     res->inres->x = finger_table[1].first.n;
     res->inres->r = locations->getaddress (finger_table[1].first.n);
     sbp->reply(res);
     delete res;
   } else {
     res = New chord_testandfindres (CHORD_NOTINRANGE);
+#ifdef UNOPT
+    chordID p = findpredfinger (fa->x);
+#else
     chordID p = locations->findpredloc (fa->x);
+#endif /* UNOPT */
     res->noderes->node = p;
     res->noderes->r = locations->getaddress (p);
-    warnx << "dotestandfind: " << myID << " closest pred of " << fa->x 
-	  << " is " << p << "\n";
+    // warnx << "dotestrange_findclosestpred: " << myID << " closest pred of " 
+    //  << fa->x << " is " << p << "\n";
     warnt("CHORD: testandfind_notinrangereply");
     sbp->reply(res);
     delete res;
@@ -395,12 +399,16 @@ void
 vnode::dofindclosestpred (svccb *sbp, chord_findarg *fa)
 {
   chord_noderes res(CHORD_OK);
-  chordID p = locations->findpredloc (fa->x);
+#ifdef UNOPT
+    chordID p = findpredfinger (fa->x);
+#else
+    chordID p = locations->findpredloc (fa->x);
+#endif /* UNOPT */
   ndofindclosestpred++;
   res.resok->node = p;
   res.resok->r = locations->getaddress (p);
-  warnx << "dofindclosestpred: " << myID << " closest pred of " << fa->x 
-	<< " is " << p << "\n";
+  // warnx << "dofindclosestpred: " << myID << " closest pred of " << fa->x 
+  //<< " is " << p << "\n";
   warnt("CHORD: dofindclosestpred_reply");
   sbp->reply (&res);
 }

@@ -99,7 +99,7 @@ vnode::get_predecessor_cb (chordID n, cbsfsID_t cb, chord_noderes *res,
 void
 vnode::find_successor (chordID &n, chordID &x, cbroute_t cb)
 {
-  warn << "find_successor: " << n << " " << x << "\n";
+  //  warn << "find_successor: " << n << " " << x << "\n";
   nfindsuccessor++;
   find_predecessor (n, x,
 		    wrap (mkref (this), &vnode::find_predecessor_cb, cb, x));
@@ -133,7 +133,7 @@ vnode::find_predecessor_cb (cbroute_t cb, chordID x, chordID p,
       get_successor (p, wrap (mkref(this), &vnode::find_successor_cb, 
 			      cb, search_path));
     } else {
-      warnx << "find_predecessor_cb: " << myID << " find " << x << "\n";
+      warnx << "find_predecessor_cb: " << myID << " find succ of " << x << "\n";
       for (unsigned i = 0; i < search_path.size (); i++) {
 	warnx << search_path[i] << "\n";
       }
@@ -151,6 +151,8 @@ vnode::find_successor_cb (cbroute_t cb, route search_path, chordID s,
   cb (s, search_path, status);
 }
 
+
+// XXX with OPT it finds the successor!
 void
 vnode::find_predecessor (chordID &n, chordID &x, cbroute_t cb) 
 {
@@ -162,8 +164,15 @@ vnode::find_predecessor (chordID &n, chordID &x, cbroute_t cb)
     route search_path;
     cb (n, search_path, CHORD_OK);
   } else {
-    testSearchCallbacks (n, x, wrap (this, &vnode::find_pred_test_cache_cb,
-				     n, x, cb));
+    route search_path;
+    search_path.push_back(n);
+    findpredecessor_cbstate *st = 
+      New findpredecessor_cbstate (x, n, search_path, cb);
+#ifdef UNOPT
+    find_closestpred (n, x, st);
+#else
+    testrange_findclosestpred (n, x, st);
+#endif /* UNOPT */
   }
 }
 
@@ -171,35 +180,23 @@ void
 vnode::find_predecessor_restart (chordID &n, chordID &x, route search_path,
 			       cbroute_t cb)
 {
-  ptr<chord_findarg> fap = New refcounted<chord_findarg>;
-  chord_noderes *res = New chord_noderes (CHORD_OK);
   findpredecessor_cbstate *st = 
       New findpredecessor_cbstate (x, n, search_path, cb);
   nfindpredecessorrestart++;
-  fap->v.n = n;
-  fap->x = x;
-  locations->doRPC (n, chord_program_1, CHORDPROC_FINDCLOSESTPRED, fap, res,
-	 wrap (mkref (this), &vnode::find_closestpred_cb, n, st, res));
+  find_closestpred (n, x, st);
 }
 
 void
-vnode::find_pred_test_cache_cb (chordID n, chordID x, cbroute_t cb, int found) 
+vnode::find_closestpred (chordID &n, chordID &x, findpredecessor_cbstate *st)
 {
-  route search_path;
-  search_path.push_back(n);
-  if (!found) {
-    ptr<chord_findarg> fap = New refcounted<chord_findarg>;
-    chord_noderes *res = New chord_noderes (CHORD_OK);
-    findpredecessor_cbstate *st = 
-      New findpredecessor_cbstate (x, n, search_path, cb);
-    fap->v.n = n;
-    fap->x = x;
-    warnt("CHORD: issued_FINDCLOSESTPRED_RPC");
-    locations->doRPC (n, chord_program_1, CHORDPROC_FINDCLOSESTPRED, fap, res,
-	   wrap (mkref (this), &vnode::find_closestpred_cb, n, st, res));
-  } else {
-    cb (n, search_path, CHORD_CACHEHIT);
-  }
+  ptr<chord_findarg> fap = New refcounted<chord_findarg>;
+  chord_noderes *res = New chord_noderes (CHORD_OK);
+  fap->v.n = n;
+  fap->x = x;
+  warnt("CHORD: issued_FINDCLOSESTPRED_RPC");
+  locations->doRPC (n, chord_program_1, CHORDPROC_FINDCLOSESTPRED, fap, res,
+		    wrap (mkref (this), &vnode::find_closestpred_cb, n, st, 
+			  res));
 }
 
 void
@@ -211,69 +208,57 @@ vnode::find_closestpred_cb (chordID n, findpredecessor_cbstate *st,
     warnx << "find_closestpred_cb: RPC failure " << err << "\n";
     chordnode->deletefingers (n);
     st->cb (n, st->search_path, CHORD_RPCFAILURE);
+    delete st;
   } else if (res->status) {
     warnx << "find_closestpred_cb: RPC error" << res->status << "\n";
     st->cb (n, st->search_path, res->status);
+    delete st;
   } else {
-    warnx << "find_closestpred_cb: pred of " << st->x << " is " 
-	  << res->resok->node << "\n";
+    //    warnx << "find_closestpred_cb: pred of " << st->x << " is " 
+    //  << res->resok->node << "\n";
     locations->cacheloc (res->resok->node, res->resok->r, n);
     st->search_path.push_back(res->resok->node);
-    findpredecessor_cbstate *stn = 
-      New findpredecessor_cbstate (st->x, res->resok->node,
-				   st->search_path, st->cb);
-    testSearchCallbacks(res->resok->node, st->x,
-			wrap(this, &vnode::find_closestpred_test_cache_cb,
-			     res->resok->node, stn));
-  }
-  delete st;
-}
-
-void
-vnode::find_closestpred_test_cache_cb (chordID node, 
-				     findpredecessor_cbstate *st, int found) 
-{ 
-  if (!found) {
-    ptr<chord_testandfindarg> arg = New refcounted<chord_testandfindarg> ();
-    arg->v.n = node;
-    arg->x = st->x;
-    chord_testandfindres *res = New chord_testandfindres (CHORD_OK);
-    warnt("CHORD: issued_testandfind");
-    ntestrange++;
-    locations->doRPC (node, chord_program_1, 
-		      CHORDPROC_TESTRANGE_FINDCLOSESTPRED, arg, res,
-		      wrap (this, &vnode::test_and_find_cb, res, st));
-
 #ifdef UNOPT
     get_successor (node, 
 		   wrap (mkref (this), &vnode::find_closestpred_succ_cb, st));
+#else
+    testrange_findclosestpred (res->resok->node, st->x, st);
 #endif /* UNOPT */
-
-  } else {
-    warn << "CACHE HIT\n";
-    exit(10);
-    st->cb (st->nprime, st->search_path, CHORD_CACHEHIT);
-    //    delete st;
   }
 }
 
 void
-vnode::test_and_find_cb (chord_testandfindres *res, findpredecessor_cbstate *st,
-		       clnt_stat err) 
+vnode::testrange_findclosestpred (chordID n, chordID x, 
+				  findpredecessor_cbstate *st)
 {
-  warnt("CHORD: test_and_find_cb");
+  ptr<chord_testandfindarg> arg = New refcounted<chord_testandfindarg> ();
+  arg->v.n = n;
+  arg->x = x;
+  chord_testandfindres *nres = New chord_testandfindres (CHORD_OK);
+  warnt("CHORD: issued_testandfind");
+  ntestrange++;
+  locations->doRPC (n, chord_program_1, CHORDPROC_TESTRANGE_FINDCLOSESTPRED, 
+		    arg, nres, 
+		    wrap (this, &vnode::testrange_findclosestpred_cb, 
+			  nres, st));
+}
+
+void
+vnode::testrange_findclosestpred_cb (chord_testandfindres *res,
+				     findpredecessor_cbstate *st, 
+				     clnt_stat err) 
+{
+  warnt("CHORD: testrange_findclosestpred_cb");
   if (err) {
     chordnode->deletefingers(st->nprime);
     st->cb(st->nprime, st->search_path, CHORD_RPCFAILURE);
     delete st;
     warnt("CHORD: test_and_find RPC ERROR");
   } else if (res->status == CHORD_INRANGE) { 
-    // XXX returns the wrong result if the top level call is find_predecessor
-    // instead of find_successor
     st->search_path.push_back(res->inres->x);
     locations->cacheloc (res->inres->x, res->inres->r, st->nprime);
-    warn << "test_and_find_cb: " << myID << " succ of " << st->nprime 
-	 << " is " << res->inres->x << "\n";
+    //    warn << "testrange_findclosestpred_cb: " << myID << " succ of " 
+    // << st->nprime << " is " << res->inres->x << "\n";
     st->cb (st->nprime, st->search_path, CHORD_OK);
     delete st;
   } else if (res->status == CHORD_NOTINRANGE) {
@@ -306,16 +291,16 @@ vnode::find_closestpred_succ_cb (findpredecessor_cbstate *st,
     st->cb (st->x, st->search_path, status);
     delete st;
   } else {
-    warnx << "find_closestpred_succ_cb: " << myID << " succ of " 
-	  << st->nprime << " is " << s << "\n";
+    //    warnx << "find_closestpred_succ_cb: " << myID << " succ of " 
+    //  << st->nprime << " is " << s << "\n";
     if (st->nprime == s) {
       warnx << "find_closestpred_succ_cb: " << s << " is the only Chord node\n";
       st->cb (st->nprime, st->search_path, CHORD_OK);
       delete st;
     } else if (!betweenrightincl (st->nprime, s, st->x)) {
       // XXX should we add something to the search path ???
-      warnx << "find_closestpred_succ_cb: " << st->x << " is not between " 
-	    << st->nprime << " and " << s << "\n";
+      //      warnx << "find_closestpred_succ_cb: " << st->x << " is not between " 
+      //    << st->nprime << " and " << s << "\n";
       ptr<chord_findarg> fap = New refcounted<chord_findarg>;
       chord_noderes *res = New chord_noderes (CHORD_OK);
       fap->v.n = st->nprime;
@@ -326,8 +311,8 @@ vnode::find_closestpred_succ_cb (findpredecessor_cbstate *st,
 			wrap (mkref (this), &vnode::find_closestpred_cb, 
 			      st->nprime, st, res));
     } else {
-      warnx << "find_closestpred_succ_cb: " << st->x << " is between " 
-            << st->nprime << " and " << s << "\n";
+      //      warnx << "find_closestpred_succ_cb: " << st->x << " is between " 
+      //    << st->nprime << " and " << s << "\n";
       st->cb (st->nprime, st->search_path, CHORD_OK);
       delete st;
     }

@@ -115,19 +115,19 @@ class vnode : public virtual refcount  {
   void stabilize_getsucclist_cb (int i, chordID s, net_address r, 
 				 chordstat status);
   void join_getsucc_cb (chordID s, route r, chordstat status);
+  void find_closestpred (chordID &n, chordID &x, findpredecessor_cbstate *st);
   void find_closestpred_cb (chordID n, findpredecessor_cbstate *st,
 			    chord_noderes *res, clnt_stat err);
-  void test_and_find_cb (chord_testandfindres *res, 
-			 findpredecessor_cbstate *st, clnt_stat err);
   void find_successor_cb (cbroute_t cb, route sp, chordID s, net_address r,
 			    chordstat status);
   void find_predecessor_cb (cbroute_t cb, chordID x, chordID p, 
 			    route search_path, chordstat status);
-  void find_pred_test_cache_cb (chordID n, chordID x, cbroute_t cb, int found);
+  void testrange_findclosestpred (chordID node, chordID x, 
+				  findpredecessor_cbstate *st);
+  void testrange_findclosestpred_cb (chord_testandfindres *res, 
+			 findpredecessor_cbstate *st, clnt_stat err);
   void find_closestpred_succ_cb (findpredecessor_cbstate *st, chordID s,
 				 net_address r, chordstat status);
-  void find_closestpred_test_cache_cb (chordID node, 
-				       findpredecessor_cbstate *st, int found);
   void get_successor_cb (chordID n, cbsfsID_t cb, chord_noderes *res, 
 			 clnt_stat err);
   void get_succ_cb (callback<void, chordID, chordstat>::ref cb, 
@@ -171,7 +171,7 @@ class vnode : public virtual refcount  {
   void doget_predecessor (svccb *sbp);
   void dofindclosestsucc (svccb *sbp, chord_findarg *fa);  
   void dofindclosestpred (svccb *sbp, chord_findarg *fa);
-  void dotestandfind (svccb *sbp, chord_testandfindarg *fa);
+  void dotestrange_findclosestpred (svccb *sbp, chord_testandfindarg *fa);
   void donotify (svccb *sbp, chord_nodearg *na);
   void doalert (svccb *sbp, chord_nodearg *na);
   void dogetfingers (svccb *sbp);
