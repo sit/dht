@@ -131,7 +131,7 @@ dhashgateway::retrieve_cb (svccb *sbp, ptr<dhash_block> block)
 
   dhash_retrieve_res res (DHASH_OK);
 
-  if (!block) 
+  if (!block)
     res.set_status (DHASH_NOENT);
   else {
     res.resok->block.setsize (block->len);
@@ -357,20 +357,24 @@ dhashclient::retrievecb (cbretrieve_t cb, bigint key, ref<dhash_retrieve_res> re
   else if (res->status != DHASH_OK)
     errstr = dhasherr2str (res->status);
   else {
-    dhash_ctype ctype = dhash::block_type (res->resok->block.base (), res->resok->block.size ());
-    if (!dhash::verify (key, ctype, res->resok->block.base (), res->resok->block.size ()))
+    dhash_ctype ctype = dhash::block_type (res->resok->block.base (), 
+					   res->resok->block.size ());
+    if (!dhash::verify (key, ctype, res->resok->block.base (), 
+			res->resok->block.size ())) {
       errstr = strbuf () << "data did not verify";
-    else {
+      printf("%s\n", res->resok->block.base ());
+    } else {
       // success
-      ptr<dhash_block> blk = dhash::get_block_contents (res->resok->block.base(), 
-							res->resok->block.size(), ctype);
+      ptr<dhash_block> blk = 
+	dhash::get_block_contents (res->resok->block.base(), 
+				   res->resok->block.size(), ctype);
       blk->hops = res->resok->hops;
       (*cb) (blk);
       return;
     }
   }
 
-  // warn << "dhashclient::retrieve failed: " << key << ": " << errstr << "\n";
+  warn << "dhashclient::retrieve failed: " << key << ": " << errstr << "\n";
   (*cb) (NULL); // failure
 }
 

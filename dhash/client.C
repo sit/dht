@@ -38,10 +38,6 @@
 #include "dmalloc.h"
 #endif
 
-unsigned int MTU = (getenv ("DHASH_MTU") ?
-		   atoi (getenv ("DHASH_MTU")) :
-		   1024);
-
 
 // ---------------------------------------------------------------------------
 // DHASH_STORE
@@ -110,227 +106,13 @@ protected:
 public:
 
   static void execute (dhashcli *dhcli, chordID destID, chordID blockID,
-                       ref<dhash_block> block, cbstore_t cb, store_status store_type = DHASH_STORE)
+                       ref<dhash_block> block, cbstore_t cb, 
+		       store_status store_type = DHASH_STORE)
   {
     vNew dhash_store (dhcli, destID, blockID, block, store_type, cb);
   }
 };
 
-
-// ---------------------------------------------------------------------------
-// DHASH_RETRIEVE
-//    - retrieves a given blockID
-//    - Handles the lookup of the chord node holding the block
-//      and various RACE/FAILURE conditions, by way of dhcli->lookup_iter.
-//    - XXX these failure conditions need to be code reviewed.  
-//          Can a simpler algorithm like this work:
-//          while (nodeID = lookup (blockID))
-//             <err, path, block> = retrieve (nodeID, blockID)
-//             if     (err == NO_SUCH_BLOCK) 
-//                  return NO_SUCH_BLOCK
-//             elseif (err == RETRY)
-//                  notify (path.penultimate, path.back); // and try around..
-//             else
-//                   return DHASH_CHORDERR;
-//
-//    - XXX err....the above isn't really correct..
-
-
-class dhash_retrieve {
-protected:
-  dhashcli *dhcli;
-  uint npending;
-  bool error;
-  bigint key;
-  cbretrieve_t cb;  
-  ptr<dhash_block> block;
-  bool usecachedsucc;
-  bool do_cache;
-
-  route first_path;
-  
-  dhash_retrieve (dhashcli *dhcli, bigint key, bool usecachedsucc,
-                  bool do_cache, cbretrieve_t cb)
-    : dhcli (dhcli), npending (0), error (false), key (key), cb (cb),
-      block (NULL), usecachedsucc (usecachedsucc), do_cache (do_cache)
-  {
-    npending++;
-    dhcli->lookup_iter (key, 0, MTU, usecachedsucc,
-	                wrap (this, &dhash_retrieve::first_chunk_cb));
-  }
-
-  dhash_retrieve (dhashcli *dhcli, chordID source, bigint key, cbretrieve_t cb)
-    : dhcli (dhcli), npending (0), error (false), key (key), cb (cb),
-      block (NULL), usecachedsucc (usecachedsucc), do_cache (false)
-  {
-    npending++;
-    dhcli->lookup_iter (source, key, 0, MTU, false, 0,
-			wrap (this, &dhash_retrieve::first_chunk_cb));
-  }
-
-
-  void first_chunk_cb (dhash_stat status, route path, ptr<dhash_block_chunk> chunk)
-  {
-    ///warn << "dhash_retrieve::first_chunk_cb\n";
-
-    if (status == DHASH_OK) {
-      size_t totsz     = chunk->total_len;
-      size_t nread     = chunk->chunk_len;
-      chordID sourceID = chunk->source;
-      block            = New refcounted<dhash_block> ((char *)NULL, totsz);
-      block->hops      = chunk->hops;
-      while (nread < totsz) {
-	uint32 offset = nread;
-	uint32 length = MIN (MTU, totsz - nread);
-	npending++;
-	dhcli->lookup_iter (sourceID, key, offset, length, usecachedsucc,
-			    chunk->cookie,
-			    wrap (this, &dhash_retrieve::finish));
-	nread += length;
-      }
-      first_path = path;
-
-    }
-    
-    finish (status, path, chunk);
-  }
-    
-
-  void finish (dhash_stat status, route path, ptr<dhash_block_chunk> chunk)
-  {
-    ///warn << "dhash_retrieve::finish(), npending=" << npending << "\n";
-    npending--;
-    
-    if (status != DHASH_OK) 
-      fail (dhasherr2str (status));
-    else {
-      uint32 off = chunk->chunk_offset;
-      uint32 len = chunk->chunk_len;
-      if (off + len > block->len)
-	fail (strbuf ("bad fragment: off %d, len %d, block %d", off, len, block->len));
-      else
-	memcpy (&block->data[off], chunk->chunk_data, len);
-    }
-
-    if (npending == 0) {
-      if (error)
-	block = NULL;
-      (*cb) (block);
-      if (block && 
-	  do_cache && 
-	  (dhash::block_type (block) == DHASH_CONTENTHASH)) {
-	unsigned int path_size = first_path.size ();
-	if (path_size > 1) {
-	  chordID cache_dest = first_path[path_size - 2];
-	  dhash_store::execute (dhcli, cache_dest, key, block, 
-				wrap (this, &dhash_retrieve::finish_cached),
-				DHASH_CACHE);
-	}
-
-      }
-      else
-	delete this;
-    }
-  }
-
-  void finish_cached (bool error, chordID ID)
-  {
-    if (error)
-      warn << "error caching " << ID << "\n";
-  }
-
-  void fail (str errstr)
-  {
-    warn << "dhash_retrieve failed: " << key << ": " << errstr << "\n";
-    error = true;
-  }
-
-
-public:
-  static void execute (dhashcli *dhcli, bigint key, bool usecachedsucc,
-		       bool do_cache,
-                       cbretrieve_t cb)
-  {
-    vNew dhash_retrieve (dhcli, key, usecachedsucc, do_cache, cb);
-  }
-  static void execute (dhashcli *dhcli, chordID source, bigint key,
-                       cbretrieve_t cb)
-  {
-    vNew dhash_retrieve (dhcli, source, key, cb);
-  }
-};
-
-
-
-
-
-// ---------------------------------------------------------------------------
-// DHASH_INSERT
-//     - store a give block of data into DHASH.
-//     - The location of the ring  
-//     - XXX don't really handle RETRY/FAILURE/RACE conditions..
-
-
-class dhash_insert {
-protected:
-  dhashcli *dhcli;
-  chordID blockID ;
-  ref<dhash_block> block;
-  cbinsert_t cb;
-  store_status store_type;
-  chordID destID;
-
-  dhash_insert (dhashcli *dhcli, chordID blockID, ref<dhash_block> block, 
-		bool usecachedsucc, store_status store_type, cbinsert_t cb)
-    : dhcli (dhcli), blockID (blockID), block (block), cb (cb), 
-		  store_type (store_type)
-  {
-    dhcli->lookup (blockID, usecachedsucc, 
-		   wrap (this, &dhash_insert::lookup_cb));
-  }
-  
-  void lookup_cb (dhash_stat status, chordID destID)
-  {
-    //    warn << "store " << blockID << " at " << destID << "\n";
-    
-    if (status != DHASH_OK)
-      (*cb) (true, bigint(0)); // failure
-    else {
-      dhash_store::execute (dhcli, destID, blockID, block, 
-			    cb,
-			    store_type);
-
-    }
-    delete this;
-  }
-
-
-public:
-  static void execute (dhashcli *dhcli, 
-		       chordID blockID,
-                       ref<dhash_block> block, 
-		       bool usecachedsucc, 
-		       cbinsert_t cb, 
-		       store_status type = DHASH_STORE)
-  {
-    vNew dhash_insert (dhcli, blockID, block, usecachedsucc, type, cb);
-  }
-};
-
-
-
-// ---------------------------------------------------------------------------
-// UTIL ROUTINES
-
-static bool
-straddled (route path, chordID &k)
-{
-  int n = path.size ();
-  if (n < 2) return false;
-  chordID prev = path[n-1];
-  chordID pprev = path[n-2];
-  return between (pprev, prev, k);
-}
 
 
 
@@ -349,7 +131,52 @@ void
 dhashcli::retrieve (chordID blockID, bool usecachedsucc, cbretrieve_t cb)
 {
   ///warn << "dhashcli::retrieve\n";
-  dhash_retrieve::execute (this, blockID, usecachedsucc, do_cache, cb);
+  ptr<route_dhash> iterator = 
+    New refcounted<route_dhash>(clntnode->active,
+				blockID,
+				usecachedsucc);
+
+  iterator->first_hop (wrap (this, &dhashcli::retrieve_hop_cb, iterator, cb));
+}
+
+void
+dhashcli::retrieve_hop_cb (ptr<route_dhash> iterator, cbretrieve_t cb,
+			   bool done) 
+{
+  if (done) {
+    if (iterator->status ()) {
+      (*cb) (NULL);
+    } else {
+      ptr<dhash_block> res = iterator->get_block ();
+      cb (res); 
+      cache_block (res, iterator->path (), iterator->key ());
+    }
+  } else 
+    iterator->next_hop ();
+}
+
+void
+dhashcli::cache_block (ptr<dhash_block> block, route search_path, chordID key)
+{
+
+  if (block && do_cache && 
+      (dhash::block_type (block) == DHASH_CONTENTHASH)) {
+    unsigned int path_size = search_path.size ();
+    if (path_size > 1) {
+      chordID cache_dest = search_path[path_size - 2];
+      dhash_store::execute (this, cache_dest, key, block, 
+			    wrap (this, &dhashcli::finish_cache),
+			    DHASH_CACHE);
+    }
+    
+  }
+}
+
+void
+dhashcli::finish_cache (bool error, chordID dest)
+{
+  if (error)
+    warn << "error caching block\n";
 }
 
 //use this version if you already know where the block is (and guessing
@@ -357,189 +184,47 @@ dhashcli::retrieve (chordID blockID, bool usecachedsucc, cbretrieve_t cb)
 void
 dhashcli::retrieve (chordID source, chordID blockID, cbretrieve_t cb)
 {
-  ///warn << "dhashcli::retrieve\n";
-  dhash_retrieve::execute (this, source, blockID, cb);
+  ptr<route_dhash> iterator = 
+    New refcounted<route_dhash>(clntnode->active,
+				blockID,
+				source); //this is the "guess"
+
+  iterator->first_hop (wrap (this, &dhashcli::retrieve_with_source_cb, 
+			     iterator, cb));  
 }
 
+void
+dhashcli::retrieve_with_source_cb (ptr<route_dhash> iterator,
+				   cbretrieve_t cb, bool done)
+{
+  if (done) {
+    if (iterator->status ()) 
+      (*cb) (NULL);
+    else 
+      cb (iterator->get_block ()); 
+  } else 
+    iterator->next_hop ();
+}
 
 void
 dhashcli::insert (chordID blockID, ref<dhash_block> block, 
                   bool usecachedsucc, cbinsert_t cb)
 {
-  dhash_insert::execute (this, blockID, block, usecachedsucc, cb);
-}
-
-
-//use this version when the location of the block is known
-//i.e. to fetch chunks of a block after the first
-void
-dhashcli::lookup_iter (chordID sourceID, chordID blockID, uint32 off,
-                       uint32 len, bool usecachedsucc, int cookie,
-		       dhashcli_lookup_itercb_t cb)
-{
-  warnt ("DHASH: lookup_iter");
-  ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
-  arg->v     = sourceID;
-  arg->key   = blockID;
-  arg->start = off;
-  arg->len   = len;
-  arg->cookie = cookie;
-
-  ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> (DHASH_OK);
-  doRPC (sourceID, dhash_program_1, DHASHPROC_FETCHITER, arg, res,
-    	 wrap (this, &dhashcli::lookup_iter_with_source_cb, res, cb));
+  //  dhash_insert::execute (this, blockID, block, usecachedsucc, cb);
+  lookup (blockID, usecachedsucc, 
+	  wrap (this, &dhashcli::insert_lookup_cb,
+		blockID, block, cb));
 }
 
 void
-dhashcli::lookup_iter_with_source_cb (ptr<dhash_fetchiter_res> fres,
-				      dhashcli_lookup_itercb_t cb, clnt_stat err)
+dhashcli::insert_lookup_cb (chordID blockID, ref<dhash_block> block,
+			    cbinsert_t cb, dhash_stat status, chordID destID)
 {
-  ///warn << "dhashcli::lookup_iter_with_source_cb\n";
-
-  route path;
-
-  if (err || fres->status != DHASH_COMPLETE) {
-    warn << "fetch w/ source: " << err << " " << fres->status << "\n";
-    cb (DHASH_RPCERR, path, New refcounted<dhash_block_chunk>());
-  } else { 
-    path.push_back (fres->compl_res->source);
-    ptr<dhash_block_chunk> chunk = 
-      New refcounted<dhash_block_chunk> (fres->compl_res->res.base (),
-					 fres->compl_res->res.size (),
-					 fres->compl_res->offset,
-					 fres->compl_res->attr.size,
-					 fres->compl_res->source);
-    chunk->cookie = fres->compl_res->cookie;
-    (*cb) (DHASH_OK, path, chunk);
-  }
+  if (status != DHASH_OK)
+    (*cb) (true, bigint(0)); // failure
+  else 
+    dhash_store::execute (this, destID, blockID, block,  cb);
 }
-
-
-chordID
-dhashcli::next_hop (chordID k, bool cachedsucc)
-{
-  if (cachedsucc)
-    return clntnode->lookup_closestsucc (k);
-  else
-#ifdef FINGERS
-    return clntnode->lookup_closestpred (k);
-#else
-    return clntnode->lookup_closestsucc (k);
-#endif    
-}
-
-//use this version of lookup_iter on the first block fetch
-void
-dhashcli::lookup_iter (chordID blockID, uint32 off, uint32 len,
-                       bool usecachedsucc, dhashcli_lookup_itercb_t cb)
-{
-  
-  route path;
-  path.push_back (next_hop (blockID, usecachedsucc));
-
-  ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
-  arg->key   = blockID;
-  arg->start = off;
-  arg->len   = len;
-  arg->v     = path[0];
-  arg->cookie = 0;
-
-  ref<dhash_fetchiter_res> res = New refcounted <dhash_fetchiter_res> (DHASH_CONTINUE);
-
-  doRPC (path[0], dhash_program_1, DHASHPROC_FETCHITER, arg, res, 
-	 wrap (this, &dhashcli::lookup_iter_cb, blockID, cb, res, path, 0));
-}
-
-
-
-
-void 
-dhashcli::lookup_iter_cb (chordID blockID, dhashcli_lookup_itercb_t cb,
-			  ref<dhash_fetchiter_res> res,
-			  route path,
-			  int nerror,
-			  clnt_stat err)
-{
-  ///warn << "dhashcli::lookup_iter_cb\n";
-
-  ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
-  arg->key   = blockID;
-  arg->start = 0;
-  arg->len   = MTU;
-
-  if (err) {
-    /* CASE I */
-    chordID last;
-    chordID plast;
-    nerror += 1; //nerror = hops + 100*errors
-    if (path.size () > 0)
-      last = path.pop_back ();
-    if (path.size () > 0) {
-      plast = path.back ();
-      clntnode->alert (plast, last);
-    } else {
-      plast = next_hop (blockID, false);
-      path.push_back (plast);
-    }
-    if (plast == clntnode->clnt_ID ()) {
-      (*cb) (DHASH_NOENT, path, NULL);
-    } else {
-      // XXX Assumes an in-order RPC transport, otherwise retry
-      //     might reach prev before alert can update tables.
-      //     Warning.....................the transport is UDP!!
-      arg->v = plast;
-      ref<dhash_fetchiter_res> nres = New refcounted<dhash_fetchiter_res> (DHASH_CONTINUE);
-      doRPC (plast, dhash_program_1, DHASHPROC_FETCHITER, arg, nres,
-	     wrap(this, &dhashcli::lookup_iter_cb, blockID, cb, nres, path, nerror));
-    }
-  } else if (res->status == DHASH_COMPLETE) {
-    /* CASE II */
-    
-    ptr<dhash_block_chunk> chunk = 
-      New refcounted<dhash_block_chunk> (res->compl_res->res.base (),
-					 res->compl_res->res.size (),
-					 res->compl_res->offset,
-					 res->compl_res->attr.size,
-					 path.back ());
-
-    chunk->hops = path.size () + nerror*100;
-    chunk->cookie = res->compl_res->cookie;
-    (*cb) (DHASH_OK, path, chunk);
-  } else if (res->status == DHASH_CONTINUE) {
-    chordID next = res->cont_res->next.x;
-    chordID prev = path.back ();
-    
-    if ((next == prev) || (straddled (path, blockID))) {
-      (*cb) (DHASH_NOENT, path, NULL);
-    } else {
-      clntnode->cacheloc
-	(next, res->cont_res->next.r,
-	 wrap (this, &dhashcli::lookup_iter_chalok_cb, arg, cb, path, nerror));
-    }
-  } else {
-    /* the last node queried was responbile but doesn't have it */
-    (*cb) (DHASH_NOENT, path, NULL);
-  }
-}
-
-void dhashcli::lookup_iter_chalok_cb (ptr<s_dhash_fetch_arg> arg,
-				      dhashcli_lookup_itercb_t cb,
-				      route path,
-				      int nerror,
-				      chordID next, bool ok, chordstat s)
-{
-  if (ok && s == CHORD_OK) {
-    path.push_back (next);
-    assert (path.size () < 1000);
-
-    arg->v = next;
-    ptr<dhash_fetchiter_res> nres = New refcounted<dhash_fetchiter_res> (DHASH_CONTINUE);
-    doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, arg, nres,
-	   wrap (this, &dhashcli::lookup_iter_cb,
-		 arg->key, cb, nres, path, nerror));
-  }
-}
-
 
 //like insert, but doesn't do lookup. used by transfer_key
 void
@@ -550,7 +235,8 @@ dhashcli::storeblock (chordID dest, chordID ID, ref<dhash_block> block, cbstore_
 
 void
 dhashcli::store (chordID destID, chordID blockID, char *data, size_t len,
-                 size_t off, size_t totsz, dhash_ctype ctype, store_status store_type,
+                 size_t off, size_t totsz, dhash_ctype ctype, 
+		 store_status store_type,
 		 dhashcli_storecb_t cb)
 {
   ref<dhash_storeres> res = New refcounted<dhash_storeres> (DHASH_OK);
@@ -572,10 +258,6 @@ void
 dhashcli::store_cb (dhashcli_storecb_t cb, ref<dhash_storeres> res,
 		    clnt_stat err)
 {
-  ///warn << "XXXXXX dhashcli::store_cb\n";
-
-
-
   // XXX is this ok?
   if (err) {
     warn << "dhashcli::store_cb: err " << err << "\n";

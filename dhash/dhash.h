@@ -39,6 +39,7 @@
 #include <qhash.h>
 #include <sys/time.h>
 #include <chord.h>
+#include <route.h>
 /*
  *
  * dhash.h
@@ -95,6 +96,8 @@ struct dhash_block {
   char *data;
   size_t len;
   int hops;
+  int errors;
+  chordID source;
 
   ~dhash_block () {  delete [] data; }
 
@@ -104,30 +107,6 @@ struct dhash_block {
     if (buf)
       memcpy (data, buf, len);
   }
-};
-
-struct dhash_block_chunk {
-  char *chunk_data;
-  size_t chunk_len;
-  size_t chunk_offset;
-  size_t total_len;
-  int hops;
-  chordID source;
-  chordID key;
-  int cookie;
-
-  ~dhash_block_chunk () {delete chunk_data; };
-  
-  dhash_block_chunk (char *cd, size_t clen, size_t coffset, size_t tlen, chordID source) :
-    chunk_data (new char[clen]), chunk_len (clen), 
-    chunk_offset (coffset), total_len (tlen), source (source) 
-  {
-    if (chunk_data)
-      memcpy (chunk_data, cd, chunk_len);
-  };
-
-      dhash_block_chunk () : chunk_data (NULL), chunk_len (0) {};
-      
 };
 
 struct pk_partial {
@@ -289,42 +268,40 @@ typedef callback<void, bool, chordID>::ref cbinsert_t;
 typedef callback<void, bool, ptr<insert_info> >::ref cbinsertgw_t;
 typedef cbinsert_t cbstore_t;
 typedef callback<void, ptr<dhash_block> >::ref cbretrieve_t;
-typedef callback<void, dhash_stat, route, ptr<dhash_block_chunk> >::ref dhashcli_lookup_itercb_t;
 typedef callback<void, ptr<dhash_storeres> >::ref dhashcli_storecb_t;
 typedef callback<void, dhash_stat, chordID>::ref dhashcli_lookupcb_t;
 typedef callback<void, dhash_stat, chordID, route>::ref dhashcli_routecb_t;
+
+class route_dhash;
 
 class dhashcli {
   ptr<chord> clntnode;
   bool do_cache;
 
  private:
-  void doRPC (chordID ID, rpc_program prog, int procno, ptr<void> in, void *out, aclnt_cb cb);
-  void lookup_iter_with_source_cb (ptr<dhash_fetchiter_res> fres, dhashcli_lookup_itercb_t cb, clnt_stat err);
-  void lookup_iter_cb (chordID blockID, dhashcli_lookup_itercb_t cb, ref<dhash_fetchiter_res> res, 
-		       route path, int nerror,  clnt_stat err);
-  void lookup_iter_chalok_cb (ptr<s_dhash_fetch_arg> arg,
-			      dhashcli_lookup_itercb_t cb,
-			      route path,
-			      int nerror,
-			      chordID next, bool ok, chordstat s);
-  void lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb, chordID succID, route path, chordstat err);
+  void doRPC (chordID ID, rpc_program prog, int procno, ptr<void> in, 
+	      void *out, aclnt_cb cb);
+
+  void store_cb (dhashcli_storecb_t cb, ref<dhash_storeres> res,clnt_stat err);
+  void lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
+			   chordID succID, route path, chordstat err);
   void lookup_findsucc_route_cb (chordID blockID, dhashcli_routecb_t cb,
 				 chordID succID, route path, chordstat err);
-  void store_cb (dhashcli_storecb_t cb, ref<dhash_storeres> res,  clnt_stat err);
-  chordID next_hop (chordID k, bool cachedsucc);
+  void retrieve_hop_cb (ptr<route_dhash> iterator, cbretrieve_t cb, bool done);
+  void cache_block (ptr<dhash_block> block, route search_path, chordID key);
+  void finish_cache (bool error, chordID dest);
+  void retrieve_with_source_cb (ptr<route_dhash> iterator,
+				cbretrieve_t cb, bool done);
+  void insert_lookup_cb (chordID blockID, ref<dhash_block> block,
+			 cbinsert_t cb, dhash_stat status, chordID destID);
 
  public:
-  dhashcli (ptr<chord> node, bool do_cache) : clntnode (node), do_cache (do_cache) {}
+  dhashcli (ptr<chord> node, bool do_cache) : clntnode (node), 
+    do_cache (do_cache) {};
   void retrieve (chordID blockID, bool usecachedsucc, cbretrieve_t cb);
   void retrieve (chordID source, chordID blockID, cbretrieve_t cb);
   void insert (chordID blockID, ref<dhash_block> block, 
                bool usecachedsucc, cbinsert_t cb);
-  void lookup_iter (chordID sourceID, chordID blockID, uint32 off,
-                    uint32 len, bool usecachedsucc, int cookie,
-		    dhashcli_lookup_itercb_t cb);
-  void lookup_iter (chordID blockID, uint32 off, uint32 len,
-                    bool usecachedsucc, dhashcli_lookup_itercb_t cb);
   void storeblock (chordID dest, chordID blockID, ref<dhash_block> block,
 		   cbstore_t cb, store_status stat = DHASH_STORE);
   void store (chordID destID, chordID blockID, char *data, size_t len,
@@ -382,9 +359,6 @@ public:
 };
 
 
-
-
-
 class dhashgateway {
   ptr<asrv> clntsrv;
   ptr<chord> clntnode;
@@ -396,6 +370,41 @@ class dhashgateway {
 
 public:
   dhashgateway (ptr<axprt_stream> x, ptr<chord> clnt, bool do_cache = false);
+};
+
+
+class route_dhash : public route_iterator {
+
+public:
+  route_dhash (ptr<vnode> vi, chordID xi, 
+	       bool ucs = false);
+  route_dhash (ptr<vnode> vi, chordID xi,
+	       chordID first_hop, bool ucs = false);
+  void next_hop ();
+  void first_hop (cbhop_t cb);
+  ptr<dhash_block> get_block () {return block;};
+  dhash_stat get_status () { return result; };
+  
+private:
+  int nerror;
+  int nhops;
+  bool use_cached_succ;
+  int npending;
+  bool fetch_error;
+  ptr<dhash_block> block;
+  dhash_stat result;
+  bool given_first;
+  chordID first_hop_guess;
+
+  void make_hop (chordID &n);
+  void make_hop_cb (ptr<dhash_fetchiter_res> res, 
+		    clnt_stat err);
+  void nexthop_chalok_cb (chordID s, bool ok, chordstat status);  
+  chordID lookup_next_hop (chordID k);
+  bool straddled (route path, chordID &k);
+
+  void finish_block_fetch (ptr<dhash_fetchiter_res> res, clnt_stat err);
+  void fail (str errstr);
 };
 
 

@@ -531,6 +531,7 @@ dhash::fetch(chordID id, int cookie, cbvalue cb)
   //if the cookie is in the hash, return that value
   pk_partial *part = pk_cache[cookie];
   if (part) {
+    warn << "COOKIE HIT\n";
     cb (cookie, part->val, DHASH_OK);
     //if done, free
   } else {
