@@ -432,7 +432,8 @@ Kelips::lookup_internal(lookup_args *a)
 	_allhops.push_back(history.size());
     }
     assert( lasthop == key );
-    record_lookup_stat( ip(), lasthop, t2-a->start, true, true );
+    record_lookup_stat( ip(), lasthop, t2-a->start, true, true, 0 /* hops */, 
+			0 /* num_timeouts */, 0 /* time_timeouts */ );
   }else if ((t2 - a->start) > _max_lookup_time) {
     record_lookup_stat( ip(), lasthop, t2-a->start, false, false);
     if (Node::collect_stat()) {
@@ -449,7 +450,9 @@ Kelips::lookup_internal(lookup_args *a)
     if (Node::collect_stat()) 
       _ok_failures += 1;
     if (a->retrytimes >= 2) 
-      record_lookup_stat( ip(), lasthop, t2-a->start, false, false);
+      record_lookup_stat( ip(), lasthop, t2-a->start, false, false, 
+			  0 /* hops */, 0 /* num_timeouts */, 
+			  0 /* time_timeouts */);
   }
 
   delete a;

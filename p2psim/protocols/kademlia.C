@@ -520,7 +520,9 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
     }
     after = now();
 
-    record_lookup_stat(ip(), fr.succ.ip, after - args->starttime, true, true);
+    record_lookup_stat(ip(), fr.succ.ip, after - args->starttime, true, true,
+		       0 /* hops */, 0 /* num_timeouts */ , 
+		       0 /* time_timeouts */);
     if(outcounter++ >= 1000) {
       KDEBUG(0) <<  pingbegin - args->starttime << "ms lookup (" << args->attempts << "a, " << fr.hops << "h, " << fr.rpcs << "r, " << fr.timeouts << "t), " << after - pingbegin << "ms ping, " << after - args->starttime << "ms total." << endl;
       outcounter = 0;
@@ -550,10 +552,10 @@ Kademlia::lookup_wrapper(lookup_wrapper_args *args)
   if(now() - args->starttime > Kademlia::max_lookup_time) {
     if(alive_and_joined) {
       _bad_failures++;
-      record_lookup_stat(ip(), target_ip, after - args->starttime, false, false, args->timeout_count, args->timeout_time);
+      record_lookup_stat(ip(), target_ip, after - args->starttime, false, false, 0 /* hops */, args->timeout_count, args->timeout_time);
     } else {
       _ok_failures++;
-      record_lookup_stat(ip(), target_ip, after - args->starttime, true, false, args->timeout_count, args->timeout_time);
+      record_lookup_stat(ip(), target_ip, after - args->starttime, true, false, 0 /* hops */, args->timeout_count, args->timeout_time);
     }
     _bad_attempts += args->attempts;
     delete args;

@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.44 2004/01/26 02:34:40 strib Exp $ */
+/* $Id: tapestry.C,v 1.45 2004/01/26 19:08:09 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -225,11 +225,13 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
     if( _direct_reply ) {
       _total_latency += ( lr.time_done - args->starttime );
       record_lookup_stat( ip(), lr.owner_ip, lr.time_done - args->starttime,
-			  true, true, args->num_timeouts, args->time_timeouts);
+			  true, true, lr.hopcount, args->num_timeouts, 
+			  args->time_timeouts);
     } else {
       _total_latency += ( now() - args->starttime );
       record_lookup_stat( ip(), lr.owner_ip, now() - args->starttime,
-			  true, true, args->num_timeouts, args->time_timeouts);
+			  true, true, lr.hopcount, args->num_timeouts, 
+			  args->time_timeouts);
     }
     delete args;
   } else {
@@ -249,7 +251,7 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
 		      << endl;
 	}
 	record_lookup_stat( ip(), ip(), now() - args->starttime,
-			    false, false, args->num_timeouts, 
+			    false, false, lr.hopcount, args->num_timeouts, 
 			    args->time_timeouts );
 	_num_fail_lookups++;
       } else if( lr.owner_id != lr.real_owner_id ) {
@@ -268,7 +270,7 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
 		      << endl;
 	}
 	record_lookup_stat( ip(), ip(), now() - args->starttime,
-			    true, false, args->num_timeouts, 
+			    true, false, lr.hopcount, args->num_timeouts, 
 			    args->time_timeouts );
 	_num_inc_lookups++;
       } else {

@@ -68,7 +68,8 @@ public:
   static void record_bw_stat(stat_type type, uint num_ids, uint num_else);
   static void record_lookup_stat(IPAddress src, IPAddress dst, Time interval, 
 				 bool complete, bool correct, 
-				 uint num_timeouts= 0, Time time_timeouts = 0);
+				 uint num_hops = 0, uint num_timeouts = 0, 
+				 Time time_timeouts = 0);
   static void print_stats();
 
   int queue_delay () { return _queue_len; };
@@ -86,10 +87,14 @@ protected:
   static vector<double> _correct_stretch;
   static vector<double> _incorrect_stretch;
   static vector<double> _failed_stretch;
+  static vector<uint> _correct_hops;
+  static vector<uint> _incorrect_hops;
+  static vector<uint> _failed_hops;
   static vector<double> _num_timeouts;
   static vector<Time> _time_timeouts;
   static void print_lookup_stat_helper( vector<Time> times, 
 					vector<double> stretch,
+					vector<uint> hops,
 					bool timeouts = false );
   int _queue_len;
 

@@ -338,7 +338,7 @@ Chord::lookup_internal(lookup_args *a)
 
   a->retrytimes.push_back((uint)(now()- a->start - extra_time));
 
-  record_lookup_stat(me.ip, lasthop.ip, a->retrytimes[a->retrytimes.size()-1], corr, corr);
+  record_lookup_stat(me.ip, lasthop.ip, a->retrytimes[a->retrytimes.size()-1], corr, corr, 0 /* hops */, 0 /* time_timeouts */, 0 /* num_timeouts */ );
 
   if (Node::collect_stat()) {
     _lookup_num += 1;

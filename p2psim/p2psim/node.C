@@ -44,6 +44,9 @@ vector<Time> Node::_failed_lookups;
 vector<double> Node::_correct_stretch;
 vector<double> Node::_incorrect_stretch;
 vector<double> Node::_failed_stretch;
+vector<uint> Node::_correct_hops;
+vector<uint> Node::_incorrect_hops;
+vector<uint> Node::_failed_hops;
 vector<double> Node::_num_timeouts;
 vector<Time> Node::_time_timeouts;
 
@@ -178,8 +181,8 @@ Node::record_bw_stat(stat_type type, uint num_ids, uint num_else)
 
 void 
 Node::record_lookup_stat(IPAddress src, IPAddress dst, Time interval, 
-			 bool complete, bool correct, uint num_timeouts,
-			 Time time_timeouts)
+			 bool complete, bool correct, uint num_hops, 
+			 uint num_timeouts, Time time_timeouts)
 {
 
   if( !collect_stat() ) {
@@ -211,12 +214,15 @@ Node::record_lookup_stat(IPAddress src, IPAddress dst, Time interval,
   if( complete && correct ) {
     _correct_lookups.push_back( interval );
     _correct_stretch.push_back( stretch );
+    _correct_hops.push_back( num_hops );
   } else if( !complete ) {
     _failed_lookups.push_back( interval );
     _failed_stretch.push_back( stretch );
+    _failed_hops.push_back( num_hops );
   } else {
     _incorrect_lookups.push_back( interval );
     _incorrect_stretch.push_back( stretch );
+    _incorrect_hops.push_back( num_hops );
   }
 
   // timeout stuff
@@ -259,25 +265,31 @@ Node::print_stats()
 	  ((double)_incorrect_lookups.size())/total_lookups,
 	  ((double)_failed_lookups.size())/total_lookups );
   cout << "CORRECT_LOOKUPS:: ";
-  print_lookup_stat_helper( _correct_lookups, _correct_stretch );
+  print_lookup_stat_helper( _correct_lookups, _correct_stretch, 
+			    _correct_hops );
   cout << "INCORRECT_LOOKUPS:: ";
-  print_lookup_stat_helper( _incorrect_lookups, _incorrect_stretch );
+  print_lookup_stat_helper( _incorrect_lookups, _incorrect_stretch, 
+			    _incorrect_hops );
   cout << "FAILED_LOOKUPS:: ";
-  print_lookup_stat_helper( _failed_lookups, _failed_stretch );
+  print_lookup_stat_helper( _failed_lookups, _failed_stretch, _failed_hops );
   // now overall stats (put them all in one container)
   for( uint i = 0; i < _incorrect_lookups.size(); i++ ) {
     _correct_lookups.push_back( _incorrect_lookups[i] );
     _correct_stretch.push_back( _incorrect_stretch[i] );
+    _correct_hops.push_back( _incorrect_hops[i] );
   }
   for( uint i = 0; i < _failed_lookups.size(); i++ ) {
     _correct_lookups.push_back( _failed_lookups[i] );
     _correct_stretch.push_back( _failed_stretch[i] );
+    _correct_hops.push_back( _failed_hops[i] );
   }
   cout << "OVERALL_LOOKUPS:: ";
-  print_lookup_stat_helper( _correct_lookups, _correct_stretch );
+  print_lookup_stat_helper( _correct_lookups, _correct_stretch, 
+			    _correct_hops );
 
   cout << "TIMEOUTS_PER_LOOKUP:: ";
-  print_lookup_stat_helper( _time_timeouts, (vector<double>) _num_timeouts, 
+  print_lookup_stat_helper( _time_timeouts, _num_timeouts, 
+			    _correct_hops /* this isn't used */,
 			    true );
 
   cout << "<-----ENDSTATS----->\n" << endl;
@@ -286,7 +298,7 @@ Node::print_stats()
 
 void 
 Node::print_lookup_stat_helper( vector<Time> times, vector<double> stretch,
-				bool timeouts )
+				vector<uint> hops, bool timeouts )
 {
 
   assert( times.size() == stretch.size() );
@@ -297,6 +309,7 @@ Node::print_lookup_stat_helper( vector<Time> times, vector<double> stretch,
 
   Time time_med, time_10, time_90;
   double stretch_med, stretch_10, stretch_90;
+  uint hops_med, hops_10, hops_90;
   if( times.size() == 0 ) {
     time_med = 0;
     time_10 = 0;
@@ -304,34 +317,45 @@ Node::print_lookup_stat_helper( vector<Time> times, vector<double> stretch,
     stretch_med = 0;
     stretch_10 = 0;
     stretch_90 = 0;
+    hops_med = 0;
+    hops_10 = 0;
+    hops_90 = 0;
   } else {
     if( times.size() % 2 == 0 ) {
       time_med = (times[times.size()/2] + times[times.size()/2-1])/2;
       stretch_med = (stretch[times.size()/2] + stretch[times.size()/2-1])/2;
+      hops_med = (hops[times.size()/2] + hops[times.size()/2-1])/2;
     } else {
       time_med = times[(times.size()-1)/2];
       stretch_med = stretch[(times.size()-1)/2];
+      hops_med = hops[(times.size()-1)/2];
     }
     time_10 = times[(uint) (times.size()*.1)];
     stretch_10 = stretch[(uint) (times.size()*.1)];
+    hops_10 = hops[(uint) (times.size()*.1)];
     time_90 = times[(uint) (times.size()*.9)];
     stretch_90 = stretch[(uint) (times.size()*.9)];
+    hops_90 = hops[(uint) (times.size()*.9)];
   }
 
   // also need the means
   Time time_total = 0;
   double stretch_total = 0;
+  uint hops_total = 0;
   for( uint i = 0; i < times.size(); i++ ) {
     time_total += times[i];
     stretch_total += stretch[i];
+    hops_total += hops[i];
   }
-  double time_mean, stretch_mean;
+  double time_mean, stretch_mean, hops_mean;
   if( times.size() == 0 ) {
     time_mean = 0;
     stretch_mean = 0;
+    hops_mean = 0;
   } else {
     time_mean = ((double) time_total)/((double) times.size());
     stretch_mean = ((double) stretch_total)/((double) times.size());
+    hops_mean = ((double) hops_total)/((double) times.size());
   }
 
   if( timeouts ) {
@@ -348,6 +372,9 @@ Node::print_lookup_stat_helper( vector<Time> times, vector<double> stretch,
     
     printf( "stretch_10th:%.3f stretch_mean:%.3f stretch_median:%.3f stretch_90th:%.3f ",
 	    stretch_10, stretch_mean, stretch_med, stretch_90 );
+
+    printf( "hops_10th:%u hops_mean:%.3f hops_median:%u hops_90th:%u ",
+	    hops_10, hops_mean, hops_med, hops_90 );
     
     cout << " numlookups:" << times.size() << endl;
 
