@@ -40,9 +40,8 @@
 #include <merkle_sync_prot.h>
 
 #define MERKLE_ENABLED 0
-#if MERKLE_ENABLED
-#define MNEW
-#endif
+#define MERKLE_TREE    1
+#define REPLICATE_KEY  1
 
 #define LEASE_TIME 2
 #define LEASE_INACTIVE 60
@@ -82,7 +81,7 @@ dhash::dhash(str dbname, ptr<vnode> node,
 	     ptr<route_factory> _r_factory,
 	     u_int k, int _ss_mode) 
 {
-  warn << "in dhash constructor " << node->my_ID () << "\n";
+  warn << "In dhash constructor " << node->my_ID () << "\n";
   this->r_factory = _r_factory;
   nreplica = k;
   kc_delay = 11;
@@ -118,7 +117,6 @@ dhash::dhash(str dbname, ptr<vnode> node,
   replica_syncer = NULL;
   partition_syncer_dstID = 0;
   partition_syncer = NULL;
-
 
   // RPC demux
   warn << host_node->my_ID () << " registered dhash_program_1\n";
@@ -272,6 +270,7 @@ dhash::partition_maintenance_timer (int index)
 void 
 dhash::sync_cb () 
 {
+  //warn << "** SYNC\n";
   db->sync ();
 
   // benjie: remove stale entries from the lease table
@@ -672,8 +671,7 @@ dhash::fix_replicas_txerd (dhash_stat err)
 void
 dhash::replicate_key (chordID key, cbstat_t cb)
 {
-  // XXX HACK
-  if (MERKLE_ENABLED) {
+  if (!REPLICATE_KEY) {
     warn << "\n\n\n****NOT REPLICATING KEY\n";
     (cb) (DHASH_OK);
   } else {
@@ -752,7 +750,7 @@ dhash::get_key_got_block (chordID key, cbstat_t cb, ptr<dhash_block> b)
     ptr<dbrec> k = id2dbrec (key);
     ptr<dbrec> d = New refcounted<dbrec> (b->data, b->len);
 
-#ifdef MNEW
+#if MERKLE_TREE
     block blk (to_merkle_hash (k), d);
     mtree->insert (&blk);
     get_key_stored_block (cb, 0);
@@ -839,7 +837,7 @@ dhash::append (ptr<dbrec> key, ptr<dbrec> data,
 	stat = DHASH_STORED;
 	keys_stored += 1;
 
-#ifdef MNEW
+#if MERKLE_TREE
 	block blk (to_merkle_hash (key), marshalled_data);
 	mtree->insert (&blk);
 	append_after_db_store (cb, arg->key, 0);
@@ -885,7 +883,7 @@ dhash::append_after_db_fetch (ptr<dbrec> key, ptr<dbrec> new_data,
 	ptr<dbrec> marshalled_data =
 	  New refcounted<dbrec> (m_dat, m_len);
 
-#ifdef MNEW
+#if MERKLE_TREE
 	block blk (to_merkle_hash (key), marshalled_data);
 	mtree->insert (&blk);
 	append_after_db_store (cb, arg->key, 0);
@@ -1046,7 +1044,7 @@ dhash::store (s_dhash_insertarg *arg, cbstore cb)
     else
       bytes_stored += arg->data.size ();
 
-#ifdef MNEW
+#if MERKLE_TREE
     block blk (to_merkle_hash (k), d);
     mtree->insert (&blk);
     store_cb (arg->type, id, cb, 0);
