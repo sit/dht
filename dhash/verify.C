@@ -103,6 +103,7 @@ get_block_contents (char *data, unsigned int len, dhash_ctype t)
   // XXX make this function shorter...
   long version = 0;
   char *content;
+  long contentlen = len;
 
   xdrmem x1 (data, len, XDR_DECODE);
   
@@ -115,6 +116,8 @@ get_block_contents (char *data, unsigned int len, dhash_ctype t)
 	return NULL;
       if (!XDR_GETLONG (&x1, &version))
 	return NULL;
+      if (!XDR_GETLONG (&x1, &contentlen))
+	return NULL;
     }
     /* FALL THROUGH */
 
@@ -122,7 +125,7 @@ get_block_contents (char *data, unsigned int len, dhash_ctype t)
   case DHASH_NOAUTH:
   case DHASH_APPEND:
     {
-      if (!(content = (char *)XDR_INLINE (&x1, len)))
+      if (!(content = (char *)XDR_INLINE (&x1, contentlen)))
 	return NULL;
     }
     break;
@@ -131,7 +134,7 @@ get_block_contents (char *data, unsigned int len, dhash_ctype t)
     return NULL;
   }
 
-  ptr<dhash_block> d = New refcounted<dhash_block> (content, len, t);
+  ptr<dhash_block> d = New refcounted<dhash_block> (content, contentlen, t);
   d->version = version;
   return d;
 }
