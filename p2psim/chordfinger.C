@@ -5,7 +5,7 @@ using namespace std;
 ChordFinger::ChordFinger(Node *n) : Chord(n) 
 {
   loctable->resize((1 + NBCHID + CHORD_SUCC_NUM), CHORD_SUCC_NUM);
-  for (int i = 0; i < NBCHID; i++) {
+  for (unsigned int i = 0; i < NBCHID; i++) {
     loctable->pin(ConsistentHash::successorID(me.id, i));
   }
 
@@ -27,7 +27,7 @@ ChordFinger::fix_fingers()
     gap = gap >> 1;
   }
   vector<Chord::IDMap> v;
-  for (int i = i0; i < NBCHID; i++) {
+  for (unsigned int i = i0; i < NBCHID; i++) {
     v = find_successors(ConsistentHash::successorID(me.id,i), 1); 
     if (v.size() > 0) loctable->add_node(v[0]);
   }

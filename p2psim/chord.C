@@ -64,8 +64,8 @@ Chord::find_successors(CHID key, int m)
     if(nr.done){
       return nr.v;
     } else {
-      printf("%s !!! node %u refers to next %qu for key %qu\n",
-             ts(), PID(nprime.id), PID(nr.next.id));
+      printf("%s !!! node %qu refers to next %qu for key %qu\n",
+             ts(), PID(nprime.id), PID(nr.next.id), PID(key));
       nprime = nr.next;
     }
   }
@@ -141,8 +141,8 @@ Chord::stabilize(void *x)
     IDMap succ2 = loctable->succ(1);
 
     if(succ1.id != succ2.id)
-      printf("%s changed succ from %u to %u\n",
-             ts(), succ1.id, succ2.id);
+      printf("%s changed succ from %qu to %qu\n",
+             ts(), PID(succ1.id), PID(succ2.id));
 
     notify_args na;
     notify_ret nr;

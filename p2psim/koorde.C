@@ -55,7 +55,7 @@ void
 Koorde::koorde_lookup(koorde_lookup_arg *a, koorde_lookup_ret *r)
 {
   IDMap succ = loctable->succ(1);
-  printf ("Koorde (%u) lookup key=%x kshift=%x i=%x succ=%u\n", 
+  printf ("Koorde (%qu) lookup key=%qx kshift=%qx i=%qx succ=%qu\n", 
 	  me.id, a->k, a->kshift, a->i, succ.id);
   if (ConsistentHash::betweenrightincl (me.id, succ.id, a->k)) {
     r->r = succ;

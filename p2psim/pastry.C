@@ -61,7 +61,7 @@ unsigned
 Pastry::shared_prefix_len(NodeID n, NodeID m)
 {
   NodeID mask;
-  for(int i=0; i<idlength; i++) {
+  for(unsigned int i=0; i<idlength; i++) {
     mask = 1 << (idlength - i);
     if(n | mask != m | mask)
       return i;

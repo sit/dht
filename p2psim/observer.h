@@ -7,7 +7,7 @@
 class Observer {
 public:
   Observer();
-  ~Observer();
+  virtual ~Observer();
 
   void reschedule(Time);
   virtual void execute() = 0;
