@@ -72,8 +72,10 @@ location::location (const chordID &_n, const net_address &_r)
 };
 
 location::~location () {
-  if (checkdeadcb)
+  if (checkdeadcb) {
     timecb_remove (checkdeadcb);
+    checkdeadcb = NULL;
+  }
   warnx << "~location: delete " << n << "\n";
 }
 
@@ -188,6 +190,12 @@ locationtable::doRPC (const chordID &n, rpc_program progno,
 void
 locationtable::doRPCcb (ptr<location> l, aclnt_cb realcb, clnt_stat err)
 {
+  assert (locs[l->n]);
+  // This code assumes that the location is still in the locs[], etc
+  // structures.  Otherwise, the good bookkeeping is probably wrong and
+  // the checkdead stuff is extraneous.  However, it is unlikely (?)
+  // that a node would get evicted while it has an RPC in flight.
+  
   if (err) {
     if (l->alive) {
       // xxx should really kill all nodes that share the same ip/port.
@@ -683,6 +691,15 @@ locationtable::check_dead (ptr<location> l, unsigned int newwait)
 {
   warnx << "check_dead: " << l->n << "\n";
   l->checkdeadcb = NULL;
+
+  // Only bother if we still have this node around.
+  // This is purely defensive code; check_dead should only be
+  // called from a timecb and that should be removed during eviction.
+  // See locationtable::remove.
+  if (!locs[l->n]) {
+    warnx << "check_dead: " << l->n << ": already evicted.\n";
+    return;
+  }
   
   // make sure we actually go out on the network and check if the node
   // is alive. if we're allowed to challenge, do that as well.
@@ -721,11 +738,19 @@ locationtable::remove (locwrap *lw)
     return false;
   
   if (lw->good ()) good--;
+  
   locs.remove (lw);
   loclist.remove (lw->n_);
   cachedlocs.remove (lw);
   size_cachedlocs--;
+
+  if ((lw->type_ & LOC_REGULAR) && lw->loc_->checkdeadcb) {
+    timecb_remove (lw->loc_->checkdeadcb);
+    lw->loc_->checkdeadcb = NULL;
+  }
+
   {
+    // This code is here only for sanity checking.
     locwrap *foo = locs.first ();
     size_t mygood = 0;
     while (foo) {
@@ -733,10 +758,10 @@ locationtable::remove (locwrap *lw)
 	mygood++;
       foo = locs.next (foo);
     }
-    //    if (good != mygood) {
-    //   warn << "good(" << good << ") isn't == to mygood(" << mygood << ")\n";
-    //   good = mygood;
-    // }
+    if (good != mygood) {
+      warn << "good(" << good << ") isn't == to mygood(" << mygood << ")\n";
+      good = mygood;
+    }
   }
   delete lw;
   return true;
