@@ -56,7 +56,12 @@ while t <= finish.date ():
     # Find the appropriate directory of pl_app; organized by month/date
     dir = "%d-%02d/%d-%02d-%02d" % (t.year, t.month, t.year, t.month, t.day)
     sys.stderr.write ("Processing %s...\n" % dir)
-    apps = os.listdir (dir)
+    try:
+	apps = os.listdir (dir)
+    except OSError, e:
+	sys.stderr.write ("Oops? %s\n" % e)
+	t += oneday
+	continue
     apps.sort ()
     for app in apps:
 	if app == '.' or app == '..': continue

@@ -2,6 +2,7 @@ import datetime
 import gzip
 import operator
 import string
+import sys
 import time
 
 """
@@ -42,10 +43,14 @@ class plapp:
 	    assert parts[5] == host, "Mismatched host line (%s vs %s)!" % (parts[5], host)
 	    my.matrix[host] = None
 	else:
-	    assert len (parts) == len (my.hosts), "Incorrect number of entries on line %d (%d vs expected %d, for host %s)" % (my.hosts_read + 3, len (parts), len (my.hosts), host)
-	    dummy = {}
-	    map (operator.setitem, [dummy] * len (my.hosts), my.hosts, parts)
-	    my.matrix[host] = dummy
+	    if len (parts) != len (my.hosts):
+		sys.stderr.write ("Incorrect number of entries on line %d (%d vs expected %d, for host %s)\n" % (my.hosts_read + 3, len (parts), len (my.hosts), host))
+		# We'll pretend this host failed to send us data.
+		my.matrix[host] = None
+	    else:
+		dummy = {}
+		map (operator.setitem, [dummy] * len (my.hosts), my.hosts, parts)
+		my.matrix[host] = dummy
 
     def get (my, x, y):
 	if x not in my.hostdx or y not in my.hostdx:
