@@ -749,7 +749,7 @@ Kademlia::find_value(find_value_args *fargs, find_value_result *fresult)
     delete ci;
 
 next_candidate:
-    while(outstanding_rpcs->size() < (int) Kademlia::alpha) {
+    while((outstanding_rpcs->size() < (int) Kademlia::alpha) && successors.size()) {
       k_nodeinfo front = *successors.begin();
       if(Kademlia::distance(front.id, fargs->key) < Kademlia::distance(fresult->succ.id, fargs->key))
         fresult->succ = front;
