@@ -49,8 +49,6 @@ TapestryObserver::Instance(Args *a)
 
 TapestryObserver::TapestryObserver(Args *a) : _type( "Tapestry" )
 {
-  _num_nodes = atoi((*a)["numnodes"].c_str());
-  assert(_num_nodes > 0);
 
   _init_num = atoi((*a)["initnodes"].c_str());
 
@@ -64,6 +62,7 @@ TapestryObserver::TapestryObserver(Args *a) : _type( "Tapestry" )
     t->registerObserver(this);
   }
   _stabilized = false;
+  lid.clear();
 
 }
 
@@ -99,7 +98,7 @@ TapestryObserver::kick(Observed *o, ObserverInfo *oi )
     
     //i only want to sort it once after all nodes have joined! 
     Tapestry *c = 0;
-    if (lid.size() != _num_nodes) {
+    if (!lid.empty()) {
       lid.clear();
       for (pos = l.begin(); pos != l.end(); ++pos) {
 	c = (Tapestry *)(*pos);
@@ -146,7 +145,7 @@ TapestryObserver::kick(Observed *o, ObserverInfo *oi )
 	c = (Tapestry *)(*pos);
 	assert(c);
 	// only care about live nodes
-	if( c->node()->alive() ) {
+	if( c->node()->alive() && c->ip() != n->ip() ) {
 	  if( event_s == "crash" ) {
 	    c->oracle_node_died( n->ip(), n->id(), l );
 	  } else if( event_s == "join" ) {

@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.30 2003/11/22 17:39:18 thomer Exp $ */
+/* $Id: tapestry.C,v 1.31 2003/11/27 21:24:00 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -219,6 +219,7 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
       record_stat(STAT_LOOKUP, 1, 0);
       bool succ = doRPC( next, &Tapestry::handle_lookup, args, ret );
       if( succ ) {
+	_last_heard_map[next] = now();
 	record_stat( STAT_LOOKUP, 1, 2 );
       }
       if( succ && !ret->failed ) {
@@ -283,9 +284,12 @@ Tapestry::join(Args *args)
 
   TapDEBUG(5) << "j enter" << endl;
 
-  if( _join_num == 0 ) {
+  IPAddress wellknown_ip = args->nget<IPAddress>("wellknown");
+  TapDEBUG(3) << ip() << " Wellknown: " << wellknown_ip << endl;
+
+  if( _join_num == 0 && wellknown_ip == ip() ) {
     notifyObservers();
-  } else {
+  } else if( _join_num > 0 ) {
     notifyObservers( (ObserverInfo *) "join" );
   }
 
@@ -295,9 +299,6 @@ Tapestry::join(Args *args)
   }
 
   uint curr_join = ++_join_num;
-
-  IPAddress wellknown_ip = args->nget<IPAddress>("wellknown");
-  TapDEBUG(3) << ip() << " Wellknown: " << wellknown_ip << endl;
 
   // might already be joined if init_state was used
   if( joined ) {
@@ -1150,6 +1151,12 @@ Tapestry::init_state(set<Protocol *> lid)
 
   // TODO: we shouldn't need locking in here, right?
 
+  if( !node()->alive() ) {
+    _join_num++;
+    TapDEBUG(3) << "My alive is false" << endl;
+    return;
+  }
+
   TapDEBUG(2) << "init_state: about to add everyone" << endl;
   // for every node but this own, add them all to your routing table
   vector<NodeInfo *> nodes;
@@ -1187,7 +1194,7 @@ Tapestry::init_state(set<Protocol *> lid)
     }
   }
   
-  TapDEBUG(0) << "INITSTATE: " << known_nodes << endl;
+  TapDEBUG(2) << "INITSTATE: " << known_nodes << endl;
 
   have_joined();
   TapDEBUG(2) << "init_state: finished adding everyone" << endl;
@@ -1241,7 +1248,8 @@ Tapestry::multi_add_to_rt_start( RPCSet *ping_rpcset,
     // do an asynchronous RPC to each one, collecting the ping times in the
     // process
     // however, no need to ping if we already know the ping time, right?
-    if( !check_exist || !_rt->contains( ni->_id ) ) {
+    if( (!check_exist) // && now() - _last_heard_map[ni->_addr] >= _stabtimer) 
+	|| !_rt->contains( ni->_id ) ) {
       record_stat(STAT_PING, 0, 0);
       unsigned rpc = asyncRPC( ni->_addr, 
 			       &Tapestry::handle_ping, &pa, &pr );
@@ -1664,7 +1672,7 @@ Tapestry::crash(Args *args)
   // TODO: should be killing these waiting RPCs instead of allowing them
   // to finish normally.  bah.
   _waiting_for_join->notifyAll();
-  TapDEBUG(0) << "crash exit" << endl;
+  TapDEBUG(2) << "crash exit" << endl;
 
   notifyObservers( (ObserverInfo *) "crash" );
 }

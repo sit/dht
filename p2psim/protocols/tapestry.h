@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.21 2003/11/20 15:36:01 thomer Exp $ */
+/* $Id: tapestry.h,v 1.22 2003/11/27 21:24:00 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -233,7 +233,10 @@ private:
 
   // how many nearest neighbors do we keep at every step?
   static const uint _k = 16;
-  
+
+  // when's the last time I heard from this person?
+  map<IPAddress, Time> _last_heard_map;
+
   // statitics per message
   vector<uint> stat;
   vector<uint> num_msgs;

@@ -37,7 +37,6 @@ public:
 
 private:
   static TapestryObserver *_instance;
-  unsigned int _num_nodes;
   unsigned int _init_num;
   unsigned int _oracle_num;
   bool _stabilized;
