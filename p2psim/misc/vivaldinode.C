@@ -247,8 +247,8 @@ VivaldiNode::algorithm(Sample s)
 {
 
   //reject timeouts and self pings
-  if (s._latency > 1000000 ||
-      s._latency < 1000) return;
+  //  if (s._latency > 1000 ||
+  if   (s._latency == 0) return;
 
   if (_initial_triangulation && _init_samples.size () < _num_init_samples)
     {

@@ -37,8 +37,8 @@ gtitm::gtitm(vector<string> *v)
   assert (v->size () > 0);
   strcpy((char *)_filename,((*v)[1]).c_str ());
   _num = atoi (((*v)[0]).c_str ());
-
- 
+  if (v->size () >= 3)
+    strcpy((char *)_filename_alt,((*v)[2]).c_str ());
 }
 
 gtitm::~gtitm()
@@ -57,11 +57,33 @@ gtitm::latency(IPAddress ip1, IPAddress ip2, bool ignored)
   long key = ip1*_num + ip2;
   if (memo[key]) return memo[key];
 
-  Time ret = dijkstra (a, b, g, NULL);
+  Time ret = 1000*dijkstra (a, b, g, NULL);
   memo[key] = ret;
+
   return ret;
 }
 
+
+void
+gtitm::swap ()
+{
+  char tmp[64];
+  strcpy (tmp, _filename);
+  strcpy (_filename, _filename_alt);
+  strcpy (_filename_alt, tmp);
+  g = restore_graph ((char *)_filename);
+  if (!g) {
+    cerr << "(swap) unable to parse graph in file: " << _filename << "\n";
+    exit (-1);
+  }
+  if (_num > g->n) {
+    cerr << "gtitm (swap): requested " << _num 
+	 << " hosts, but only " << g->n 
+	 << " are in the file\n";
+    exit (-1);
+  }
+  memo.clear ();
+}
 
 void
 gtitm::parse(ifstream &ifs)

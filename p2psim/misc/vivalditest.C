@@ -24,6 +24,7 @@
 
 #include <typeinfo>
 #include "vivalditest.h"
+#include "topologies/gtitm.h"
 #include "topologies/euclidean.h"
 #include "topologies/euclideangraph.h"
 #include "misc/vivaldinode.h"
@@ -69,6 +70,13 @@ VivaldiTest::nodeevent (Args *args)
   int _queue = args->nget<int> ("queue", 0, 10);
   if (_queue > 0) 
     queue_delay (_queue);
+
+  int doswap = args->nget<int> ("doswap", 0, 10);
+  if (doswap) {
+    cout << "vivaldi SWAP!\n";
+    gtitm *t = dynamic_cast<gtitm *>(Network::Instance()->gettopology());
+    t->swap ();
+  }
 }
 
 void

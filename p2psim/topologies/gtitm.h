@@ -26,15 +26,14 @@
 #define __GTITM_H
 
 #include <string>
+#include "p2psim/p2psim.h"
+#include "p2psim/topology.h"
 
 extern "C" {
 #include "gb_graph.h"
 #include "gb_save.h"
 #include "gb_dijk.h"
-}
-
-using namespace std;
-
+};
 
 class gtitm : public Topology {
 public:
@@ -43,14 +42,17 @@ public:
   
   virtual void parse(ifstream&);
   virtual Time latency(IPAddress, IPAddress, bool);
+  void swap ();
 
 private:
   hash_map<int, int> memo;
   char _filename[64];
+  char _filename_alt[64];
   int _num;
   Graph *g;
 };
 
+#undef dist
 #endif //  __gTITm_H
 
 
