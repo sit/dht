@@ -88,8 +88,8 @@ dhashcli_config_init::dhashcli_config_init ()
 
 // ---------------------------------------------------------------------------
 // DHASHCLI
- 
-dhashcli::dhashcli (ptr<vnode> node, uint nreplica)
+
+dhashcli::dhashcli (ptr<vnode> node, uint nrep)
   : clntnode (node), ordersucc_ (true)
 {
   int ordersucc = 1;
@@ -97,12 +97,7 @@ dhashcli::dhashcli (ptr<vnode> node, uint nreplica)
   ordersucc_ = (ordersucc > 0);
   warn << "will order successors " << ordersucc_ << "\n";
 
-#if 0
-  if (DHC) {
-    dhc_mgr = New refcounted<dhc> (clntnode, dhcs, nreplica);
-    dhc_mgr->init ();
-  }
-#endif
+  //nreplica = nrep; //ATHICHA
 }
 
 void
@@ -206,22 +201,10 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
   ptr<rcv_state> rs = New refcounted<rcv_state> (blockID, cb);
   
   if (blockID.ctype == DHASH_KEYHASH) {
-    //    if (!DHC) {
       route_iterator *ci = clntnode->produce_iterator_ptr (blockID.ID);
       ci->first_hop (wrap (this, &dhashcli::retrieve_block_hop_cb, rs, ci,
 			   options, 5, guess),
 		     guess);
-#if 0
-    } else {
-      rs->ds.status = DHASH_OK;
-      rs->ds.options = options;
-      rs->ds.retries = 5;
-      rs->ds.guess = guess;
-      clntnode->find_successor (rs->key.ID, wrap (this, 
-						  &dhashcli::retrieve_dhc_lookup_cb,
-						  rs));
-    }
-#endif
   } else {
     vec<ptr<location> > sl = clntnode->succs ();
     if ((options & DHASHCLIENT_SUCCLIST_OPT) && 
@@ -888,33 +871,18 @@ dhashcli::insert_store_cb (ref<sto_state> ss, route r, u_int i,
     for (unsigned int i = 0; i < r.size (); i++)
       r_ret.push_back (r[i]->id ());
 
-    timeval tp;
-    gettimeofday (&tp, NULL);
-    end_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
-    warn << "********End DHash insert 1 block " << end_insert - start_insert
-	 << " usec\n";
-    total_insert += end_insert - start_insert;
-    warn << "********DHash total insert " << total_insert << "\n";
     (*ss->cb) (DHASH_OK, r_ret);
   }
 }
 
 void
 dhashcli::insert_dhc_cb (ptr<location> dest, route r, 
-			 cbinsert_path_t cb, /*dhc_stat err,*/ clnt_stat cerr)
+			 cbinsert_path_t cb, clnt_stat cerr)
 {
   vec<chordID> path;
   if (!cerr) {
     for (uint i=0; i<r.size (); i++) 
       path.push_back (r[i]->id ());
-
-    timeval tp;
-    gettimeofday (&tp, NULL);
-    end_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
-    warn << "********End DHC insert 1 block " << end_insert - start_insert
-	 << " usec\n";
-    total_insert += end_insert - start_insert;
-    warn << "********DHC total insert " << total_insert << "\n";
 
     (*cb) (DHASH_OK, path);
   } else {

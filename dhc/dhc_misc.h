@@ -98,15 +98,17 @@ is_member (chordID id, vec<chordID> config)
 static inline bool 
 is_primary (chordID bID, chordID nID, vec<chordID> config)
 {
-  chordID next = nID;
+  chordID next = 0; // = nID;
   if (bID <= nID) {
     for (uint i=0; i<config.size (); i++)
-      if ((bID < config[i]) && (config[i] < nID))
+      if ((bID < config[i]) && (config[i] <= nID)) {
 	next = config[i];
+	break;
+      }
     return (next == nID);
   } else {
     for (uint i=0; i<config.size (); i++)
-      if ((config[i] > bID) && (config[i] < nID))
+      if ((bID < config[i]) && (next < config[i]))
 	next = config[i];
     return (next == nID);
   }

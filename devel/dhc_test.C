@@ -42,20 +42,31 @@ write_cb (dhashclient dhash, dhash_stat stat, ptr<insert_info> i)
     exit (-1);
   }
 
+#if 1
   if (insert_count < count) {
-    mp = keyhash_payload (insert_count+1, str (data, DATASIZE));
+    mp = keyhash_payload (insert_count+2, str (data, DATASIZE));
     mp.sign (sk, mpk, ms);
     gettimeofday (&tp, NULL);
     start_massive_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
     dhash.insert (mp.id (mpk), mpk, ms, mp, wrap (&write_cb, dhash), NULL);
   }
-
+#endif
   if (insert_count == count) {
+#if 1
     warn << "DHC_TEST: Massive Insert Successful \n";
     warn << "           elapse time " << total_massive_time
 	 << " usecs\n";
     sprintf (out, "%llu WRITE %d %llu usecs\n", end_massive_insert, count,
 	     total_massive_time);
+#else
+    gettimeofday (&tp, NULL);
+    end_massive_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
+    warn << "DHC_TEST: Massive Insert Successful \n";
+    warn << "           elapse time " << end_massive_insert - start_massive_insert
+	 << " usecs\n";
+    sprintf (out, "%llu WRITE %d %llu usecs\n", end_massive_insert, count,
+	     end_massive_insert - start_massive_insert);
+#endif
     write (fd, out, strlen (out));
     exit (1);
   }
@@ -135,11 +146,6 @@ main (int argc, char **argv)
   str key = file2wstr (argv[5]);
   sk = sfscrypt.alloc_priv (key, SFS_SIGN);
 
-  keyhash_payload p (0, str (data, DATASIZE));
-  sfs_pubkey2 pk;
-  sfs_sig2 s;
-  p.sign (sk, pk, s);
-
   total_massive_time = 0;
 
   timeval tp;
@@ -149,6 +155,11 @@ main (int argc, char **argv)
 
   switch (atoi (argv[3])) {
   case NEWBLOCK: {
+    keyhash_payload p (0, str (data, DATASIZE));
+    sfs_pubkey2 pk;
+    sfs_sig2 s;
+    p.sign (sk, pk, s);
+
     ptr<option_block> opt = New refcounted<option_block>;
     opt->flags = DHASHCLIENT_NEWBLOCK;
     timeval tp;
@@ -159,19 +170,49 @@ main (int argc, char **argv)
     break;
   }
   case WRITE: {
+#if 1
+    keyhash_payload p (1, str (data, DATASIZE));
+    sfs_pubkey2 pk;
+    sfs_sig2 s;
+    p.sign (sk, pk, s);
+
     insert_count = 0;
     timeval tp;
     gettimeofday (&tp, NULL);
     start_massive_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
     warn << "DHC Start Write Block at " << start_massive_insert << "\n";
-    dhash.insert (p.id (pk), pk, s, p, wrap (&write_cb, dhash));        
+
+    dhash.insert (p.id (pk), pk, s, p, wrap (&write_cb, dhash));    
+#else
+    insert_count = 0;
+    timeval tp;
+    gettimeofday (&tp, NULL);
+    start_massive_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
+    warn << "DHC Start Write Block at " << start_massive_insert << "\n";
+    if (count <= 10) 
+      for (int i=0; i<count; i++) {
+	keyhash_payload p (i+1, str (data, DATASIZE));
+	sfs_pubkey2 pk;
+	sfs_sig2 s;
+	p.sign (sk, pk, s);
+	dhash.insert (p.id (pk), pk, s, p, wrap (&write_cb, dhash));    
+      }
+#endif    
     break;
   }    
   case READ: {
+    keyhash_payload p (1, str (data, DATASIZE));
+    sfs_pubkey2 pk;
+    sfs_sig2 s;
+    p.sign (sk, pk, s);
+
     read_count = 0;
     timeval tp;
     gettimeofday (&tp, NULL);
     start_massive_read = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
+    dhash.retrieve (p.id (pk), DHASH_KEYHASH, 
+		    wrap (&readonly_cb, p.id (pk), dhash));
+#if 0
     if (count < 10) 
       for (int i=0; i<count; i++)
 	dhash.retrieve (p.id (pk), DHASH_KEYHASH, 
@@ -180,6 +221,7 @@ main (int argc, char **argv)
       for (int i=0; i<10; i++)
 	dhash.retrieve (p.id (pk), DHASH_KEYHASH, 
 			wrap (&readonly_cb, p.id (pk), dhash));
+#endif
     break;
   }
   default:

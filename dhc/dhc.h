@@ -77,11 +77,10 @@ struct replica_t {
 
 struct keyhash_meta {
   replica_t config;
-  //bool cvalid;
   paxos_seqnum_t accepted;
   char *buf;
   
-  keyhash_meta () : /*cvalid (false), */ buf (NULL)
+  keyhash_meta () : buf (NULL)
   {
     accepted.seqnum = 0;
     bzero (&accepted.proposer, sizeof (accepted.proposer));
@@ -94,10 +93,6 @@ struct keyhash_meta {
     bcopy (bytes + offst, &csize, sizeof (uint));
     config = replica_t (bytes + offst);
     offst += csize;
-#if 0
-    bcopy (bytes + offst, &cvalid, sizeof (bool));
-    offst += sizeof (bool);
-#endif
     bcopy (bytes + offst, &accepted.seqnum, sizeof (u_int64_t));
     offst += sizeof (u_int64_t);
     ID_get (&accepted.proposer, bytes + offst);
@@ -107,7 +102,7 @@ struct keyhash_meta {
 
   uint size ()
   {
-    return (sizeof (uint) + config.size () /*+ sizeof (bool)*/ 
+    return (sizeof (uint) + config.size ()
 	    + sizeof (u_int64_t) + ID_size);
   }
 
@@ -123,10 +118,6 @@ struct keyhash_meta {
     offst += sizeof (uint);
     bcopy (config.bytes (), buf + offst, config.size ());
     offst += config.size ();
-#if 0
-    bcopy (&cvalid, buf + offst, sizeof (bool));
-    offst += sizeof (bool);
-#endif
     bcopy (&accepted.seqnum, buf + offst, sizeof (u_int64_t));
     offst += sizeof (u_int64_t);
     ID_put (buf + offst, accepted.proposer);
@@ -141,7 +132,6 @@ struct keyhash_meta {
 	<< "\n     config IDs: ";
     for (uint i=0; i<config.nodes.size (); i++)
       ret << config.nodes[i] << " ";
-    //ret << "\n     cvalid: " << cvalid;
     ret << "\n     accepted proposal number: " 
 	<< "<" << accepted.seqnum << "," << accepted.proposer << ">";
 
@@ -279,8 +269,7 @@ struct paxos_state_t {
 
 enum stat_t {
   IDLE = 0,
-  RECON_INPROG = 1,
-  W_INPROG = 2
+  RECON_INPROG = 1
 };
 
 struct dhc_soft {
@@ -339,16 +328,19 @@ struct dhc_soft {
 
 struct read_state {
   bool done;
+  uint count;
   vec<keyhash_data> blocks;
   vec<uint> bcount;
 
-  read_state () : done (false) {}
+  read_state () : done (false), count (0) {}
 
   ~read_state () 
   {
     blocks.clear ();
     bcount.clear ();
   }
+
+  void add () { count++; }
 
   void add (keyhash_data kd)
   {
@@ -377,8 +369,12 @@ struct write_state {
   bool done;
   uint bcount;
   user_args *sbp;
+  ptr<keyhash_data> new_data;
   
-  write_state (user_args *s) : done (false), bcount (0), sbp (s) {}
+  write_state (user_args *s) : done (false), bcount (0), sbp (s) 
+  {
+    new_data = New refcounted<keyhash_data>;
+  }
 };
 
 typedef callback<void, dhc_stat, clnt_stat>::ref dhc_cb_t;
@@ -424,18 +420,11 @@ class dhc /*: public virtual refcount*/ {
   void getblock_retry_cb (user_args *, ptr<location>, ptr<read_state>);
   void recv_getblock (user_args *);
 
-  void get_lookup_cb (chordID, dhc_getcb_t, vec<chord_node>, route, chordstat);
-  void get_result_cb (chordID, dhc_getcb_t, ptr<dhc_get_res>, clnt_stat);
-  
   void recv_put (user_args *);
   void recv_putblock (user_args *);
-
-  void put_lookup_cb (put_args *, dhc_cb_t, bool,
-  		      vec<chord_node>, route, chordstat);
-  void put_result_cb (chordID, dhc_cb_t, ptr<dhc_put_res>, clnt_stat);
-  void putblock_cb (/*user_args *,*/ ptr<dhc_block>, ptr<location>, ptr<write_state>, 
+  void putblock_cb (ptr<location>, ptr<write_state>, 
 		    ref<dhc_put_res>, clnt_stat);
-  void putblock_retry_cb (/*user_args *,*/ ptr<dhc_block>, ptr<location>, ptr<write_state>);
+  void putblock_retry_cb (ptr<location>, ptr<write_state>);
 
   void recv_newblock (user_args *);
   void recv_newblock_ack (user_args *, ptr<uint>, 
@@ -446,10 +435,6 @@ class dhc /*: public virtual refcount*/ {
   ~dhc () {};
   
   void init ();
-  
-  void get (ptr<location>, chordID, dhc_getcb_t);
-  void put (ptr<location>, chordID, chordID, ref<dhash_value>, dhc_cb_t, 
-	    bool newblock=false);
   void dispatch (user_args *);
   
 };

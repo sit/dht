@@ -1,4 +1,11 @@
 
+-major code clean up
+
+-make it so that only reconfigure when nodes in the configuration die,
+or when primary changes.
+
+-figure out what RPCs are sent during recon. ACLNT_TRace or tcpdump.
+
 -If received error RPC_CANTSEND, set l->markalive to true and send the RPC anyway.
 Frank says make sure l is a pointer from a locationtable,
 i.e. from lookup() not lookup_or_create()
@@ -10,6 +17,7 @@ Can do all this in recon_timer ().
 
 
 DONE:
+-ping for rtts between emulab nodes = 20ms
 
 -Right now keyhash_meta has a cvalid tag that is set to false
 when a node is in the old configuration, and has finished reconfiguration
