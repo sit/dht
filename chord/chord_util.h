@@ -65,6 +65,7 @@ chordID init_chordID (int index, str name, int p);
 chordID make_chordID (str hostname, int port, int index = 0);
 bool is_authenticID (const chordID &x, sfs_hostname n, int p, int vnode);
 int is_authenticID (const chordID &x, sfs_hostname n, int p);
+bool str2chordID (str c, chordID &newID);
 
 void warnt(char *msg);
 

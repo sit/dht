@@ -411,3 +411,22 @@ is_authenticID (const chordID &x, sfs_hostname n, int p)
   }
   return -1;
 }
+
+bool
+str2chordID (str c, chordID &newID)
+{
+  if (c.len () > NBIT / 4)
+    return false;
+  
+  newID = 0;
+  for (unsigned int i = 0; i < c.len (); i++) {
+    if (c[i] >= '0' && c[i] <= '9') {
+      newID = (newID << 4) | (c[i] - '0');
+    } else if (c[i] >= 'a' && c[i] <= 'f') {
+      newID = (newID << 4) | (c[i] - 'a' + 10);
+    } else {
+      return false;
+    }
+  }
+  return true;
+}
