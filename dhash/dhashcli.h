@@ -14,7 +14,7 @@ typedef callback<void, dhash_stat, vec<chord_node>, route>::ref
 typedef	callback<void, dhash_stat, bool>::ref sendblockcb_t;
 
 #include "download.h" // for cbretrieve_t
-#include <dhc.h>
+#include <dhc_prot.h>
 
 // Forward declarations
 class dbfe;
@@ -26,7 +26,6 @@ class route_iterator;
 class dhashcli {
   ptr<vnode> clntnode;
   bool ordersucc_;
-  ptr<dhc> dhc_mgr;
 
   struct rcv_state {
     blockID key;
@@ -44,6 +43,8 @@ class dhashcli {
     cb_ret callback;
 
     bool completed;
+
+    ptr<dhc_get_res> dhcres;
 
     void timemark () {
       timespec x;
@@ -96,7 +97,7 @@ class dhashcli {
 			u_int nstores, u_int min_needed,
 			dhash_stat err, chordID id, bool present);
   void insert_dhc_cb (ptr<location> dest, route r, 
-		      cbinsert_path_t cb, dhc_stat err, clnt_stat cerr);
+		      cbinsert_path_t cb, clnt_stat cerr);
   
   void fetch_frag (ptr<rcv_state> rs);
 
@@ -111,6 +112,9 @@ class dhashcli {
   void retrieve_block_hop_cb (ptr<rcv_state> rs, route_iterator *ci,
 			     int options, int retries, ptr<chordID> guess,
 			     bool done);
+  void retrieve_dhc_cb (ptr<rcv_state> rs, dhash_stat status,
+			int options, int retries, 
+			ptr<chordID> guess, clnt_stat err);
   void retrieve_dl_or_walk_cb (ptr<rcv_state> rs, dhash_stat status,
                                int options, int retries, ptr<chordID> guess,
 			       ptr<dhash_block> blk);
@@ -121,7 +125,7 @@ class dhashcli {
 		   chord_node dest,
 		   int retry_num);
 public:
-  dhashcli (ptr<vnode> node, str dhcs = str("default"), uint nreplica = 5);
+  dhashcli (ptr<vnode> node, uint nreplica = 5);
 
   void assemble (blockID b, cb_ret cb, vec<chord_node> succs, route r);
   void retrieve (blockID blockID, cb_ret cb, 

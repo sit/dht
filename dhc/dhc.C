@@ -26,11 +26,16 @@ dhc::dhc (ptr<vnode> node, str dbname, uint k) :
   str dbs = strbuf () << dbname << ".dhc";
   open_db (db, dbs, opts, "dhc: keyhash rep db file");
   
+}
+
+
+void
+dhc::init ()
+{
   warn << myNode->my_ID () << " registered dhc_program_1\n";
   myNode->addHandler (dhc_program_1, wrap (this, &dhc::dispatch));
   
   recon_tm = delaycb (RECON_TM, wrap (this, &dhc::recon_timer));
-
 }
 
 void
@@ -944,8 +949,6 @@ dhc::recv_put (user_args *sbp)
     ptr<write_state> ws = New refcounted<write_state> (sbp);
     for (uint i=0; i<b->config.size (); i++) {
       ptr<dhc_put_res> res = New refcounted<dhc_put_res>;
-      //user_args *mysbp = New user_args (*sbp);
-      //printf("sbp pointer is %x\n", (uint)sbp); 
       myNode->doRPC (b->config[i], dhc_program_1, DHCPROC_PUTBLOCK, arg, res,
 		     wrap (this, &dhc::putblock_cb, kb, b->config[i], ws, res));
     }

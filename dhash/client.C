@@ -89,7 +89,7 @@ dhashcli_config_init::dhashcli_config_init ()
 // ---------------------------------------------------------------------------
 // DHASHCLI
  
-dhashcli::dhashcli (ptr<vnode> node, str dhcs, uint nreplica)
+dhashcli::dhashcli (ptr<vnode> node, uint nreplica)
   : clntnode (node), ordersucc_ (true)
 {
   int ordersucc = 1;
@@ -97,8 +97,12 @@ dhashcli::dhashcli (ptr<vnode> node, str dhcs, uint nreplica)
   ordersucc_ = (ordersucc > 0);
   warn << "will order successors " << ordersucc_ << "\n";
 
-  if (DHC)
+#if 0
+  if (DHC) {
     dhc_mgr = New refcounted<dhc> (clntnode, dhcs, nreplica);
+    dhc_mgr->init ();
+  }
+#endif
 }
 
 void
@@ -255,13 +259,45 @@ dhashcli::retrieve_block_hop_cb (ptr<rcv_state> rs, route_iterator *ci,
   chord_node s = rs->succs.pop_front ();
   if (DHC && rs->key.ctype == DHASH_KEYHASH) {
     ptr<location> l = clntnode->locations->lookup_or_create (s);
+    ptr<dhc_get_arg> arg = New refcounted<dhc_get_arg>;
+    arg->bID = rs->key.ID;
+    rs->dhcres = New refcounted<dhc_get_res> (DHC_OK);   
+
+    clntnode->doRPC (l, dhc_program_1, DHCPROC_GET, arg, rs->dhcres,
+		     wrap (this, &dhashcli::retrieve_dhc_cb,
+			   rs, status, options, retries, guess));
+
+#if 0
     dhc_mgr->get (l, rs->key.ID, wrap (this, &dhashcli::retrieve_dl_or_walk_cb,
 				       rs, status, options, retries, guess));
+#endif
   } else 
     dhash_download::execute (clntnode, s, rs->key, NULL, 0, 0, 0,
 			     wrap (this, &dhashcli::retrieve_dl_or_walk_cb,
 				   rs, status, options, retries, guess));
 }
+
+void 
+dhashcli::retrieve_dhc_cb (ptr<rcv_state> rs, dhash_stat status,
+			   int options, int retries, 
+			   ptr<chordID> guess, clnt_stat err)
+{
+  if (rs->dhcres->status == DHC_OK) {
+    ptr<dhash_block> blk = 
+      New refcounted<dhash_block> (rs->dhcres->resok->data.data.base (), 
+				   rs->dhcres->resok->data.data.size (),
+				   DHASH_KEYHASH);
+    blk->ID = rs->key.ID;
+    blk->source = clntnode->my_ID ();
+    blk->hops   = 0;
+    blk->errors = 0;
+    
+    retrieve_dl_or_walk_cb (rs, status, options, retries, guess, blk);
+  } else {
+    retrieve_dl_or_walk_cb (rs, status, options, retries, guess, 0); 
+  }
+}
+
 
 void
 dhashcli::retrieve_dl_or_walk_cb (ptr<rcv_state> rs, dhash_stat status,
@@ -728,14 +764,25 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, int opti
 				    dhash::num_dfrags ()),
 			      i == 0 ? DHASH_STORE : DHASH_REPLICA);
       }
-    }
-    else {
+    } else {
       ptr<location> dest = clntnode->locations->lookup_or_create (succs[0]);
-      ref<dhash_value> value = New refcounted<dhash_value>;
-      value->set (block->data, block->len);
+      ptr<dhc_put_arg> arg = New refcounted<dhc_put_arg>;
+      arg->bID = block->ID;
+      arg->writer = clntnode->my_ID ();
+      arg->value.set (block->data, block->len);
+      ptr<dhc_put_res> res = New refcounted<dhc_put_res>;
+
+      if (options & DHASHCLIENT_NEWBLOCK)
+	clntnode->doRPC (dest, dhc_program_1, DHCPROC_NEWBLOCK, arg, res,
+			 wrap (this, &dhashcli::insert_dhc_cb, dest, r, ss->cb));
+      else 
+	clntnode->doRPC (dest, dhc_program_1, DHCPROC_PUT, arg, res,
+			 wrap (this, &dhashcli::insert_dhc_cb, dest, r, ss->cb));	
+#if 0
       dhc_mgr->put (dest, block->ID, clntnode->my_ID (), value, 
 		    wrap (this, &dhashcli::insert_dhc_cb, dest, r, ss->cb),
 		    options & DHASHCLIENT_NEWBLOCK);
+#endif
     }
     return;
   }
@@ -824,10 +871,10 @@ dhashcli::insert_store_cb (ref<sto_state> ss, route r, u_int i,
 
 void
 dhashcli::insert_dhc_cb (ptr<location> dest, route r, 
-			 cbinsert_path_t cb, dhc_stat err, clnt_stat cerr)
+			 cbinsert_path_t cb, /*dhc_stat err,*/ clnt_stat cerr)
 {
   vec<chordID> path;
-  if (!err) {
+  if (!cerr) {
     for (uint i=0; i<r.size (); i++) 
       path.push_back (r[i]->id ());
 
@@ -841,7 +888,7 @@ dhashcli::insert_dhc_cb (ptr<location> dest, route r,
 
     (*cb) (DHASH_OK, path);
   } else {
-    warning << clntnode->my_ID () << "dhc err: " << err << "\n";
+    warning << clntnode->my_ID () << "dhash err: " << cerr << "\n";
     path.push_back (dest->id ());
     (*cb) (DHC_ERR, path);
   }

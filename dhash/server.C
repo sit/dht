@@ -61,6 +61,7 @@
 
 #include <merkle_sync_prot.h>
 int JOSH = getenv("JOSH") ? atoi(getenv("JOSH")) : 0;
+int DHC_SERVER = getenv("DHC") ? atoi(getenv("DHC")) : 0;
 
 #include <configurator.h>
 
@@ -221,8 +222,14 @@ dhash_impl::init_after_chord (ptr<vnode> node)
   trace << host_node->my_ID () << " registered dhash_program_1\n";
   host_node->addHandler (dhash_program_1, wrap(this, &dhash_impl::dispatch));
 
+  // helper class for PK block consistency
+  if (DHC_SERVER) {
+    dhc_mgr = New refcounted<dhc> (host_node, dhcs, nreplica);
+    dhc_mgr->init ();
+  } 
+
   // the client helper class (will use for get_key etc)
-  cli = New dhashcli (node, dhcs, nreplica);
+  cli = New dhashcli (node, nreplica);
 
   update_replica_list ();
   delaycb (synctm (), wrap (this, &dhash_impl::sync_cb));

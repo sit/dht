@@ -392,7 +392,7 @@ struct put_args {
   }
 };
 
-class dhc : public virtual refcount {
+class dhc /*: public virtual refcount*/ {
   
   ptr<vnode> myNode;
   ptr<dbfe> db;
@@ -401,7 +401,7 @@ class dhc : public virtual refcount {
   uint n_replica;
   uint recon_tm_rpcs;
   timecb_t *recon_tm;
-  
+
   void recon_timer ();
   void recon_tm_lookup (ref<dhc_block>, bool, vec<chord_node>, route, chordstat);
   void recon_tm_done (dhc_stat, clnt_stat);
@@ -439,6 +439,8 @@ class dhc : public virtual refcount {
 
   dhc (ptr<vnode>, str, uint);
   ~dhc () {};
+  
+  void init ();
   
   void get (ptr<location>, chordID, dhc_getcb_t);
   void put (ptr<location>, chordID, chordID, ref<dhash_value>, dhc_cb_t, 

@@ -1,6 +1,7 @@
 #include "dhash.h"
 #include <pmaint.h>
 #include <dbfe.h>
+#include <dhc.h>
 
 // Forward declarations.
 class RPC_delay_args;
@@ -83,6 +84,7 @@ class dhash_impl : public dhash {
   ptr<vnode> host_node;
   dhashcli *cli;
   str dhcs;
+  ptr<dhc> dhc_mgr;
 
   merkle_server *msrv;
   pmaint *pmaint_obj;
