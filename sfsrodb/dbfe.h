@@ -167,6 +167,7 @@ struct dbImplInfo {
 struct dbEnumeration {
 #ifdef SLEEPYCAT
   dbEnumeration(DB *db);
+  ~dbEnumeration ();
 #else
   ~dbEnumeration ();
   dbEnumeration(btreeSync *adb);

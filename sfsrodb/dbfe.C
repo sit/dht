@@ -106,6 +106,10 @@ dbEnumeration::dbEnumeration(DB *db ) {
   cursor_init = 0;
 }
 
+dbEnumeration::~dbEnumeration() {
+  cursor->c_close (cursor);
+}
+
 #else
 dbEnumeration::dbEnumeration(btreeSync *adb) {
 
