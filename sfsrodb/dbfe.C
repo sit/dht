@@ -91,15 +91,29 @@ dbOptions::getOption(char *optionSig) {
 //////////////////////dbEnumeration//////////////////////
 
 #ifdef SLEEPYCAT
-dbEnumeration::dbEnumeration(DB *db ) {
-
+dbEnumeration::dbEnumeration(DB *db, DB_ENV *dbe) {
+  int r = 0;
   db_sync = db;
-  db->cursor(db, NULL, &cursor, 0);
+
+  t = NULL;
+  if(dbe) {
+    r = txn_begin(dbe, NULL, &t, 0);
+    if (r) { dbe->err(dbe, r, "txn_begin"); fatal << "wah\n"; }
+  }
+
+  r = db->cursor(db, t, &cursor, 0);
+  if (r) { dbe->err(dbe, r, "db->cursor"); fatal << "wah\n"; }
   cursor_init = 0;
 }
 
 dbEnumeration::~dbEnumeration() {
   cursor->c_close (cursor);
+
+  if(t) {
+    int r = txn_commit(t, 0);
+    if (r) warn << "cursor: bad txn_commit\n";
+    t = NULL;
+  }
 }
 
 #else
@@ -267,6 +281,7 @@ dbfe::dbfe() {
     gADB_async = NULL;
 #else
     db = NULL;
+    dbe = NULL;
 
     create_impl = wrap(this, &dbfe::IMPL_create_sleepycat);
     open_impl = wrap(this, &dbfe::IMPL_open_sleepycat);
@@ -291,30 +306,74 @@ dbfe::~dbfe() {
 
 #ifdef SLEEPYCAT
 int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) { 
-  int r;
+  char cpath[MAXPATHLEN];
+  int r = -1, fd = -1;
+  bool do_dbenv = false;
+  if(filename) do_dbenv = true;
 
- r = db_create(&db, NULL, 0);
- if (r != 0) return r;
- 
- long mode = opts.getOption(PERM_OPT);
- if (mode == -1) mode = 0664;
- long flags = opts.getOption(FLAG_OPT);
- if (flags == -1) flags = DB_CREATE;
- long create = opts.getOption(CREATE_OPT);
- if (create == 0) flags |= DB_EXCL;
- long cacheSize = opts.getOption(CACHE_OPT);
- 
- if (cacheSize > -1) {
-   r = db->set_cachesize(db, 0, cacheSize, 0);
-   if (r != 0) return r;
- }
+  long mode = opts.getOption(PERM_OPT);
+  if (mode == -1) mode = 0664;
+  long flags = opts.getOption(FLAG_OPT);
+  if (flags == -1) flags = DB_CREATE;
+  long create = opts.getOption(CREATE_OPT);
+  if (create == 0) flags |= DB_EXCL;
+  long cacheSize = opts.getOption(CACHE_OPT);
+
+  if(do_dbenv) {
+    fd = open(".", O_RDONLY);
+    if(fd == -1) fatal << "can't open current working dir\n";
+    mkdir(filename, 0755);
+    r = chdir(filename);
+    if(r == -1) fatal << "couldn't chdir to " << filename << "\n";
+
+    r = db_env_create(&dbe, 0);
+    if (r) return r;
+
+    if (cacheSize > -1) {
+      r = dbe->set_cachesize(dbe, 0, cacheSize*1024, 0);
+      if (r) return r;
+    }
+    // uncomment the below for slightly better performance
+    //    r = dbe->set_flags(dbe, DB_TXN_NOSYNC, 1);
+    //    if (r) return r;
+    getwd(cpath);
+    r = dbe->set_data_dir(dbe, cpath);
+    if (r) return r;
+    r = dbe->set_lg_dir(dbe, cpath);
+    if (r) return r;
+    r = dbe->set_tmp_dir(dbe, cpath);
+    if (r) return r;
+
+    r = dbe->open(dbe, NULL, DB_CREATE | DB_INIT_MPOOL | DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_TXN | DB_RECOVER , 0);
+    if (r) return r;
+  }
+
+  r = db_create(&db, dbe, 0);
+  if (r) return r;
+
+  db->set_pagesize(db, 20 * 1024);
+  // the below seems to cause the db to grow much larger.
+  //  db->set_bt_minkey(db, 60);
+
+  if(!do_dbenv) {
+    if (cacheSize > -1) {
+      r = db->set_cachesize(db, 0, cacheSize*1024, 0);
+      if (r) return r;
+    }
+  }
 
 #if ((DB_VERSION_MAJOR < 4) || ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 1)))
- r = db->open(db, (const char *)filename, NULL, DB_BTREE, flags, mode);
+  r = db->open(db, (const char *)filename, NULL, DB_BTREE, flags, mode);
 #else
- r = db->open(db, NULL, (const char *)filename, NULL, DB_BTREE, flags, mode);
+  r = db->open(db, NULL, (const char *)filename, NULL, DB_BTREE, flags, mode);
 #endif
- return r;
+
+  if(do_dbenv) {
+    fchdir(fd);
+    close(fd);
+  }
+
+  return r;
 }
 
 
@@ -326,6 +385,8 @@ dbfe::IMPL_create_sleepycat(char *filename, dbOptions opts)
 } 
 
 int dbfe::IMPL_insert_sync_sleepycat(ref<dbrec> key, ref<dbrec> data) { 
+  DB_TXN *t = NULL;
+  int r = 0;
   DBT skey, content;
   bzero(&skey, sizeof(skey));
   bzero(&content, sizeof(content));
@@ -334,11 +395,20 @@ int dbfe::IMPL_insert_sync_sleepycat(ref<dbrec> key, ref<dbrec> data) {
   skey.size = key->len;
   skey.data = key->value;
 
-  int r = 0;
+  if(dbe) {
+    r = txn_begin(dbe, NULL, &t, 0);
+    if (r) return r;
+  }
 
-  if ((r = db->put(db, NULL, &skey, &content, 0)) != 0) return r;
+  r = db->put(db, t, &skey, &content, 0);
+  if (r) return r;
 
-  return 0;
+  if(t) {
+    r = txn_commit(t, 0);
+    t = NULL;
+  }
+
+  return r;
 } 
 
 ptr<dbrec> 
@@ -362,11 +432,26 @@ dbfe::IMPL_lookup_sync_sleepycat(ref<dbrec> key)
 
 int 
 dbfe::IMPL_delete_sync_sleepycat(ptr<dbrec> key) {
+  DB_TXN *t = NULL;
+  int err;
   DBT dkey;
   bzero(&dkey, sizeof(dkey));
   dkey.size = key->len;
   dkey.data = key->value;
-  int err = db->del (db, NULL, &dkey, 0);
+
+  if(dbe) {
+    err = txn_begin(dbe, NULL, &t, 0);
+    if (err) return err;
+  }
+
+  err = db->del (db, t, &dkey, 0);
+  if (err) return err;
+
+  if(t) {
+    err = txn_commit(t, 0);
+    t = NULL;
+  }
+
   return err;
 }
 
@@ -394,11 +479,16 @@ void dbfe::IMPL_lookup_async_sleepycat(ref<dbrec> key, itemReturn_cb cb)
 }
 
 int 
-dbfe::IMPL_close_sleepycat() { return db->close(db, 0); };
+dbfe::IMPL_close_sleepycat() { 
+  int r;
+  r = db->close(db, 0);
+  if(dbe) dbe->close(dbe, 0);
+  return r;
+}
 
 ptr<dbEnumeration> dbfe::IMPL_make_enumeration_sleepycat()
 {
-  return New refcounted<dbEnumeration>(db);
+  return New refcounted<dbEnumeration>(db, dbe);
 }
 
 void 
@@ -412,9 +502,6 @@ void
 dbfe::IMPL_sync () {
   db->sync (db, 0L);
 }
-
-
-
 
 #else 
 

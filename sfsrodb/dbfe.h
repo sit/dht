@@ -155,7 +155,7 @@ struct dbImplInfo {
 
 struct dbEnumeration {
 #ifdef SLEEPYCAT
-  dbEnumeration(DB *db);
+  dbEnumeration(DB *db, DB_ENV *dbe);
   ~dbEnumeration ();
 #else
   ~dbEnumeration ();
@@ -178,6 +178,7 @@ struct dbEnumeration {
   DB* db_sync;
   DBC *cursor;
   char cursor_init;
+  DB_TXN *t;
 #else
   bIteration *it;
   btreeSync *ADB_sync;
@@ -222,6 +223,7 @@ class dbfe {
   callback<ptr<dbEnumeration> >::ptr make_enumeration;
 
 #ifdef SLEEPYCAT
+  DB_ENV* dbe;
   DB* db;
   int IMPL_open_sleepycat(char *filename, dbOptions opts);
   int IMPL_close_sleepycat();
@@ -277,7 +279,6 @@ class dbfe {
     { return (*delete_impl_async) (key, cb); };
   void sync () 
     { IMPL_sync (); };
-
 
 
 
