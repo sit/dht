@@ -41,8 +41,8 @@ private:
   struct join_result {
     int ok;
   };
+  void do_join(void *args, void *result);
   void handle_join(NodeID id, IPAddress ip);
-  void handle_join(void *args, void *result);
 
 
   // lookup
