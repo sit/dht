@@ -159,8 +159,8 @@ class locationtable : public virtual refcount {
   void updateloc (chordID &x, net_address &r);
   void increfcnt (chordID &n);
   bool lookup_anyloc (chordID &n, chordID *r);
-  chordID findsuccloc (chordID x);
-  chordID findpredloc (chordID x);
+  chordID closestsuccloc (chordID x);
+  chordID closestpredloc (chordID x);
   net_address & getaddress (chordID &x);
   chordID query_location_table (chordID x);
   void changenode (node *n, chordID &n, net_address &r);

@@ -137,13 +137,12 @@ between (chordID &a, chordID &b, chordID &n)
 {
   bool r;
   if (a == b) {
-    r = 1;
+    r = n != a;   // n is the only node not in the interval (n,n)
   } else if (a < b) {
     r = (n > a) && (n < b);
   } else {
     r = (n > a) || (n < b);
   }
-  // warnx << n << " between( " << a << ", " <<  b << "): " <<  r << "\n";
   return r;
 }
 
@@ -158,14 +157,12 @@ betweenleftincl (chordID &a, chordID &b, chordID &n)
   } else {
     r = (n >= a) || (n < b);
   }
-  // warnx << n << " between( " << a << ", " <<  b << "): " <<  r << "\n";
   return r;
 }
 
 bool
 betweenrightincl (chordID &a, chordID &b, chordID &n)
 {
-  //  bool f = (b - a) > 0;  
   bool r;
   if ((a == b) && (n == a)) {
     r = 1;
@@ -174,7 +171,6 @@ betweenrightincl (chordID &a, chordID &b, chordID &n)
   } else {
     r = (n > a) || (n <= b);
   }
-  // warnx << n << " between( " << a << ", " <<  b << "): " <<  r << "\n";
   return r;
 }
 

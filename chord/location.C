@@ -145,13 +145,13 @@ locationtable::query_location_table (chordID x) {
 }
 
 chordID
-locationtable::findsuccloc (chordID x) {
+locationtable::closestsuccloc (chordID x) {
   chordID n = x;
   for (location *l = locs.first (); l; l = locs.next (l)) {
     if (l->refcnt == 0) continue;
     if ((x == n) || between (x, n, l->n)) n = l->n;
   }
-  // warnx << "findsuccloc of " << x << " is " << n << "\n";
+  // warnx << "closestsuccloc of " << x << " is " << n << "\n";
   return n;
 }
 
@@ -357,7 +357,7 @@ locationtable::betterpred_greedy (chordID myID, chordID current,
 }
 
 chordID
-locationtable::findpredloc (chordID x) 
+locationtable::closestpredloc (chordID x) 
 {
   chordID n = x;
   for (location *l = locs.first (); l; l = locs.next (l)) {

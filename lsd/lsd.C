@@ -128,8 +128,12 @@ startclntd()
 }
 
 static void
-newvnode_cb (int nreplica, int n, vnode *my)
+newvnode_cb (int nreplica, int n, vnode *my, chordstat stat)
 {
+  if (stat != CHORD_OK) {
+    warnx << "newvnode_cb: status " << stat << "\n";
+    fatal ("unable to join\n");
+  }
   str db_name_prime = strbuf () << db_name << "-" << n;
   if (ndhash == MAX_VNODES) fatal << "Too many virtual nodes (1024)\n";
   dh[ndhash++] = New dhash (db_name_prime, my, nreplica, 10000, 1000, ss_mode);

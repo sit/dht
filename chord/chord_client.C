@@ -80,7 +80,7 @@ chord::newvnode (cbjoin_t cb)
     vnodep->join (cb);
   } else {
     vnodep->stabilize ();
-    (*cb) (vnodep);
+    (*cb) (vnodep, CHORD_OK);
   }
   return vnodep;
 }

@@ -22,7 +22,8 @@
 #include "chord.h"
 #include "math.h"
 
-#define TIMEOUT 60
+#define TIMEOUT 10
+
 
 #ifdef FAKE_DELAY
 long geo_distance (chordID x, chordID y) 

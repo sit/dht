@@ -90,30 +90,38 @@ vnode::nth_successorID (int n)
 }
 
 void
-vnode::find_successor (chordID &n, chordID &x, cbroute_t cb)
+vnode::find_successor (chordID &x, cbroute_t cb)
 {
-  // warn << "find_successor: " << n << " " << x << "\n";
   nfindsuccessor++;
-  find_route (n, x, wrap (mkref (this), &vnode::find_successor_cb, x, cb));
+  find_route (x, wrap (mkref (this), &vnode::find_successor_cb, x, cb));
 }
 
 void
 vnode::find_successor_cb (chordID x, cbroute_t cb, chordID s, 
 			  route search_path, chordstat status)
 {
+  //  warnx << "find_successor_cb: succ of " << x << " is " << s << " pathlen "
+  //<< search_path.size () << "\n";
+  //for (unsigned i = 0; i < search_path.size (); i++) {
+  //warnx << search_path[i] << "\n";
+  //}
   cb (s, search_path, status);
 }
 
 void
-vnode::find_route (chordID &n, chordID &x, cbroute_t cb) 
+vnode::find_route (chordID &x, cbroute_t cb) 
 {
   nfindpredecessor++;
-  if (n == finger_table[1].first.n) {    // is n the only node?
+  if (myID == finger_table[1].first.n) {    // is n the only node?
     route search_path;
-    search_path.push_back (n);
-    cb (n, search_path, CHORD_OK);
+    cb (myID, search_path, CHORD_OK);
   } else {
+    chordID n = lookup_closestpred (x);
     route search_path;
+    if ((n == myID) && (x == myID)) {
+      print ();
+      assert (0);
+    }
     search_path.push_back (n);
     findpredecessor_cbstate *st = 
       New findpredecessor_cbstate (x, search_path, cb);
@@ -217,7 +225,7 @@ vnode::alert (chordID &n, chordID &x)
   na->v.n = n;
   na->n.x = x;
   na->n.r = locations->getaddress (x);
-  doRPC ( n, chord_program_1, CHORDPROC_ALERT, na, res, 
+  doRPC (n, chord_program_1, CHORDPROC_ALERT, na, res, 
 		    wrap (mkref (this), &vnode::alert_cb, res));
 }
 

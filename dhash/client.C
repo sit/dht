@@ -197,7 +197,6 @@ dhashclient::lookup_iter_cb (svccb *sbp,
 {
   dhash_fetch_arg *arg = sbp->template getarg<dhash_fetch_arg> ();
   ptr<dhash_fetch_arg> rarg = New refcounted<dhash_fetch_arg>(*arg);
-  
 
   if (err) {
     /* CASE I */

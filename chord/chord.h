@@ -33,7 +33,6 @@
 #include "dmalloc.h"
 #endif
 
-#include "cache.h"
 #include "chord_prot.h"
 #include "chord_util.h"
 #include "location.h"
@@ -47,7 +46,7 @@ class vnode;
 
 typedef vec<chordID> route;
 typedef callback<void,chordID,bool,chordstat>::ref cbchallengeID_t;
-typedef callback<void,vnode*>::ref cbjoin_t;
+typedef callback<void,vnode*,chordstat>::ref cbjoin_t;
 typedef callback<void,chordID,net_address,chordstat>::ref cbchordID_t;
 typedef callback<void,chordID,route,chordstat>::ref cbroute_t;
 typedef unsigned long cxid_t;
@@ -122,8 +121,8 @@ class vnode : public virtual refcount {
   void updatefingers (chordID &x, net_address &r);
   void replacefinger (chordID &s, node *n);
   u_long estimate_nnodes ();
-  chordID findpredfinger (chordID &x);
-  chordID findpredfinger_ss (chordID &x);
+  chordID closestpredfinger (chordID &x);
+  chordID closestpredfinger_ss (chordID &x);
 
   u_int nout_backoff;
   u_int nout_continuous;
@@ -147,6 +146,7 @@ class vnode : public virtual refcount {
 			 clnt_stat err);
   void get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res, 
 			   clnt_stat err);
+  void find_route (chordID &x, cbroute_t cb);
   void find_successor_cb (chordID x, 
 			  cbroute_t cb, chordID s, route sp, chordstat status);
   void testrange_findclosestpred (chordID node, chordID x, 
@@ -182,11 +182,22 @@ class vnode : public virtual refcount {
   void join (cbjoin_t cb);
   void get_successor (chordID n, cbchordID_t cb);
   void get_predecessor (chordID n, cbchordID_t cb);
-  void find_successor (chordID &n, chordID &x, cbroute_t cb);
-  void find_route (chordID &n, chordID &x, cbroute_t cb);
+  void find_successor (chordID &x, cbroute_t cb);
   void notify (chordID &n, chordID &x);
   void alert (chordID &n, chordID &x);
   chordID nth_successorID (int n);
+
+  // For other modules
+  int countrefs (chordID &x);
+  chordID closestsuccfinger (chordID &x);
+  void deletefingers (chordID &x);
+  void stats (void);
+  void print (void);
+  void stop (void);
+  bool hasbecomeunstable (void);
+  bool isstable (void);
+  chordID lookup_closestpred (chordID &x);
+  chordID lookup_closestsucc (chordID &x);
 
   // The RPCs
   void doget_successor (svccb *sbp);
@@ -198,18 +209,6 @@ class vnode : public virtual refcount {
   void doalert (svccb *sbp, chord_nodearg *na);
   void dogetfingers (svccb *sbp);
   void dochallenge (svccb *sbp, chord_challengearg *ca);
-
-  // For other modules
-  int countrefs (chordID &x);
-  chordID findsuccfinger (chordID &x);
-  void deletefingers (chordID &x);
-  void stats (void);
-  void print (void);
-  void stop (void);
-  bool hasbecomeunstable (void);
-  bool isstable (void);
-  chordID lookup_closestpred (chordID &x);
-  chordID lookup_closestsucc (chordID &x);
 
   //RPC demux
   void addHandler (unsigned long prog, cbdispatch_t cb) {
@@ -271,8 +270,7 @@ class chord : public virtual refcount {
     return active->lookup_closestpred (k); 
   };
   void find_successor (chordID n, cbroute_t cb) {
-    chordID myID = active->my_ID ();
-    active->find_successor (myID, n, cb);
+    active->find_successor (n, cb);
   };
   void get_predecessor (chordID n, cbchordID_t cb) {
     active->get_predecessor (n, cb);
