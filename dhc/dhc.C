@@ -23,7 +23,7 @@ dhc::dhc (ptr<vnode> node, str dbname, uint k) :
 }
 
 void 
-dhc::recon (chordID bID, dhc_reconcb_t cb)
+dhc::recon (chordID bID, dhc_cb_t cb)
 {
 
 #if DHC_DEBUG
@@ -84,7 +84,7 @@ dhc::recon (chordID bID, dhc_reconcb_t cb)
 }
 
 void 
-dhc::recv_promise (chordID bID, dhc_reconcb_t cb, 
+dhc::recv_promise (chordID bID, dhc_cb_t cb, 
 		   ref<dhc_prepare_res> promise, clnt_stat err)
 {
 #if DHC_DEBUG
@@ -137,7 +137,7 @@ dhc::recv_promise (chordID bID, dhc_reconcb_t cb,
 }
 
 void
-dhc::recv_accept (chordID bID, dhc_reconcb_t cb, 
+dhc::recv_accept (chordID bID, dhc_cb_t cb, 
 		  ref<dhc_propose_res> proposal, clnt_stat err)
 {
   if (!err && proposal->status == DHC_OK) {
@@ -433,10 +433,11 @@ dhc::recv_get (user_args *sbp)
     ptr<dhc_get_arg> arg = New refcounted<dhc_get_arg>;
     arg->bID = get->bID;
     ptr<read_state> rs = New refcounted<read_state>;
-    ptr<dhc_get_res> res = New refcounted<dhc_get_res>;
-    for (uint i=0; i<b->config.size (); i++)
+    for (uint i=0; i<b->config.size (); i++) {
+      ptr<dhc_get_res> res = New refcounted<dhc_get_res>;
       myNode->doRPC (b->config[i], dhc_program_1, DHCPROC_GETBLOCK, arg, res,
 		     wrap (this, &dhc::getblock_cb, sbp, b->config[i], rs, res));
+    }
   }
 }
 
@@ -519,6 +520,178 @@ dhc::recv_getblock (user_args *sbp)
 }
 
 void 
+dhc::put (chordID bID, chordID writer, ref<dhash_value> value, dhc_cb_t cb)
+{
+  ptr<location> l = myNode->locations->lookup (bID);
+  if (l) {
+    ptr<dhc_put_arg> arg = New refcounted<dhc_put_arg>;
+    arg->bID = bID;
+    arg->writer = writer;
+    arg->value.set (value->base (), value->size ());
+    ptr<dhc_put_res> res = New refcounted<dhc_put_res>;
+    myNode->doRPC (l, dhc_program_1, DHCPROC_PUT, arg, res,
+		   wrap (this, &dhc::put_result_cb, bID, cb, res));
+  } else {
+    put_args *pa = New put_args (bID, writer, value);
+    myNode->find_successor (bID, wrap (this, &dhc::put_lookup_cb, pa, cb));
+  }
+}
+
+void 
+dhc::put_lookup_cb (put_args *pa, dhc_cb_t cb, 
+		    vec<chord_node> succ, route path, chordstat err)
+{
+  if (!err) {
+    ptr<location> l = myNode->locations->lookup (succ[0].x); 
+    ptr<dhc_put_arg> arg = New refcounted<dhc_put_arg>;
+    arg->bID = pa->bID;
+    arg->writer = pa->writer;
+    arg->value.set (pa->value->base (), pa->value->size ());
+    ptr<dhc_put_res> res = New refcounted<dhc_put_res>;
+    myNode->doRPC (l, dhc_program_1, DHCPROC_PUT, arg, res,
+		   wrap (this, &dhc::put_result_cb, pa->bID, cb, res));
+    delete pa;
+  } else 
+    (*cb) (DHC_CHORDERR);
+}
+
+void 
+dhc::put_result_cb (chordID bID, dhc_cb_t cb, ptr<dhc_put_res> res, clnt_stat err)
+{
+  if (err)
+    (*cb) (DHC_CHORDERR);
+  else (*cb) (res->status);
+}
+
+void
+dhc::recv_put (user_args *sbp)
+{
+  dhc_put_arg *put = sbp->template getarg<dhc_put_arg> ();
+  ptr<dbrec> key = id2dbrec (put->bID);
+  ptr<dbrec> rec = db->lookup (key);
+
+  if (!rec) {
+    dhc_put_res res; res.status = DHC_BLOCK_NEXIST;
+    sbp->reply (&res);
+    return;
+  }
+   
+  dhc_soft *b = dhcs[put->bID];
+  if (b && b->pstat->recon_inprogress) {
+    dhc_put_res res; res.status = DHC_RECON_INPROG;
+    sbp->reply (&res);
+    return;
+  }
+    
+  ptr<dhc_block> kb = to_dhc_block (rec);
+  //check if myNode is the primary in kb.config 
+  if (!b) {
+    b = New dhc_soft (myNode, kb);
+    dhcs.insert (b);
+  } 
+
+  tag_t newtag;
+  newtag.ver = kb->data->tag.ver + 1;
+  newtag.writer = put->writer;
+  if (tag_cmp (newtag, kb->data->tag) == 1) {
+    kb->data->tag.ver = newtag.ver;
+    kb->data->tag.writer = newtag.writer;
+    kb->data->data.set (put->value.base (), put->value.size ());
+    db->insert (key, to_dbrec (kb));
+    db->sync ();
+  }
+
+  ptr<dhc_putblock_arg> arg = New refcounted<dhc_putblock_arg>;
+  arg->bID = put->bID;
+  arg->new_data.tag.ver = kb->data->tag.ver;
+  arg->new_data.tag.writer = kb->data->tag.writer;
+  arg->new_data.data.set (kb->data->data.base (), kb->data->data.size ());
+  ptr<write_state> ws = New refcounted<write_state>;
+  for (uint i=0; i<b->config.size (); i++) {
+    ptr<dhc_put_res> res = New refcounted<dhc_put_res>;
+    myNode->doRPC (b->config[i], dhc_program_1, DHCPROC_PUTBLOCK, arg, res,
+		   wrap (this, &dhc::putblock_cb, sbp, kb, b->config[i], ws, res));
+  }
+}
+
+void
+dhc::putblock_cb (user_args *sbp, ptr<dhc_block> kb, ptr<location> dest, ptr<write_state> ws, 
+		  ref<dhc_put_res> res, clnt_stat err)
+{
+  if (!ws->done) {
+    if (!err && res->status == DHC_OK) {
+      if (++ws->bcount > n_replica/2) {
+	ws->done = true;
+	dhc_put_res pres; pres.status = DHC_OK;
+	sbp->reply (&pres);
+	return;
+      }
+    }
+    if (err) {
+      ws->done = true;
+      dhc_put_res pres; pres.status = DHC_CHORDERR;
+      sbp->reply (&pres);
+      return;
+    } 
+    if (res->status == DHC_RECON_INPROG ||
+	res->status == DHC_BLOCK_NEXIST) {
+      delaycb (60, wrap (this, &dhc::putblock_retry_cb, sbp, kb, dest, ws));
+    } else {
+      ws->done = true;
+      dhc_put_res pres; pres.status = res->status;
+      sbp->reply (&pres);
+    }
+  }
+}
+
+void 
+dhc::putblock_retry_cb (user_args *sbp, ptr<dhc_block> kb, ptr<location> dest, ptr<write_state> ws)
+{
+  ptr<dhc_putblock_arg> arg = New refcounted<dhc_putblock_arg>;
+  arg->bID = kb->id;
+  arg->new_data.tag.ver = kb->data->tag.ver;
+  arg->new_data.tag.writer = kb->data->tag.writer;
+  arg->new_data.data.set (kb->data->data.base (), kb->data->data.size ());
+  ptr<dhc_put_res> res = New refcounted<dhc_put_res>;
+  myNode->doRPC (dest, dhc_program_1, DHCPROC_PUTBLOCK, arg, res,
+		 wrap (this, &dhc::putblock_cb, sbp, kb, dest, ws, res));
+  
+}
+
+void 
+dhc::recv_putblock (user_args *sbp)
+{
+  dhc_putblock_arg *putblock = sbp->template getarg<dhc_putblock_arg> ();
+  ptr<dbrec> rec = db->lookup (id2dbrec (putblock->bID));
+  if (!rec) {
+    dhc_put_res res; res.status = DHC_BLOCK_NEXIST;
+    sbp->reply (&res);
+    return;
+  }
+
+  dhc_soft *b = dhcs[putblock->bID];
+  if (b && b->pstat->recon_inprogress) {
+    dhc_put_res res; res.status = DHC_RECON_INPROG;
+    sbp->reply (&res);
+    return;
+  } 
+
+  ptr<dhc_block> kb = to_dhc_block (rec);
+  //check if cvalid and myNode is in config.nodes
+  if (tag_cmp (putblock->new_data.tag, kb->data->tag) == 1) {
+    kb->data->tag.ver = putblock->new_data.tag.ver;
+    kb->data->tag.writer = putblock->new_data.tag.writer;
+    kb->data->data.set (putblock->new_data.data.base (), 
+			putblock->new_data.data.size ());
+    db->insert (id2dbrec (kb->id), to_dbrec (kb));
+    db->sync ();
+  }
+  //return OK even if data is old??
+  dhc_put_res res; res.status = DHC_OK;
+  sbp->reply (&res);
+}
+
+void 
 dhc::dispatch (user_args *sbp)
 {
   switch (sbp->procno) {
@@ -536,6 +709,12 @@ dhc::dispatch (user_args *sbp)
     break;
   case DHCPROC_GETBLOCK:
     recv_getblock (sbp);
+    break;
+  case DHCPROC_PUT:
+    recv_put (sbp);
+    break;
+  case DHCPROC_PUTBLOCK:
+    recv_putblock (sbp);
     break;
   default:
     warn << "dhc:dispatch Unimplemented RPC " << sbp->procno << "\n"; 

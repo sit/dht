@@ -324,8 +324,27 @@ struct read_state {
   }
 };
 
-typedef callback<void, dhc_stat>::ref dhc_reconcb_t;
+struct write_state {
+  bool done;
+  uint bcount;
+  
+  write_state () : done (false), bcount (0) {}
+};
+
+typedef callback<void, dhc_stat>::ref dhc_cb_t;
 typedef callback<void, dhc_stat, ptr<keyhash_data> >::ref dhc_getcb_t;
+
+struct put_args {
+  chordID bID;
+  chordID writer;
+  ref<dhash_value> value;
+  
+  put_args (chordID b, chordID w, ref<dhash_value> v) : value(v)
+  {
+    bID = b;
+    writer = w;
+  }
+};
 
 class dhc {
   
@@ -336,9 +355,9 @@ class dhc {
   uint n_replica;
 
   void recv_prepare (user_args *);
-  void recv_promise (chordID, dhc_reconcb_t, ref<dhc_prepare_res>, clnt_stat);
+  void recv_promise (chordID, dhc_cb_t, ref<dhc_prepare_res>, clnt_stat);
   void recv_propose (user_args *);
-  void recv_accept (chordID, dhc_reconcb_t, ref<dhc_propose_res>, clnt_stat);
+  void recv_accept (chordID, dhc_cb_t, ref<dhc_propose_res>, clnt_stat);
   void recv_newconfig (user_args *);
   void recv_newconfig_ack (chordID, ref<dhc_newconfig_res>, clnt_stat);
   void recv_get (user_args *);
@@ -350,13 +369,24 @@ class dhc {
   void get_lookup_cb (chordID, dhc_getcb_t, vec<chord_node>, route, chordstat);
   void get_result_cb (chordID, dhc_getcb_t, ptr<dhc_get_res>, clnt_stat);
   
+  void recv_put (user_args *);
+  void recv_putblock (user_args *);
+
+  void put_lookup_cb (put_args *, dhc_cb_t, 
+		      vec<chord_node>, route, chordstat);
+  void put_result_cb (chordID, dhc_cb_t, ptr<dhc_put_res>, clnt_stat);
+  void putblock_cb (user_args *, ptr<dhc_block>, ptr<location>, ptr<write_state>, 
+		    ref<dhc_put_res>, clnt_stat);
+  void putblock_retry_cb (user_args *, ptr<dhc_block>, ptr<location>, ptr<write_state>);
+
  public:
 
   dhc (ptr<vnode>, str, uint);
   ~dhc () {};
   
-  void recon (chordID, dhc_reconcb_t);
+  void recon (chordID, dhc_cb_t);
   void get (chordID, dhc_getcb_t);
+  void put (chordID, chordID, ref<dhash_value>, dhc_cb_t);
   void dispatch (user_args *);
   
 };

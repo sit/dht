@@ -88,6 +88,7 @@ union dhc_get_res switch (dhc_stat status) {
 	void;
 };
 
+/*
 struct dhc_gettag_arg {
    chordID bID;
    chordID writer;
@@ -104,10 +105,21 @@ union dhc_gettag_res switch (dhc_stat status) {
    default:
 	void;
 };
+*/
 
 struct dhc_put_arg {
    chordID bID;
-   keyhash_data data;
+   chordID writer;
+   dhash_value value;
+};
+
+struct dhc_putblock_arg {
+   chordID bID;
+   keyhash_data new_data;
+};
+
+struct dhc_put_res {
+   dhc_stat status;
 };
 
 program DHC_PROGRAM {
@@ -128,11 +140,11 @@ program DHC_PROGRAM {
     dhc_get_res
     DHCPROC_GETBLOCK (dhc_get_arg) = 5;
 
-    dhc_gettag_res
-    DHCPROC_GETTAG (dhc_gettag_arg) = 6;
-
-    void
+    dhc_put_res
     DHCPROC_PUT (dhc_put_arg) = 7;
+
+    dhc_put_res
+    DHCPROC_PUTBLOCK (dhc_putblock_arg) = 8;
      
   } = 1;	
 } = 344452;
