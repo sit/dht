@@ -478,10 +478,13 @@ dhash_impl::dispatch (user_args *sbp)
       blockID id (farg->key, farg->ctype, farg->dbtype);
 
       if (farg->ctype == DHASH_CONTENTHASH && farg->dbtype == DHASH_BLOCK) {
-	// XXX fetch from cache db, since that's the only place right
-	// now we have CONTENTHASH BLOCK. probably need a flag later.
-
-        ptr<dbrec> ret = cache_db->lookup (id2dbrec (farg->key));
+	// benjie: the only place we store data as both CONTENTHASH
+	// and BLOCK (as oppose to fragment) is in cache_db. also, we
+	// don't distinguish between cached or stored keyhash blocks
+	// (the store code will use the regular db to "cache" keyhash
+	// blocks). hence, we don't ever have to deal with keyhash
+	// blocks from cache_db.
+	ptr<dbrec> ret = cache_db->lookup (id2dbrec (farg->key));
 	if (ret)
           fetchiter_sbp_gotdata_cb (sbp, farg, -1, ret, DHASH_OK);
 	else {
@@ -775,15 +778,10 @@ dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
 	  break;
 	}
 
-	ptr<dbfe> mydb = 0;
-	if (arg->type == DHASH_CACHE)
-	  mydb = cache_db;
-	else if (arg->ctype == DHASH_KEYHASH)
-	  mydb = keyhash_db;
-	else
-	  assert (0);
+	// don't distinguish regular stored and cached keyhash blocks,
+	// since their dbtypes are both DHASH_BLOCK.
 
-	ptr<dbrec> prev = mydb->lookup (k);
+	ptr<dbrec> prev = keyhash_db->lookup (k);
 	if (prev) {
 	  if (is_keyhash_stale (prev, d)) {
 	    if (arg->type == DHASH_STORE)
@@ -791,11 +789,11 @@ dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
 	    break;
 	  }
 	  else {
-	    warnx << "receiving/caching new copy of " << arg->key << "\n";
-	    mydb->del (k);
+	    warnx << "storing new copy of " << arg->key << "\n";
+	    keyhash_db->del (k);
 	  }
 	}
-	mydb->insert (k, d);
+	keyhash_db->insert (k, d);
 	info << "db write: " << host_node->my_ID ()
 	     << " U " << arg->key << " " << ss->size << "\n";
 	break;
