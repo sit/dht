@@ -175,7 +175,7 @@ VivaldiNode::algorithm(Sample s)
 
   if (_initial_triangulation && _init_samples.size () < _num_init_samples)
     {
-      if (ip () > 200 && s._who > 200) return;
+      if ((ip () % 2 > 0) && (s._who % 2 > 0)) return;
       cerr << ip () << " initing with " << s._who << "\n";
       _init_samples.push_back (s);
       if (_init_samples.size () == _num_init_samples)
@@ -204,8 +204,6 @@ VivaldiNode::algorithm(Sample s)
     assert (_samples.size () == 1); // XXX only work with one sample for now
     Coord s = _samples[0]._c;
 
-    //    cerr << "inputs are " << _c << " and " << s << "\n";    
-
     //get the great-circle distance (as radians)
     double theta_predicted = spherical_dist_arc (_c, s); 
     double theta_actual = (_samples[0]._latency) / (_radius);
@@ -213,13 +211,12 @@ VivaldiNode::algorithm(Sample s)
     if(theta_actual >= 0){
       //find the vector we'll rotate around
       Coord rot = cross (_c, s);
-      //cerr << "rot: " << rot << "\n";
+
       //calculate how far to rotate
-      //cerr << "pred=" << theta_predicted << " actual=" << theta_actual << "\n";
       double theta_correct = t * (theta_predicted - theta_actual);
-      //cerr << "rotating by " << theta_correct << "\n";
+
+      //rotate ourselves towards (or away) from the node we talked to
       Coord new_pos = rotate_arb (rot, _c, theta_correct);
-      //cerr << "new pos: " << new_pos << "\n";
       _c = new_pos;
     } else {
       cerr << "rejecting invalid measurement\n";
@@ -231,26 +228,26 @@ VivaldiNode::algorithm(Sample s)
 
   if (usinght && _c._ht <= 1000) // 1000 is 1ms
     _c._ht = 1000; 
-  // cout << " to " << _c << "\n";
-  _samples.clear ();
 
+  _samples.clear ();
 }
 
 void
 VivaldiNode::initial_triangulation (vector<Sample> isamps)
 {
   double prev_f = RAND_MAX;
-  double cur_f = 0;
   long iterations = 0;
-  while (fabs(cur_f - prev_f) > 0.001
-	 && iterations++ < 1000) {
+
+  while (fabs(_pred_err - prev_f) > 0.0001
+	 && iterations++ < 10000) {
     Coord f = net_force (_c, isamps);
-    _c = _c + f * 0.05; // XXX what timestep?
-    prev_f = cur_f;
-    cur_f = length (f);
-    if (ip () == 300) cerr << ip () << " " << cur_f << " " << prev_f << "\n";
+    _c = _c + (f * 0.05); // XXX what timestep?
+    prev_f = _pred_err;
+    update_error (isamps);
+    if (ip () == 1) cerr << ip () << " " << _pred_err << "\n";
   }
-  cerr << ip () << ": " << cur_f << "\n";
+
+  cerr << ip () << ": " << _pred_err << "\n";
   return;
 }
 

@@ -159,7 +159,8 @@ VivaldiTest::tick(void *)
   _ticks++;
   IPAddress dst;
 
-  if (_initial_triangulation && _init_samples.size () >= _num_init_samples
+  if (!_initial_triangulation || 
+      _initial_triangulation && _init_samples.size () >= _num_init_samples
       && !_joined) {
     _all.push_back(this);
     _joined = true;
@@ -175,7 +176,7 @@ VivaldiTest::tick(void *)
     dst = _all[random() % _all.size()]->ip();
   }
 
-  if(this->ip() == 1) {
+  if(this->ip() == 2) {
 
     if (_ticks % 5 == 0) 
       {
