@@ -8,8 +8,17 @@ if( $ARGV[0] eq "--args" ) {
     shift(@ARGV);
     $argsfile = shift(@ARGV);
 }
-
-my @logs = @ARGV;
+my @logs;
+my $logfile;
+if ($ARGV[0] eq "--logs") {
+    shift(@ARGV);
+    $logfile = shift(@ARGV);
+    open LOGS,"$logfile" or die "cannot open logs $logfile\n";
+    @logs = <LOGS>;
+    close LOGS;
+}else{
+    @logs = @ARGV;
+}
 
 my @stats = qw( BW_PER_TYPE BW_TOTALS BW_PERNODE BW_PERNODE_IN BW_SPENODE BW_SPENODE_IN LOOKUP_RATES CORRECT_LOOKUPS RTABLE
 		INCORRECT_LOOKUPS FAILED_LOOKUPS OVERALL_LOOKUPS 
@@ -21,6 +30,7 @@ my %stats_used = ();
 
 foreach my $log (@logs) {
 
+    chomp $log;
     if( !( -f $log ) ) {
 	print STDERR "$log is not a file, skipping.\n";
 	next;

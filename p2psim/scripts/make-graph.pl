@@ -11,6 +11,7 @@ my $param;
 my $paramname = "param";
 my %paramvals;
 my $epsfile;
+my $colorepsfile;
 my $pngfile;
 my @indats = ();
 my $xrange;
@@ -55,6 +56,7 @@ make-graph.pl [options]
 			        Can specify more than one ylabel (if more than
 				one is given, the last is the axis label)
     --epsfile <filename>      Save the postscript, instead of using gv
+    --colorepsfile <filename> Save the postscript in color
     --pngfile <filename>      Save the png file
     --param <param_num>       Color the dots by this parameter.  Can be the
 			        parameter name or a number.  To plot only
@@ -107,7 +109,7 @@ my $con_cmd = "$script_dir/find_convexhull.py";
 # Get the user-defined parameters.
 # First parse options
 my %options;
-&GetOptions( \%options, "help|?", "x=s", "y=s@", "epsfile=s", "pngfile=s",
+&GetOptions( \%options, "help|?", "x=s", "y=s@", "epsfile=s", "colorepsfile=s","pngfile=s",
 	     "param=s", "paramname=s", "datfile=s@", "label=s@", 
 	     "xrange=s", "yrange=s", "xlabel=s", "ylabel=s@", "title=s", 
 	     "convex:s", "plottype=s", "grid", "rtmgraph", "hulllabel:s",
@@ -189,6 +191,9 @@ if( defined $options{"yrange"} ) {
 }
 if( defined $options{"epsfile"} ) {
     $epsfile = $options{"epsfile"};
+}
+if (defined $options{"colorepsfile"}) {
+  $colorepsfile = $options{"colorepsfile"};
 }
 if (defined $options{"pngfile"}) {
   $pngfile = $options{"pngfile"};
@@ -1058,6 +1063,9 @@ if( defined $yrange ) {
 if( defined $epsfile ) {
     print GP "set terminal postscript eps $fontsize\n";
     print GP "set output \"$epsfile\"\n";
+}elsif (defined $colorepsfile) {
+    print GP "set terminal postscript eps color $fontsize\n";
+    print GP "set output \"$colorepsfile\"\n";
 }elsif (defined $pngfile) {
     print GP "set terminal png color medium\n";
     print GP "set output \"$pngfile\"\n";
@@ -1260,8 +1268,7 @@ foreach my $file (@iterfiles) {
 
 		print GP ", \"$datfile\" using " . 
 		    "($xparen\$$oldxpos):($yparen[$k]\$$oldypos) " . 
-		    "$t with $type lw $linewidth lt " . 
-			($k+($j-1)*($#ystat+1)+1);
+		    "$t with $type lt " .  ($k+($j-1)*($#ystat+1)+1) . " lw $linewidth";
 
 	    }
 
@@ -1276,14 +1283,14 @@ close( GP );
 
 # now make the graph and display it if desired
 system( "gnuplot /tmp/paramplot-$$.gnuplot" ) and die( "No gnuplot" );
-if( (!defined $epsfile) && (!defined $pngfile) ) {
+if( (!defined $epsfile) && (!defined $pngfile) && (!defined $colorepsfile)) {
     system( "gv /tmp/paramplot-$$.eps" ) and die( "No gv" );
 }
 
 
 # now cleanup time
 unlink( "/tmp/paramplot-$$.gnuplot" );
-if( (!defined $epsfile) && (!defined($pngfile) )) {
+if( (!defined $epsfile) && (!defined($pngfile) ) && (!defined $colorepsfile)) {
     unlink( "/tmp/paramplot-$$.eps" );
 }
 if( $xparam or grep( /1/, @yparam ) ) {

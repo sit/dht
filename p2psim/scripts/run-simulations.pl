@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.30 2004/11/08 05:05:18 jinyang Exp $
+# $Id: run-simulations.pl,v 1.31 2005/03/04 20:00:23 jinyang Exp $
 
 use strict;
 use Getopt::Long;
@@ -36,7 +36,7 @@ my $exittime = 200000;
 my $stattime = 100000;
 my $alpha = 1;
 my $beta = 1800000;
-my $pareto = 1;
+my $pareto = 0;
 my $uniform = 0;
 my $churnfile = "";
 my $argsfile = "";
