@@ -44,9 +44,6 @@ EventQueue::run()
   while(1) {
     // NB: this is pretty essential.
     // block, (i.e., yield) if the queue is empty.
-    dump();
-
-
     // if the queue is empty
     a[1].op = _queue.empty() ? CHANEND : CHANNOBLK;
 
