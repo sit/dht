@@ -151,17 +151,16 @@ public:
     uint type;
     CHID key;
     IPAddress ipkey;
-    vector<lookup_path> path;
     uint m;
-    uint all;
-    IDMap dst;
   };
 
   struct next_recurs_ret {
     vector<IDMap> v;
+    vector<lookup_path> path;
     bool correct;
     uint finish_time;
     IDMap lasthop;
+    IDMap dst;
   };
 
   struct lookup_args{
@@ -184,7 +183,6 @@ public:
                                find_successors_ret *);
 
   void final_recurs_hop(next_recurs_args *args, next_recurs_ret *ret);
-  virtual void my_next_recurs_handler(next_recurs_args *, next_recurs_ret *);
   void next_recurs_handler(next_recurs_args *, next_recurs_ret *);
   void lookup_internal(lookup_args *a);
   void alert_delete(alert_args *aa);
@@ -317,7 +315,7 @@ class LocTable {
     void print();
 
     int add_node(Chord::IDMap n, bool is_succ=false);
-    int add_check(Chord::IDMap n, int add);
+    int add_check(Chord::IDMap n);
     void add_sortednodes(vector<Chord::IDMap> l);
     void del_node(Chord::IDMap n, bool force=false);
     virtual void del_all();

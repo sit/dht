@@ -48,8 +48,6 @@ class ChordFingerPNS: public Chord {
 
     void reschedule_pns_stabilizer(void *x);
     void fix_pns_fingers(bool restart);
-    //void my_next_recurs_handler(next_recurs_args *, next_recurs_ret *);
-    //void pns_next_recurs_handler(next_recurs_args *, next_recurs_ret *);
     void join(Args*);
 
   protected:
