@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.9 2003/12/12 23:15:19 jinyang Exp $
+# $Id: run-simulations.pl,v 1.10 2003/12/15 01:32:03 strib Exp $
 
 use strict;
 use Getopt::Long;
@@ -39,6 +39,7 @@ my $logdir = "/tmp";
 my $observer = "";
 my $seed = "";
 my $randomize;
+my $withobserver = 0;
 
 sub usage {
     select(STDERR);
@@ -48,19 +49,20 @@ run-simulations [options]
   Options:
 
     --help                    Display this help message
-    --protocol                The name of the protocol to simulate
-    --topology                The topology file to use
-    --lookupmean              The average time (ms) between lookups on a node
-    --lifemean                The average time (ms) a node is alive
-    --deathmean               The average time (ms) a node is dead
-    --exittime                The length of the test
-    --churnfile               The churnfile to use (if any)
-    --argsfile                File containing the argument sets to simulate
+    --protocol <name>         The name of the protocol to simulate
+    --topology <top_file>     The topology file to use
+    --lookupmean <time>       The average time (ms) between lookups on a node
+    --lifemean <time>         The average time (ms) a node is alive
+    --deathmean <time>        The average time (ms) a node is dead
+    --exittime <time>         The length of the test
+    --churnfile <churn_file>  The churnfile to use (if any)
+    --argsfile <arg_file>     File containing the argument sets to simulate
                                 format of each line:<argname> <val1> ... <valN>
-    --logdir                  Where to write the logs
-    --seed                    Random seed to use in all simulations
-    --randomize               Randomizes the order of param combos.  The number
+    --logdir <dir>            Where to write the logs
+    --seed  <seed>            Random seed to use in all simulations
+    --randomize <num>         Randomizes the order of param combos.  The number
 	                        supplied specifies how many times to iterate.
+    --observer                Use an observer
 
 EOUsage
     
@@ -75,7 +77,8 @@ my %options;
 {;}
 &GetOptions( \%options, "help|?", "topology=s", "lookupmean=s", "protocol=s", 
 	     "lifemean=s", "deathmean=s", "exittime=s", "churnfile=s", 
-	     "argsfile=s", "logdir=s", "seed=s", "randomize=i" ) or &usage;
+	     "argsfile=s", "logdir=s", "seed=s", "randomize=i", "observer" ) 
+    or &usage;
 
 if( $options{"help"} ) {
     &usage();
@@ -147,6 +150,9 @@ if( defined $options{"exittime"} ) {
 }
 if( defined $options{"randomize"} ) {
     $randomize = $options{"randomize"};
+}
+if( defined $options{"observer"} ) {
+    $withobserver = 1;
 }
 if( defined $options{"seed"} ) {
     $seed = $options{"seed"};
@@ -230,7 +236,9 @@ if( $churnfile ne "" ) {
 }
 
 print EF "\n";
-#print EF "observer $observer initnodes=1\n";
+if( $withobserver ) {
+    print EF "observer $observer initnodes=1\n";
+}
 close( EF );
 
 # now run the simulation
