@@ -209,8 +209,7 @@ locationtable::insert (const chordID &n,
   ptr<location> loc = New refcounted<location> (n, r, v, coords);
   if (loc->vnode () < 0)
     return NULL;
-  realinsert (loc);
-  return loc;
+  return realinsert (loc);
 }
 
 // XXX this code currently only handles a single predecessor. NOT pred lists.
