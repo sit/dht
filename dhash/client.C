@@ -600,13 +600,13 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, int opti
 
   ref<sto_state> ss = New refcounted<sto_state> (block, cb);
   ss->succs = succs;
+  
+  timeval tp;
+  gettimeofday (&tp, NULL);
+  start_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
 
   if (block->ctype == DHASH_KEYHASH) {
     if (!DHC) {
-      timeval tp;
-      gettimeofday (&tp, NULL);
-      start_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
-
       for (u_int i = 0; i < dhash::num_efrags (); i++) {
 	// Count up for each RPC that will be dispatched
 	ss->out += 1;
@@ -625,9 +625,6 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, int opti
       }
     }
     else {
-      timeval tp;
-      gettimeofday (&tp, NULL);
-      start_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
       ptr<location> dest = clntnode->locations->lookup_or_create (succs[0]);
       ref<dhash_value> value = New refcounted<dhash_value>;
       value->set (block->data, block->len);
