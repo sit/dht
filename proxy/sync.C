@@ -33,7 +33,7 @@
 #include "proxy.h"
 
 extern ptr<aclnt> local;
-extern ptr<dbfe> ilog;
+extern ptr<dbfe> disconnect_log;
 extern ptr<dbfe> cache_db;
 extern str proxyhost;
 extern int proxyport;
@@ -68,7 +68,7 @@ sync_insert (bigint n, ptr<aclnt> proxyclnt,
 
   if (!res->status) {
     ref<dbrec> k = my_id2dbrec (n);
-    ilog->del (k);
+    disconnect_log->del (k);
     warn << n << " moved to proxy, removed\n";
   }
   else
@@ -103,13 +103,13 @@ sync_retrieve (bigint n, ptr<aclnt> proxyclnt,
 static void
 sync_next (bigint n, ptr<aclnt> proxyclnt)
 {
-  if (sync_dbnext (ilog, n)) {
+  if (sync_dbnext (disconnect_log, n)) {
     delaycb (60, wrap (proxy_sync));
     return;
   }
 
   ref<dbrec> k = my_id2dbrec (n);
-  ref<dbrec> d = ilog->lookup (k);
+  ref<dbrec> d = disconnect_log->lookup (k);
   if (!d) {
     warn << "can't retrieve " << n << " from insert log\n";
     delaycb (0, wrap (sync_next, n+1, proxyclnt));

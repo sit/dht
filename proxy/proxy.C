@@ -33,12 +33,12 @@
 static str proxy_socket;
 
 ptr<aclnt> local = 0;
-ptr<dbfe> ilog = 0;
 str proxyhost = "";
 int proxyport = 0;
 extern void proxy_sync ();
 
 ptr<dbfe> cache_db;
+ptr<dbfe> disconnect_log = 0;
 
 static void
 sync_diskcache_cb(ptr<dbfe> db) {
@@ -52,9 +52,10 @@ client_accept (int fd)
   if (fd < 0)
     fatal ("EOF\n");
   assert (cache_db);
-  assert (ilog);
+  assert (disconnect_log);
   ref<axprt_stream> x = axprt_stream::alloc (fd, 1024*1025);
-  vNew refcounted<proxygateway> (x, cache_db, ilog, proxyhost, proxyport);
+  vNew refcounted<proxygateway>
+    (x, cache_db, disconnect_log, proxyhost, proxyport);
 }
 
 static void
@@ -110,7 +111,7 @@ open_worker (ptr<dbfe> mydb, str name, dbOptions opts, str desc)
 }
 
 static void
-initialize_cache ()
+initialize_db ()
 {
   dbOptions opts;
   opts.addOption ("opt_async", 1);
@@ -122,10 +123,14 @@ initialize_cache ()
   open_worker (cache_db, cdbs, opts, "cache db file");
   delaycb (SYNC_TIME, wrap (&sync_diskcache_cb, cache_db));
   
+  disconnect_log = New refcounted<dbfe> ();
+  str ddbs = strbuf () << "db.d";
+  open_worker (disconnect_log, ddbs, opts, "disconnected operation log");
+  delaycb (SYNC_TIME, wrap (&sync_diskcache_cb, disconnect_log));
+  
   warn << "starting proxy between local cache and remote lsd\n";
   startclntd();
   delaycb (1, wrap (proxy_sync));
-
 }
 
 static void
@@ -144,14 +149,10 @@ main (int argc, char **argv)
   mp_clearscrub ();
   random_init ();
   proxy_socket = "/tmp/proxy-sock";
-  str dbf = "proxy-log";
   int ch;
 
-  while ((ch = getopt (argc, argv, "d:l:S:x:"))!=-1)
+  while ((ch = getopt (argc, argv, "S:x:"))!=-1)
     switch (ch) {
-    case 'd':
-      dbf = optarg;
-      break;
     case 'S':
       proxy_socket = optarg;
       break;
@@ -191,16 +192,7 @@ main (int argc, char **argv)
     usage();
   }
 
-
-  ilog = New refcounted<dbfe> ();
-  dbOptions opts;
-
-  if (int err = ilog->opendb (const_cast <char *> (dbf.cstr ()), opts)) {
-    warn << "cannot open insert log " << dbf << ": " << strerror (err) << "\n";
-    exit (-1);
-  }
-
-  initialize_cache();
+  initialize_db ();
   amain ();
 }
 

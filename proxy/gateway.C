@@ -58,10 +58,10 @@ is_keyhash_stale (ref<dbrec> prev, ref<dbrec> d)
 
 
 proxygateway::proxygateway (ptr<axprt_stream> x, ptr<dbfe> cache,
-                            ptr<dbfe> il, str host, int port)
+                            ptr<dbfe> dl, str host, int port)
 {
   cache_db = cache;
-  ilog = il;
+  disconnect_log = dl;
 
   proxyclnt = 0;
   proxyhost = host;
@@ -262,9 +262,9 @@ proxygateway::local_insert_done (bool disconnected, svccb *sbp)
     warn << "cannot connect to proxy, remember " << n << "\n";
 
     ref<dbrec> k = my_id2dbrec (n);
-    if (!ilog->lookup (k)) {
+    if (!disconnect_log->lookup (k)) {
       ref<dbrec> d = New refcounted<dbrec> (&t, sizeof (t));
-      if (ilog->insert (k, d)) {
+      if (disconnect_log->insert (k, d)) {
         warn << "failed to insert " << n << " into insert log\n";
         dhash_insert_res r (DHASH_RETRY);
         sbp->reply (&r);

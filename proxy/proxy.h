@@ -21,7 +21,7 @@ class proxygateway : public virtual refcount
 {
   ptr<asrv> clntsrv;
   ptr<dbfe> cache_db;
-  ptr<dbfe> ilog;
+  ptr<dbfe> disconnect_log;
 
   str proxyhost;
   int proxyport;
