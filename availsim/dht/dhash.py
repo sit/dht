@@ -15,6 +15,7 @@ class node:
     def __init__ (my, id):
         my.id = id
         my.blocks = {}
+
 	my.cached_blocks = {}
         my.alive = 1
         my.bytes = 0
@@ -47,7 +48,7 @@ class node:
             my.bytes += size
 
     def unstore (my, block):
-	# print "# DELETE", block, "from", my.id 
+	print "# DELETE", block, "from", my.id 
 	my.bytes -= my.blocks[block]
 	del my.blocks[block]
 
@@ -69,6 +70,7 @@ class chord:
         my.deadnodes = {}
         my.allnodes = {}
         my.blocks = {}
+        my.block_keys = []
         
         my.now_nodes = [] # nodes that changed liveness this time step.
 
@@ -90,9 +92,13 @@ class chord:
             bisect.insort (my.nodes, nnode)
 
         if nnode not in my.now_nodes: my.now_nodes.append (nnode)
+	return nnode
     
     def _failure (my, id, crash):
-        n = my.allnodes[id]
+	try:
+	    n = my.allnodes[id]
+	except KeyError, e:
+	    return
         if n.alive:
             if crash:
                 n.crash ()
@@ -161,7 +167,7 @@ class chord:
 class dhash (chord):
     """Provides a simple paramterizable insert and lazy repair implementation.
     The repair implementation does not delete excess fragments from nodes.
-    Repair happens at the end of each observed time step."""
+    No repair happens; you must call repair separately"""
 
     # Subclass and redefine these methods to produce more interesting
     # storage and repair behavior.
@@ -170,6 +176,7 @@ class dhash (chord):
         successors of key, via id.  Returns the successor."""
         if block not in my.blocks:
             my.blocks[block] = size
+	    bisect.insort (my.block_keys, block)
         succs = my.succ (block, my.insert_pieces ())
         isz   = my.insert_piece_size (size)
         for s in succs:
@@ -223,16 +230,14 @@ class dhash (chord):
 
     # XXX How long to wait until we do repair?
     def repair (my, affected_node):
-        count = my.insert_pieces ()
 	runlen = my.look_ahead ()
-        preds = my.pred (affected_node, count)
+        preds = my.pred (affected_node, runlen)
         succs = my.succ (affected_node, runlen)
         # succ's does not include affected_node if it is dead.
         slice = preds + succs
-	k = my.blocks.keys ()
-	k.sort ()
+	k = my.block_keys
 	# consider the predecessors who should be doing the repair
-        for i in range(1,len(slice) - runlen):
+        for i in range(1,len(slice) - runlen + 1):
             p = slice[i - 1]
 	    # let them see further than they would have inserted.
             s = slice[i:i+runlen]
@@ -249,8 +254,7 @@ class dhash (chord):
     def available_blocks (my):
 	scannable = my.look_ahead ()
         needed = my.read_pieces ()
-	k = my.blocks.keys ()
-	k.sort ()
+	k = my.block_keys
 	avail = 0
 	succs = []
 	for b in k:
@@ -264,11 +268,6 @@ class dhash (chord):
 		avail += 1
 	return avail
 	    
-    def time_changed (my, last_time, new_time):
-        for n in my.now_nodes:
-            my.repair (n)
-	chord.time_changed (my, last_time, new_time)
-    
     # Subclass and redefine these methods to explore basic changes.
     def min_pieces (my):
         """The minimum number of pieces we need before repairing.
@@ -286,6 +285,14 @@ class dhash (chord):
     def insert_piece_size (my, whole_size):
         """How big is each piece that gets inserted?"""
         return 0
+
+class dhash_repair (dhash):
+    def __init__ (my):
+        dhash.__init__ (my)
+    def time_changed (my, last_time, new_time):
+        for n in my.now_nodes:
+            my.repair (n)
+	chord.time_changed (my, last_time, new_time)
 
 class dhash_replica_norepair (dhash):
     def __init__ (my, replicas = 3):
@@ -309,7 +316,7 @@ class dhash_replica (dhash_replica_norepair):
     def look_ahead (my):
 	return 3 * my.replicas
 
-class dhash_fragments (dhash):
+class dhash_fragments (dhash_repair):
     def __init__ (my, dfrags, efrags):
         dhash.__init__ (my)
         my.dfrags = dfrags
@@ -328,7 +335,7 @@ class dhash_fragments (dhash):
         # A vague estimate of overhead from encoding... 2%-ish
         return int (1.02 * (size / my.dfrags))
 
-class dhash_cates (dhash):
+class dhash_cates (dhash_repair):
     def min_pieces (my):
         return 14
     def read_pieces (my):
@@ -388,6 +395,83 @@ class dhash_cates (dhash):
 		if n.alive: my._pmaint_join (n)
 	dhash.time_changed (my, last_time, new_time)
 	chord.time_changed (my, last_time, new_time)
+
+class dhash_oracle (dhash):
+    def _repair (my, an, succs, resp_blocks):
+        for b in resp_blocks:
+            # Check their availability
+	    haves = []
+	    donthaves = []
+            for s in succs:
+                if b in s.blocks:
+		    haves.append (s)
+		else:
+		    donthaves.append (s)
+	    avail = len (haves)
+	    # I might fail or the only copy might be pushed off soon
+	    if avail == 1 and (haves[0] == an or haves[0] == succs[len(succs) - 1]):
+		s = donthaves[0]
+                isz = my.insert_piece_size (my.blocks[b])
+		s.store (b, isz)
+		haves[0].nrpc += 1
+		haves[0].sent_bytes += isz
+
+		if haves[0] == succs[len(succs) - 1]:
+		    haves[0].unstore (b)
+		    haves[0].sent_bytes_breakdown['join_repair_write'] += isz
+		else:
+		    haves[0].sent_bytes_breakdown['failure_repair_write'] += isz
+
+    def add_node (my, id):
+	n = node (id)
+	my.repair (n)
+	n = dhash.add_node (my, id)
+
+    def min_pieces (my):
+        return 1
+    def read_pieces (my):
+        return 1
+    def insert_pieces (my):
+        return 1
+    def look_ahead (my):
+	return 10
+    def insert_piece_size (my, size):
+        return size
+
+class availability_oracle (dhash_oracle):
+    """
+    Only has to repair whenever the last copy is about to disappear,
+    even temporarily.
+    """
+    def fail_node (my, id):
+	try:
+	    n = my.allnodes[id]
+	except KeyError, e:
+	    return
+	my.repair (n)
+        my._failure (id, 0)
+
+    def crash_node (my, id):
+	try:
+	    n = my.allnodes[id]
+	except KeyError, e:
+	    return
+	my.repair (n)
+        my._failure (id, 1)
+
+class durability_oracle (dhash_oracle):
+    """
+    Only has to repair before a node leaves permanently, taking away
+    the last copy.
+    """
+    def crash_node (my, id):
+	try:
+	    n = my.allnodes[id]
+	except KeyError, e:
+	    return
+	my.repair (n)
+        my._failure (id, 1)
+
 
 if __name__ == '__main__':
     gdh = dhash_replica_norepair()

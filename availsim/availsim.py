@@ -246,6 +246,10 @@ if __name__ == '__main__':
 	gdh = dhash.dhash_replica_norepair (replicas)
     elif (dtype == "cates"):
 	gdh = dhash.dhash_cates ()
+    elif (dtype == "replica_durability_oracle"):
+	gdh = dhash.durability_oracle ()
+    elif (dtype == "replica_availability_oracle"):
+	gdh = dhash.availability_oracle ()
     else:
 	sys.stderr.write ("invalid dhash type\n")
         usage ()
