@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.45 2004/01/26 19:08:09 strib Exp $ */
+/* $Id: tapestry.C,v 1.46 2004/01/26 21:56:59 strib Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>
@@ -186,6 +186,7 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
   lookup_args la;
   la.key = args->key;
   la.looker = ip();
+  la.starttime = args->starttime;
 
   lookup_return lr;
     
@@ -244,7 +245,7 @@ Tapestry::lookup_wrapper(wrap_lookup_args *args)
       }
       delaycb( 100, &Tapestry::lookup_wrapper, args );
     } else {
-      
+
       if( lr.failed ) {
 	if( _verbose ) {
 	  TapDEBUG(0) << "Lookup failed for key " << print_guid(args->key) 
@@ -392,6 +393,15 @@ Tapestry::handle_lookup(lookup_args *args, lookup_return *ret)
 	ret->failed = false;
       }
     }
+
+    // we're retrying if we've gotten down here, so if we've
+    // exceeded the max time we should quite
+    if( now() - args->starttime > _max_lookup_time ) {
+      i = _redundant_lookup_num;
+      TapDEBUG(1) << "Timed out looking for " << print_guid(args->key) << endl;
+      break;
+    }
+
   }
 
   // if we were never successful, set the failed flag

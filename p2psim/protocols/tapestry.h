@@ -1,4 +1,4 @@
-/* $Id: tapestry.h,v 1.35 2004/01/24 21:59:40 strib Exp $ */
+/* $Id: tapestry.h,v 1.36 2004/01/26 21:56:59 strib Exp $ */
 
 #ifndef __TAPESTRY_H
 #define __TAPESTRY_H
@@ -102,6 +102,7 @@ public:
   struct lookup_args {
     GUID key;
     IPAddress looker;
+    Time starttime; // not counted in stats since this is a hack
   };
 
   struct lookup_return {
