@@ -1,7 +1,13 @@
 
-This directory contains the simulator distribution which consists of
-two programs: (1) traffic_gen and (2) sim. (For a quick start check
-the examples in the "examples/" directory.)
+This directory contains the simulator distribution software which
+consists of two programs: (1) traffic_gen and (2) sim. The simulator
+software is completely independent from the rest of the code
+distribution. To compile traffic_gen and sim do:
+
+>make depend
+>make
+
+For a quick start check the examples in the "examples/" directory.
 
 traffic_gen
 ===========

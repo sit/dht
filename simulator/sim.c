@@ -25,7 +25,7 @@
 
 #include <stdio.h>
 #include <ctype.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include <stdlib.h>
 
 #define DECL_VAR
