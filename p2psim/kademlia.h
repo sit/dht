@@ -45,7 +45,7 @@ public:
   static pair<NodeID, IPAddress> *get_closest(vector<pair<NodeID, IPAddress> > *, NodeID);
   static unsigned k()   { return _k; }
 
-  void do_lookup_wrapper(IPAddress, NodeID, vector<pair<NodeID, IPAddress> > * = 0);
+  void do_lookup_wrapper(pair<NodeID, IPAddress>, NodeID, vector<pair<NodeID, IPAddress> > * = 0);
 
   // public, because k_bucket needs it.
   struct lookup_args {
@@ -73,7 +73,7 @@ public:
   };
   struct ping_result {};
   void do_ping(ping_args*, ping_result*);
-  bool do_ping_wrapper(IPAddress);
+  bool do_ping_wrapper(pair<NodeID, IPAddress>);
 
 // }}}
 // {{{ private

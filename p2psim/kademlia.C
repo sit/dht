@@ -67,7 +67,8 @@ Kademlia::join(Args *args)
   lookup_args la(_id, ip(), _id);
   lookup_result lr;
   KDEBUG(1) << "join: lookup my id.  included ip = " << la.ip << endl;
-  doRPC(wkn, &Kademlia::do_lookup, &la, &lr);
+  bool b = doRPC(wkn, &Kademlia::do_lookup, &la, &lr);
+  assert(b);
 
   // put well known node in k-buckets
   _tree->insert(lr.rid, wkn);
@@ -80,10 +81,10 @@ Kademlia::join(Args *args)
   }
 
   // get our ``successor''
-  KDEBUG(2) << "join: calling get_closest" << endl;
-  pair<NodeID, IPAddress> *p = get_closest(&(lr.results), _id);
-  assert(p->first == lr.results[0].first);
-  assert(p->second == lr.results[0].second);
+  // KDEBUG(2) << "join: calling get_closest" << endl;
+  pair<NodeID, IPAddress> *p = &(lr.results[0]);
+  // assert(p->first == lr.results[0].first);
+  // assert(p->second == lr.results[0].second);
 
   // common prefix length
   unsigned cpl = common_prefix(_id, p->first);
@@ -96,7 +97,8 @@ Kademlia::join(Args *args)
     lookup_args la(_id, ip(), (_id ^ (1<<i)));
     lookup_result lr;
     KDEBUG(3) << "join: i/cpl = " << i << ", looking up entry " << i << ": " << printbits(la.key) << " at IP = " << p->second << endl;
-    doRPC(p->second, &Kademlia::do_lookup, &la, &lr);
+    if(!doRPC(p->second, &Kademlia::do_lookup, &la, &lr))
+      _tree->erase(p->first);
 
     for(unsigned j=0; j<lr.results.size(); j++) {
       KDEBUG(3) << "join: i/cpl = " << i << " inspect result " << j << ": " << printbits(lr.results[j].first) << endl;
@@ -113,7 +115,8 @@ Kademlia::join(Args *args)
   ta.id = _id;
   ta.ip = ip();
   KDEBUG(2) << "join: Node " << printbits(_id) << " initiating transfer from " << printbits(p->first) << endl;
-  doRPC(p->second, &Kademlia::do_transfer, &ta, &tr);
+  if(!doRPC(p->second, &Kademlia::do_transfer, &ta, &tr))
+    _tree->erase(p->first);
 
   // merge that data in our _values table
   for(map<NodeID, Value>::const_iterator pos = tr.values.begin(); pos != tr.values.end(); ++pos)
@@ -170,7 +173,8 @@ Kademlia::do_insert(insert_args *iargs, insert_result *iresult)
   }
 
   // we're not the one to insert it
-  doRPC(p->second, &Kademlia::do_insert, iargs, iresult);
+  if(!doRPC(p->second, &Kademlia::do_insert, iargs, iresult))
+    _tree->erase(p->first);
 }
 
 // }}}
@@ -244,13 +248,15 @@ done:
 // wrapper around do_lookup(lookup_args *largs, lookup_result *lresult)
 // if use_ip == 0, use the well-known node
 void
-Kademlia::do_lookup_wrapper(IPAddress use_ip, Kademlia::NodeID key, 
+Kademlia::do_lookup_wrapper(pair<NodeID, IPAddress> p, Kademlia::NodeID key, 
     vector<pair<NodeID, IPAddress> > *v)
 {
   lookup_args la(_id, ip(), key);
   lookup_result lr;
 
-  doRPC(use_ip ? use_ip : _wkn, &Kademlia::do_lookup, &la, &lr);
+  if(!doRPC(p.second ? p.second : _wkn, &Kademlia::do_lookup, &la, &lr))
+    _tree->erase(p.first);
+
   if(!v)
     return;
 
@@ -271,12 +277,16 @@ Kademlia::do_ping(ping_args *pargs, ping_result *presult)
 // }}}
 // {{{ Kademlia::do_ping_wrapper
 bool
-Kademlia::do_ping_wrapper(IPAddress use_ip)
+Kademlia::do_ping_wrapper(pair<NodeID, IPAddress> p)
 {
-  assert(use_ip);
+  assert(p.second);
   ping_args pa(_id, ip());
   ping_result pr;
-  return doRPC(use_ip, &Kademlia::do_ping, &pa, &pr);
+  if(!doRPC(p.second, &Kademlia::do_ping, &pa, &pr)) {
+    _tree->erase(p.first);
+    return false;
+  }
+  return true;
 }
 
 // }}}
@@ -608,8 +618,6 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
     }
 
   // if not full, just add the new id.
-  // XXX: is this correct? there is this thing that we have to split when our
-  // own ID falls in the range of the lowest and highest
   if(_nodes->size() < _k) {
     KDEBUG(4) <<  "insert: added on level " << depth << endl;
     peer_t *p = new peer_t(node, ip, now());
@@ -621,18 +629,18 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
   //
   // _nodes ARRAY IS FULL.  PING THE LEAST-RECENTLY SEEN NODE.
   //
-
   assert(_nodes->size() == _k);
   assert(_child[0] == 0);
   assert(_child[1] == 0);
 
-  // ping the least-recently seen node.
+  // ping the least-recently seen node.  if that one is
+  // OK, then don't do anything.
   set<peer_t*>::const_iterator least_recent = _nodes->begin();
   assert(*least_recent);
-  if(_self->do_ping_wrapper((*least_recent)->ip))
+  if(_self->do_ping_wrapper(make_pair((*least_recent)->id, (*least_recent)->ip)))
     return 0;
 
-  // evict the dead one
+  // evict the dead node
   _nodes->erase(least_recent);
   _root->erase((*least_recent)->id);
 
@@ -642,13 +650,15 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
   _nodes->insert(p);
 
   //
-  // Now if this k-bucket contains the node own ID, then split it.
+  // Now if this k-bucket contains the node own ID, then split it,
+  // otherwise just return the peer_t we just inserted.
   //
-  // XXX: should return make_pair(p, depth);
-  if(node >= (*_nodes->begin())->id &&
-     node <= (*_nodes->end())->id &&
-     (*_nodes->begin())->id != (*_nodes->end())->id)
+  if(!(node >= (*_nodes->begin())->id &&
+       node <= (*_nodes->end())->id &&
+       (*_nodes->begin())->id != (*_nodes->end())->id))
   {
+    return p;
+  } else {
     assert(!_leaf);
 
   // split if this is not a final leaf
@@ -675,11 +685,6 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
     KDEBUG(4) <<  "insert: after split, calling insert for prefix " << (prefix + (leftmostbit ? "1" : "0")) << " to depth " << (depth+1) << endl;
     return _child[leftmostbit]->insert(node, ip, prefix + (leftmostbit ? "1" : "0"), depth+1, root);
   }
-
-  // this is a leaf and it's full.
-  // XXX: evict one. oh wait, we're leaving the more trustworthy ones in.
-  // KDEBUG(4) <<  "insert: last make_pair on depth " << depth << endl;
-  // return make_pair((peer_t*)0, depth);
 }
 
 // }}}
@@ -708,7 +713,7 @@ k_bucket::stabilize(string prefix, unsigned depth)
       vector<pair<NodeID, IPAddress> > *best = new vector<pair<NodeID, IPAddress> >;
       _root->get((*it)->id, best);
       KDEBUG(1) << "stabilize: lookup for " << Kademlia::printbits((*it)->id) << endl;
-      _self->do_lookup_wrapper((*best)[0].second, (*it)->id);
+      _self->do_lookup_wrapper((*best)[0], (*it)->id);
       delete best;
     }
     return;
@@ -726,7 +731,7 @@ k_bucket::stabilize(string prefix, unsigned depth)
   _root->get(random_key, best);
   for(vector<pair<NodeID, IPAddress> >::const_iterator i = best->begin(); i != best->end(); ++i) {
     KDEBUG(1) << "stabilize: random lookup for " << Kademlia::printbits(random_key) << endl;
-    _self->do_lookup_wrapper(i->second, random_key);
+    _self->do_lookup_wrapper((*i), random_key);
   }
   delete best;
 
