@@ -62,6 +62,9 @@ protected:
   ptr<vnode> clntnode;
   int num_retries;
   bool last;
+  int nextblock;
+  int numblocks;
+  vec<long> seqnos;
 
   dhash_store (ptr<vnode> clntnode, chordID destID, chordID blockID, 
 	       ptr<dhash_block> _block, store_status store_type, 
@@ -80,7 +83,10 @@ protected:
     error = false;
     status = DHASH_OK;
     npending = 0;
-
+    nextblock = 0;
+    numblocks = 0;
+    int blockno = 0;
+    
     size_t nstored = 0;
     while (nstored < block->len) {
       size_t chunklen = MIN (MTU, block->len - nstored);
@@ -88,12 +94,14 @@ protected:
       size_t chunkoff = nstored;
       npending++;
       store (destID, blockID, chunkdat, chunklen, chunkoff, 
-	     block->len, ctype, store_type);
+	     block->len, blockno, ctype, store_type);
       nstored += chunklen;
+      blockno++;
     }
+    numblocks = blockno;
   }
 
-  void finish (ptr<dhash_storeres> res, clnt_stat err)
+  void finish (ptr<dhash_storeres> res, int num, clnt_stat err)
   {
     ///warn << "dhash_store....finish: " << npending << "\n";
     npending--;
@@ -111,8 +119,16 @@ protected:
       if (!error)
 	status = res->status;
       error = true;
+    } else { 
+      if ((num > nextblock) && (numblocks - num > 1)) {
+	warn << "(store) FAST retransmit: " << blockID << " got " << num << " chunk " << nextblock << " of " << numblocks << " being retransmitted\n";
+	clntnode->resendRPC(seqnos[nextblock]);
+	//only one per fetch; finding more is too much bookkeeping
+	numblocks = -1;
+      }
+      nextblock++;
     }
-    
+
     if (npending == 0) {
       if (status == DHASH_RETRY) {
 	clntnode->locations->cacheloc (predID, pred_addr, 
@@ -127,7 +143,7 @@ protected:
 
 
   void store (chordID destID, chordID blockID, char *data, size_t len,
-	      size_t off, size_t totsz, dhash_ctype ctype, 
+	      size_t off, size_t totsz, int num, dhash_ctype ctype, 
 	      store_status store_type)
   {
     ref<dhash_storeres> res = New refcounted<dhash_storeres> (DHASH_OK);
@@ -141,10 +157,11 @@ protected:
     arg->type    = store_type;
     arg->attr.size     = totsz;
     arg->last    = last;
-
-    ///warn << "XXXXXX dhashcli::store ==> store_cb\n";
-    clntnode->doRPC (destID, dhash_program_1, DHASHPROC_STORE, arg, res,
-		     wrap (this, &dhash_store::finish, res));
+    
+    
+    long rexmitid = clntnode->doRPC (destID, dhash_program_1, DHASHPROC_STORE, arg, res,
+				     wrap (this, &dhash_store::finish, res, num));
+    seqnos.push_back (rexmitid);
   }
   
   void retry_cachedloc (chordID id, bool ok, chordstat stat) 
