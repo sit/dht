@@ -124,7 +124,7 @@ configured public key records, which seem just as likely.
 Any solution that applies to one problem
 probably applies equally well to the other.
 
-DDNS does improve fault-tolerance in the current DNS due to 
+DDNS has better fault-tolerance over current DNS due to 
 denial-of-service attacks. No longer is a few name servers need
 to be taken down, before the records from that zone 
 are inaccessible to others on the Internet. Because there is no 
@@ -154,7 +154,7 @@ For example, to avoid the need to publish internal host names,
 the name server for
 {\em cs.bell-labs.com} will return a valid mail exchanger (MX) record
 for any host name ending in {\em .cs.bell-labs.com}, even
-those that don't exist.
+for those that do not exist.
 
 Additionally, responses can be tailored according to factors
 other than the actual query.
