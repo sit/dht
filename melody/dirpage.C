@@ -137,7 +137,7 @@ dirpage::fileout_head (int asize)
 {
   char foo[1024]; // ridiculusly large
   size = asize;
-  sprintf(&foo, "%d\r\n\r\n", size); // FIXME return == null?
+  sprintf(foo, "%d\r\n\r\n", size); // FIXME return == null?
 warn << (int)d->cs << " fileout_head size " << size << "\n";
   out->take(dphead);
   out->take(dpfile);
