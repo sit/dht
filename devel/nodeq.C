@@ -56,7 +56,7 @@ printlist (str desc, vec<ptr<node> > &lst)
 	 << z.coords[0] << " "
 	 << z.coords[1] << " "
 	 << z.coords[2] << " "
-	 << lst[i]->y.pred_err
+	 << z.e
 	 << "\n";
   }
 }

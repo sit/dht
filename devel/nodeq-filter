@@ -11,6 +11,6 @@ if (/^===/) {
     $dist = sqrt($dist);
     $dist += $F[10] + $me[2];
 
-    printf "%3s %40s %-30s %5d %2d | %6d %6d | %5d | [%8d, %8d, %5d] (%d) => %10.2f\n",
+    printf "%3s %40s %-30s %5d %2d | %6d %6d | %5d | [%8d, %8d, %5d] (%4d) => %10.2f\n",
     	@F, $dist;
 }
