@@ -184,10 +184,18 @@ VivaldiTest::tick(void *)
   }
 
   Vivaldi::Coord c;
+
+#if 1
+  _vivaldi->doRPC(dst,
+                  dynamic_cast<VivaldiTest*>(getpeer(dst)),
+                  &VivaldiTest::handler,
+                  (void *) 0, &c);
+#else
   Time before = now();
   doRPC(dst, &VivaldiTest::handler, (void*) 0, &c);
   if ((now() - before) > 0)
     _vivaldi->sample(dst, c, (now() - before) / 2.0);
+#endif
 
   if((random() % (10 * _all.size())) == 0) {
     status();

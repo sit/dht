@@ -16,12 +16,14 @@ using namespace std;
 // Indexed by IPAddress.
 // Anyone can create a Vivaldi, call sample() after each
 // RPC, and then call my_location().
-// Or you can use Vivaldi::RPC.
+// Or you can use Vivaldi::doRPC.
 
-class Vivaldi {
+class Vivaldi : Protocol {
  public:
   Vivaldi(Node *n, int d);
   virtual ~Vivaldi();
+  string proto_name() { return "Vivaldi"; }
+
   int nsamples() { return _nsamples; }
 
   struct Coord {
@@ -41,7 +43,6 @@ class Vivaldi {
                AT *args, RT *ret);
 
  protected:
-  Node *_n; // this node
   int _nsamples; // how many times sample() has been called
   int _dim; //dimensionality of the fit space
   Coord _c; // current estimated coordinates
@@ -208,76 +209,16 @@ bool Vivaldi::doRPC(IPAddress dst, BT *target, void (BT::*fn)(AT*, RT*),
   t->_fn = fn;
   t->_args = args;
   t->_ret = ret;
-  t->_vtarget = find(dst);
+  t->_vtarget = dynamic_cast<Vivaldi*>(getpeer(dst));
+  assert(t->_vtarget);
   
   Time before = now();
-  bool ok = _n->_doRPC(dst, Thunk::thunk, (void *) t);
+  bool ok = node()->_doRPC(dst, Thunk::thunk, (void *) t);
   if(ok)
-    sample(dst, t->_c, now() - before);
+    sample(dst, t->_c, (now() - before) / 2.0);
 
   delete t;
   return ok;
 }
 
-#if 0
-// Make an RPC call, but time it and tell Vivaldi.
-// Basically wraps the RPC in an RPC to rpc_handler.
-// Use this only for simple RPCs: don't use it for
-// recursive RPCs.
-template<class BT, class AT, class RT>
-bool Vivaldi::RPC(IPAddress dsta,
-                  void (BT::* fn)(AT *, RT *),
-                  AT *args,
-                  RT *ret)
-{
-  Vivaldi *vtarget = find(dsta);
-  assert(vtarget);
-
-  // find target node from IP address.
-  Node *dstnode = Network::Instance()->getnode(dsta);
-  assert(dstnode && dstnode->ip() == dsta);
-
-  // find target protocol from class name.
-  Protocol *dstproto = dstnode->getproto(typeid(BT));
-  BT *target = dynamic_cast<BT*>(dstproto);
-  assert(target);
-
-  struct rpc_glop {
-    BT *_target;
-    Vivaldi *_vtarget;
-    void (BT::* _fn)(AT *, RT *);
-    AT *_args;
-    RT *_ret;
-    Coord _c;
-    static void thunk(void *xg){
-      rpc_glop *g = (rpc_glop*) xg;
-      (g->_target->*(g->_fn))(g->_args, g->_ret);
-      g->_c = g->_vtarget->my_location();
-    }
-  };
-
-  rpc_glop *gp = new rpc_glop;
-  gp->_target = target;
-  gp->_vtarget = vtarget;
-  gp->_fn = fn;
-  gp->_args = args;
-  gp->_ret = ret;
-
-  Time before = now();
-
-  bool ok = Node::_doRPC(dsta, rpc_glop::thunk, (void*) gp);
-
-  if(ok){
-    Time after = now();
-    sample(dsta, gp->_c, after - before);
-  }
-
-  delete gp;
-
-  return ok;
-}
 #endif
-
-#endif
-
-

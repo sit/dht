@@ -5,27 +5,17 @@
 #include <math.h>
 
 Vivaldi::Vivaldi(Node *n, int d)
+  : Protocol(n)
 {
-  _n = n;
   _nsamples = 0;
   _dim = d;
+  n->register_proto(this);
 
   // Start out at a random point.
   // Units are the same as Euclidean::Coords, presumably
   // milliseconds.
-#if 0
-  Euclidean *t =
-    dynamic_cast<Euclidean*>(Network::Instance()->gettopology());
-  assert(t);
-  Euclidean::Coord rc = t->getcoords(n->ip());
-  _c._x = rc.first + (random() % 10);
-  _c._y = rc.second + (random() % 10);
-#else
-
   for (int i = 0; i < _dim; i++) 
     _c._v.push_back(random() % 50000 - 25000);
-
-#endif
 }
 
 Vivaldi::~Vivaldi()
