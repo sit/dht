@@ -4,10 +4,11 @@
 #include <stdlib.h>
 #include <math.h>
 
-Vivaldi::Vivaldi(Node *n)
+Vivaldi::Vivaldi(Node *n, int d)
 {
   _n = n;
   _nsamples = 0;
+  _dim = d;
 
   // Start out at a random point.
   // Units are the same as Euclidean::Coords, presumably
@@ -20,8 +21,10 @@ Vivaldi::Vivaldi(Node *n)
   _c._x = rc.first + (random() % 10);
   _c._y = rc.second + (random() % 10);
 #else
-  _c._x = (random() % 200) - 100;
-  _c._y = (random() % 200) - 100;
+
+  for (int i = 0; i < _dim; i++) 
+    _c._v.push_back(random() % 50000 - 25000);
+
 #endif
 }
 
@@ -29,6 +32,18 @@ Vivaldi::~Vivaldi()
 {
 }
 
+
+ostream& 
+operator<< (ostream &s, Vivaldi::Coord &c)
+{
+  return s<< "(" << c._v[0] << ", " << c._v[1] << ")";
+}
+
+ostream& 
+operator<< (ostream &s, Vivaldi::Sample &c)
+{
+  return s<< c._c << " @ " << c._latency << "usecs" ;
+}
 // latency should be one-way, i.e. RTT / 2
 void
 Vivaldi::sample(IPAddress who, Coord c, double latency)
@@ -38,11 +53,10 @@ Vivaldi::sample(IPAddress who, Coord c, double latency)
 }
 
 Vivaldi::Coord
-Vivaldi::net_force(Coord c, vector<Sample> v)
+Vivaldi::net_force1(Coord c, vector<Sample> v)
 {
-  Coord f;
-  f._x = 0;
-  f._y = 0;
+  Coord f(v[0]._c.dim());
+
   for(unsigned i = 0; i < v.size(); i++){
     Sample s = v[i];
     double d = dist(c, s._c);
@@ -50,6 +64,27 @@ Vivaldi::net_force(Coord c, vector<Sample> v)
       Coord direction = (s._c - c);
       direction = direction / d;
       f = f + (direction * (d - s._latency));
+    }
+  }
+  return f;
+}
+
+Vivaldi::Coord
+Vivaldi::net_force(Coord c, vector<Sample> v)
+{
+  Coord f(v[0]._c.dim());
+
+  for(unsigned i = 0; i < v.size(); i++){
+    //    double noise = (double)(random () % (int)v[i]._latency) / 10.0;
+    double noise = 0;
+    double actual = v[i]._latency + noise;
+    double expect = dist (c, v[i]._c);
+    if(actual >= 0 && (expect > 0.01) ){
+      double grad = expect - actual;
+      Coord dir = (v[i]._c - c);
+      double unit = 1.0/length(dir);
+      Vivaldi::Coord udir = dir * unit * grad;
+      f = f + udir;
     }
   }
   return f;
@@ -103,6 +138,32 @@ Vivaldi1::algorithm(Sample s)
   _c = _c + (f * 0.001);
 
   _samples.clear();
+}
+
+// the current implementation
+void
+Vivaldi10::algorithm(Sample s)
+{
+  _samples.push_back(s);
+  if(_samples.size() < 10)
+    return;
+
+  Coord f = net_force(_c, _samples);
+  //  Coord f1 = net_force1(_c, _samples);
+  
+  //  cerr << f << " " << f1 << "\n";
+  double t = 0.01;
+  float ftot = 0;
+  for (int i = 0; i < f.dim(); i++)
+    ftot += f._v[i];
+
+  while (ftot*t > 100.0) t /= 2.0;
+
+  // apply the force to our coordinates
+  _c = _c + (f * t);
+
+  if (_samples.size () > 16)
+    _samples.erase(_samples.begin()); //this is so much better than pop_front
 }
 
 // algo1(), but starts without much damping, and gradually
