@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.1 2003/11/27 20:59:47 strib Exp $
+# $Id: run-simulations.pl,v 1.2 2003/11/29 20:09:44 strib Exp $
 
 use strict;
 use Getopt::Long;
@@ -40,7 +40,6 @@ my $observer = "";
 my $seed = "";
 
 sub usage {
-
     select(STDERR);
     print <<'EOUsage';
     
@@ -61,7 +60,7 @@ run-simulations [options]
     --seed                    Random seed to use in all simulations
 
 EOUsage
-
+    
     exit(1);
 
 }
@@ -70,16 +69,15 @@ EOUsage
 # Get the user-defined parameters.
 # First parse options
 my %options;
-&GetOptions( \%options, "help|?", "protocol=s", "topology=s",
-	     "lookupmean=s", "lifemean=s", "deathmean=s", "exittime=s", 
-	     "churnfile=s", "argsfile=s", "logdir=s", "seed=s" )
-    or &usage;
+{;}
+&GetOptions( \%options, "help|?", "topology=s", "lookupmean=s", "protocol=s", 
+	     "lifemean=s", "deathmean=s", "exittime=s", "churnfile=s", 
+	     "argsfile=s", "logdir=s", "seed=s" ) or &usage;
 
-if( $options{"help"} ) {    
+if( $options{"help"} ) {
     &usage();
 }
 if( $options{"protocol"} ) {
-
     my $prot = $options{"protocol"};
     if( $prot eq "Tapestry" or $prot eq "tapestry" ) {
 	$protocol = "Tapestry";
@@ -96,7 +94,6 @@ if( $options{"protocol"} ) {
     } else {
 	die( "Unrecognized protocol: $prot" );
     }
-
 } else {
     print STDERR "No protocol specified.";
     usage();
@@ -128,22 +125,24 @@ if( $options{"argsfile"} ) {
 if( $options{"logdir"} ) {
     $logdir = $options{"logdir"};
     if( ! -d $logdir ) {
-	die( "Log directory $logdir doesn't exist" );
+	print STDERR "Making $logdir since it didn't exist\n";
+	system( "mkdir -p $logdir" ) and 
+	    die( "Log directory $logdir doesn't exist and couldn't be made" );
     }
 }
-if( $options{"lookupmean"} ) {
+if( defined $options{"lookupmean"} ) {
     $lookupmean = $options{"lookupmean"};
 }
-if( $options{"lifemean"} ) {
+if( defined $options{"lifemean"} ) {
     $lifemean = $options{"lifemean"};
 }
-if( $options{"deathmean"} ) {
+if( defined $options{"deathmean"} ) {
     $deathmean = $options{"deathmean"};
 }
-if( $options{"exittime"} ) {
+if( defined $options{"exittime"} ) {
     $exittime = $options{"exittime"};
 }
-if( $options{"seed"} ) {
+if( defined $options{"seed"} ) {
     $seed = $options{"seed"};
 }
 

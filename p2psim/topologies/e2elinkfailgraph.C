@@ -71,6 +71,7 @@ E2ELinkFailGraph::latency(IPAddress ip1, IPAddress ip2, bool reply)
     return 0;
   }
   
+  /*
   // if it's a reply, we switch these around because all we know are
   // half rtts
   if( reply ) {
@@ -78,6 +79,7 @@ E2ELinkFailGraph::latency(IPAddress ip1, IPAddress ip2, bool reply)
     ip1 = ip2;
     ip2 = tmp;
   }
+  */
 
   // decide what time it is (assume 15 minute data intervals)
   int time_index = now() / 900000;

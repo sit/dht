@@ -35,7 +35,7 @@ foreach my $log (@logs) {
     my %lives = ();
     my %joinstarts = ();
     while(<LOG>) {
-	if( /(\d+) \d+ \w+ (\d) (\d) -?(\d+) (\d+) .+ .+ .+ (\d+)/ ) {
+	if( /(\d+) \d+ [\w\-]+ (\d) (\d) -?(\d+) (\d+) .+ .+ .+ (\d+)/ ) {
 	    my $time = $1;
 	    my $complete = $2;
 	    my $correct = $3;
@@ -69,7 +69,7 @@ foreach my $log (@logs) {
 	    $joinstarts{$1} = $2;
 	} elsif( /^join (\d+) (\d+)/ ) {
 	    my $key = int( $2/$bucket_factor );
-	    $starts{$key} = 1;
+#	    $starts{$key} = 1;
 	    if( !defined $lives{$key} ) {
 		$lives{$key} = 0;
 	    }
@@ -77,7 +77,7 @@ foreach my $log (@logs) {
 	    $joinstarts{$1} = 0;
 	} elsif( /^crash (\d+) (\d+) (\d)/ ) {
 	    my $key = int( $2/$bucket_factor );
-	    $starts{$key} = 1;
+#	    $starts{$key} = 1;
 	    if( !defined $lives{$key} ) {
 		$lives{$key} = 0;
 	    }
@@ -95,7 +95,7 @@ foreach my $log (@logs) {
 
     foreach my $k (keys(%joinstarts)) {
 	if( $joinstarts{$k} ) {
-	    print "joinfail: $k " . $joinstarts{$k} . "\n";
+#	    print "joinfail: $k " . $joinstarts{$k} . "\n";
 	}
     }
 

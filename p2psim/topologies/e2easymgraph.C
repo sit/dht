@@ -59,6 +59,7 @@ E2EAsymGraph::latency(IPAddress ip1, IPAddress ip2, bool reply)
     return 0;
   }
   
+  /*
   // if it's a reply, we switch these around because all we know are
   // half rtts
   if( reply ) {
@@ -66,6 +67,7 @@ E2EAsymGraph::latency(IPAddress ip1, IPAddress ip2, bool reply)
     ip1 = ip2;
     ip2 = tmp;
   }
+  */
 
   // make sure latency exists and return it
   assert(_pairwise[ip1 - 1][ip2 - 1] >= 0);
