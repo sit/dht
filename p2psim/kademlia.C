@@ -372,7 +372,6 @@ void
 Kademlia::dump()
 {
   cout << "*** DUMP FOR " << printbits(_id) << endl;
-  printf("_tree = %p\n", _tree);
   cout << "*** -------------------------- ***" << endl;
   _tree->dump();
   cout << "*** -------------------------- ***" << endl;
@@ -443,12 +442,12 @@ k_bucket_tree::random_node()
 // }}}
 
 // {{{ k_bucket::k_bucket
-k_bucket::k_bucket(Kademlia *k) : _self(k)
+k_bucket::k_bucket(Kademlia *k) : _leaf(false), _self(k)
 {
   _child[0] = _child[1] = 0;
-  _nodes.clear();
-
   _id = _self->id(); // for KDEBUG purposes only
+  _nodes = new vector<peer_t*>;
+  assert(_nodes);
 }
 
 // }}}
@@ -460,8 +459,10 @@ k_bucket::~k_bucket()
     delete _child[0];
   if(_child[1])
     delete _child[1];
-  for(unsigned i=0; i<_nodes.size(); i++)
-    delete _nodes[i];
+
+  if(_nodes)
+    for(unsigned i=0; i<_nodes->size(); i++)
+      delete (*_nodes)[i];
 }
 
 // }}}
@@ -479,46 +480,70 @@ k_bucket::insert(Kademlia::NodeID node, IPAddress ip, string prefix, unsigned de
     KDEBUG(4) << "insert: node = " << Kademlia::printbits(node) << ", ip = " << ip << ", prefix = " << prefix << endl;
 
   unsigned leftmostbit = Kademlia::getbit(node, depth);
+  unsigned myleftmostbit = Kademlia::getbit(_self->id(), depth);
+
+  //
+  // NON-ENDLEAF NODE WITH CHILD
+  //
   if(_child[leftmostbit]) {
+    assert(!_leaf);
     return _child[leftmostbit]->insert(node, ip, prefix + (leftmostbit ? "1" : "0"), depth+1, root);
   }
 
 
+  //
+  // TRY TO INSERT AT THE NODE WE END UP AT THROUGH RECURSION
+  //
+
   // is this thing is already in the array, bail out.
   // XXX: move it forward
-  for(unsigned i=0; i<_nodes.size(); i++)
-    if(_nodes[i]->id == node) {
-      _nodes[i]->lastts = now();
+  for(unsigned i=0; i<_nodes->size(); i++)
+    if((*_nodes)[i]->id == node) {
+      (*_nodes)[i]->lastts = now();
       KDEBUG(4) <<  "insert: node " << Kademlia::printbits(node) << " already in tree" << endl;
-      return make_pair(_nodes[i], depth);
+      return make_pair((*_nodes)[i], depth);
     }
 
   // if not full, just add the new id.
-  // XXX: is this correct? do we not split on own ID?
-  if(_nodes.size() < _k) {
+  // XXX: is this correct? there is this thing that we have to split when our
+  // own ID falls in the range of the lowest and highest
+  if(_nodes->size() < _k) {
     KDEBUG(4) <<  "insert: added on level " << depth << endl;
     peer_t *p = new peer_t(node, ip, now());
-    _nodes.push_back(p);
+    _nodes->push_back(p);
     return make_pair(p, depth);
   }
 
-  // must be equal then.
-  assert(_nodes.size() == _k);
+  //
+  // _nodes ARRAY IS FULL.  SPLIT IF IT IS A NON-LEAF NODE.
+  //
+
+  assert(_nodes->size() == _k);
   assert(_child[0] == 0);
   assert(_child[1] == 0);
 
-  _child[0] = new k_bucket(_self);
-  _child[1] = new k_bucket(_self);
+  // split if this is not a final leaf
+  if(!_leaf) {
+    // create both children
+    _child[0] = new k_bucket(_self);
+    _child[1] = new k_bucket(_self);
+    _child[myleftmostbit ^ 1]->_leaf = true;
 
-  // now divide contents into separate buckets
-  for(unsigned i=0; i<_nodes.size(); i++) {
-    unsigned bit = Kademlia::getbit(_nodes[i]->id, depth);
-    _child[bit]->_nodes.push_back(_nodes[i]);
+    // now divide contents into separate buckets
+    for(unsigned i=0; i<_nodes->size(); i++) {
+      unsigned bit = Kademlia::getbit((*_nodes)[i]->id, depth);
+      _child[bit]->_nodes->push_back((*_nodes)[i]);
+    }
+    delete _nodes;
+    _nodes = 0;
+
+    // now insert at the right child
+    return _child[leftmostbit]->insert(node, ip, prefix + (leftmostbit ? "1" : "0"), depth+1, root);
   }
-  _nodes.clear();
 
-  // now insert the node
-  return root->insert(node, ip, "", 0, root);
+  // this is a leaf and it's full.
+  // XXX: evict one. oh wait, we're leaving the more trustworthy ones in.
+  return make_pair((peer_t*)0, depth);
 }
 
 // }}}
@@ -534,15 +559,15 @@ k_bucket::stabilize(string prefix, unsigned depth)
     return;
   }
 
-  for(unsigned i=0; i<_nodes.size(); i++) {
-    if(now() - _nodes[i]->lastts < KADEMLIA_REFRESH)
+  for(unsigned i=0; i<_nodes->size(); i++) {
+    if(now() - (*_nodes)[i]->lastts < KADEMLIA_REFRESH)
       continue;
 
     // XXX: where?
-    KDEBUG(1) << "stabilize: lookup for " << Kademlia::printbits(_nodes[i]->id) << endl;
-    pair<NodeID, IPAddress> pp = _self->do_lookup_wrapper(kademlia_wkn_ip, _nodes[i]->id);
-    _nodes[i]->id = pp.first;
-    _nodes[i]->ip = pp.second;
+    KDEBUG(1) << "stabilize: lookup for " << Kademlia::printbits((*_nodes)[i]->id) << endl;
+    pair<NodeID, IPAddress> pp = _self->do_lookup_wrapper(kademlia_wkn_ip, (*_nodes)[i]->id);
+    (*_nodes)[i]->id = pp.first;
+    (*_nodes)[i]->ip = pp.second;
   }
 }
 
@@ -567,11 +592,11 @@ k_bucket::stabilized(vector<NodeID> lid, string prefix, unsigned depth)
            _child[1]->stabilized(lid, prefix + "1", depth+1);
   }
 
-  if(_nodes.size())
+  if(_nodes->size())
     return true;
 
 
-  KDEBUG(2) << "stabilized: " << prefix << " not present" << endl;
+  KDEBUG(2) << "stabilized: " << prefix << " not present, depth = " << depth << endl;
   NodeID lower_mask = 0;
 
   //
@@ -579,19 +604,22 @@ k_bucket::stabilized(vector<NodeID> lid, string prefix, unsigned depth)
   // Check whether that is true.
   //
 
-  // On every iteration we add another bit.  lower_mask looks like 000...111,
-  // but we use it as 111...000 by ~-ing it.
+  // On every iteration we add another bit.  lower_mask looks like 111...000,
+  // but we use it as 000...111 by ~-ing it.
   for(unsigned i=0; i<depth; i++)
-    lower_mask |= (1<<i);
+    lower_mask |= (1<<(Kademlia::idsize-depth-1));
 
   // flip the bit, and turn all bits to the right of the flipped bit into
   // zeroes.
-  NodeID lower = _id ^ (1<<depth);
+  NodeID lower = _id ^ (1<<(Kademlia::idsize-depth-1));
   lower &= ~lower_mask;
 
   // upper bound is the id with one bit flipped and all bits to the right of
   // that turned into ones.
   NodeID upper = lower | lower_mask;
+
+  KDEBUG(4) << "stabilized: lower = " << Kademlia::printbits(lower) << endl;
+  KDEBUG(4) << "stabilized: upper = " << Kademlia::printbits(upper) << endl;
 
   // yields the node with smallest id greater than lower
   vector<NodeID>::const_iterator it = upper_bound(lid.begin(), lid.end(), lower);
@@ -626,10 +654,10 @@ k_bucket::get(NodeID key, unsigned depth)
 
   KDEBUG(3) << "do_lookup: found deepest level" << endl;
 
-  assert(_nodes.size());
+  assert(_nodes->size());
 
   // XXX: use alpha
-  return _nodes[0];
+  return (*_nodes)[0];
 }
 
 // }}}
@@ -645,9 +673,9 @@ k_bucket::dump(string prefix, unsigned depth)
     return;
   }
 
-  for(unsigned i=0; i<_nodes.size(); i++)
-    if(_nodes[i])
-      cout << "*** " << prefix << " [" << i << "] : " << Kademlia::printbits(_nodes[i]->id) << endl;
+  for(unsigned i=0; i<_nodes->size(); i++)
+    if((*_nodes)[i])
+      cout << "*** " << prefix << " [" << i << "] : " << Kademlia::printbits((*_nodes)[i]->id) << endl;
 }
 
 // }}}

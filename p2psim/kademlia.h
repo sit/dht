@@ -153,11 +153,14 @@ public:
   peer_t* get(NodeID, unsigned = 0);
 
 private:
-  k_bucket* _child[2];          // subtree
-  vector<peer_t*> _nodes;       // all nodes
   static unsigned _k;
+  bool _leaf;                   // this should/can not be split further
+  Kademlia *_self;              // the kademlia node that this tree is part of
 
-  Kademlia *_self;
+  // the following are mutually exclusive, they could go into a union.
+  vector<peer_t*> *_nodes;      // for a leaf
+  k_bucket* _child[2];          // for a node
+
   NodeID _id; // so that KDEBUG() works. can be removed later.
 };
 
