@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.3 2002/07/02 08:26:55 thomer Exp $
+# $Id: Makefile.am,v 1.4 2002/07/16 16:45:22 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -15,6 +15,7 @@ SUFFIXES = .x .C .h
 $(RPCC):
 	@:
 
+$(DEP_FILES): test_prot.h
 
 test_prot.h: test_prot.x # $(RPCC)
 test_prot.C: test_prot.x # $(RPCC)
