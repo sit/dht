@@ -286,6 +286,7 @@ class skiplist {
     return (elm->*field).previous;
   }
 
+#ifdef _CALLBACK_H_INCLUDED_
   void traverse (typename callback<void, T *>::ref cb) const {
     T *p, *np;
     for (p = head; p; p = np) {
@@ -300,6 +301,7 @@ class skiplist {
       (*cb) (p);
     }
   }
+#endif /* _CALLBACK_H_INCLUDED_ */  
 
   bool repok () const {
     if (head == NULL) {
