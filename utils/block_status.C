@@ -52,14 +52,12 @@ block_status::is_missing_on (chordID n)
 }
 
 void
-block_status::print ()
+block_status::print (strbuf &out)
 {
-  warn << "status of " << id << ": missing on ";
+  out << "status of " << id << ": missing on ";
   for (u_int i = 0; i < missing.size (); i++)
-    {
-      warn << missing[i]->id() << " ";
-    }
-  warn << "\n";
+    out << missing[i]->id() << " ";
+  out << "\n";
 }
 
 block_status_manager::block_status_manager (chordID me) : my_id (me)
@@ -224,12 +222,11 @@ block_status_manager::mcount (const chordID &b)
 }
 
 void
-block_status_manager::print ()
+block_status_manager::print (strbuf &out)
 {
   block_status *bs = blocks.first ();
-  while (bs) 
-    {
-      bs->print ();
-      bs = blocks.next (bs);
-    }
+  while (bs) {
+    bs->print (out);
+    bs = blocks.next (bs);
+  }
 }

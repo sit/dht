@@ -23,7 +23,7 @@ public:
   bool is_missing_on (chordID n);
   void missing_on (ptr<location> l);
   void found_on (ptr<location> l);
-  void print ();
+  void print (strbuf &out);
 };
 
 class block_status_manager {
@@ -48,8 +48,7 @@ public:
   const vec<ptr<location> > where_missing (const chordID &b);
   u_int mcount (const chordID &b);
   u_int pcount (const chordID &b, vec<ptr<location> > succs);
-  void status ();
-  void print ();
+  void print (strbuf &out);
 };
 
 #endif
