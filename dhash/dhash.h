@@ -119,7 +119,7 @@ class dhashgateway {
   ptr<asrv> clntsrv;
   ptr<chord> clntnode;
 
-  int do_caching;
+  bool do_caching;
 
   ihash<chordID, store_state, &store_state::key, &store_state::link, hashID> pst;
 
@@ -170,7 +170,7 @@ class dhashgateway {
   void forget_block (chordID key);
 
  public:  
-  void set_caching(char c) { do_caching = c;};
+  void set_caching (bool c) { do_caching = c; };
   dhashgateway (ptr<axprt_stream> x, ptr<chord> clnt);
 };
 

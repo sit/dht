@@ -29,14 +29,13 @@
 
 EXITFN (cleanup);
 
-#define MAX_VNODES 1024
 #define STORE_SIZE 60000 //size of block store per vnode (in blocks)
 
 ptr<chord> chordnode;
 static str p2psocket;
-int do_cache;
+bool do_cache;
 int cache_size;
-dhash *dh[MAX_VNODES + 1];
+dhash *dh[chord::max_vnodes + 1];
 int ndhash = 0;
 int myport;
 
@@ -55,7 +54,7 @@ client_accept (int fd)
   // XXX these dhashgateway objects are leaked
   //
   dhashgateway *c = New dhashgateway (x, chordnode);
-  c->set_caching (do_cache ? 1 : 0);
+  c->set_caching (do_cache);
 }
 
 static void
@@ -115,7 +114,8 @@ newvnode_cb (int nreplica, str db_name, int ss_mode, int n, vnode *my,
     fatal ("unable to join\n");
   }
   str db_name_prime = strbuf () << db_name << "-" << n;
-  if (ndhash >= MAX_VNODES) fatal << "Too many virtual nodes (1024)\n";
+  if (ndhash >= chord::max_vnodes)
+    fatal << "Too many virtual nodes (" << chord::max_vnodes << ")\n";
   dh[ndhash++] = New dhash (db_name_prime, my, nreplica, 
 			    STORE_SIZE, 
 			    cache_size, 
@@ -128,6 +128,7 @@ newvnode_cb (int nreplica, str db_name, int ss_mode, int n, vnode *my,
 void
 halt ()
 {
+  warnx << "Exiting on command.\n";
   exit (0);
 }
 
@@ -169,7 +170,7 @@ main (int argc, char **argv)
 
   int ch;
 
-  do_cache = 0;
+  do_cache = false;
   int ss_mode = 0;
 
   myport = 0;
@@ -225,7 +226,7 @@ main (int argc, char **argv)
       p2psocket = optarg;
       break;
     case 'c':
-      do_cache = 1;
+      do_cache = true;
       break;
     case 'd':
       db_name = optarg;
@@ -242,6 +243,12 @@ main (int argc, char **argv)
     }
 
   if (wellknownport == 0) usage ();
+
+  if (vnode > chord::max_vnodes) {
+    warn << "Requested vnodes (" << vnode << ") more than maximum allowed ("
+	 << chord::max_vnodes << ")\n";
+    usage ();
+  }
 
   max_loccache = max_loccache * (vnode + 1);
   chordnode = New refcounted<chord> (wellknownhost, wellknownport,

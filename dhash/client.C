@@ -44,7 +44,7 @@
 int n = 0;
 
 dhashgateway::dhashgateway (ptr<axprt_stream> _x, ptr<chord> node)
-  : x (_x), clntnode(node), do_caching (0)
+  : x (_x), clntnode(node), do_caching (false)
 {
   clntsrv = asrv::alloc (x, dhashgateway_program_1,
 			 wrap (this, &dhashgateway::dispatch));

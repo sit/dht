@@ -282,6 +282,16 @@ bool
 is_authenticID (chordID &x, sfs_hostname n, int p, int vnode)
 {
   chordID ID;
+  
+  // xxx presumably there's really a smaller actual range
+  //     of valid ports.
+  if (p < 0 || p > 65535)
+    return false;
+
+  // max vnode is a system-wide default.
+  if (vnode > chord::max_vnodes)
+    return false;
+  
   str ids = n << "." << p << "." << vnode;
   // warnx << "is_authenticID: " << ids << "\n";
   char id[sha1::hashsize];

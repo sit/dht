@@ -116,6 +116,9 @@ chord::startchord (int myp)
 ptr<vnode>
 chord::newvnode (cbjoin_t cb)
 {
+  if (nvnode > max_vnodes)
+    fatal << "Maximum number of vnodes (" << max_vnodes << ") reached.\n";
+    
   chordID newID = init_chordID (nvnode, myname, myport);
   if (newID != wellknownID)
     locations->insert (newID, myname, myport);

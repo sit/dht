@@ -271,6 +271,9 @@ class chord : public virtual refcount {
   void stop_cb (const chordID &k, ptr<vnode> v);
  
  public:
+  // system wide default on the maximum number of vnodes/node.
+  static const int max_vnodes = 1024;
+
   // locations contains all nodes that appear as fingers in vnodes plus
   // a number of cached nodes.  the cached nodes have refcnt = 0
   ptr<locationtable> locations; 
