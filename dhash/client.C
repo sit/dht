@@ -335,7 +335,7 @@ dhashcli::retrieve2_hop_cb (chordID blockID, route_iterator *ci, bool done)
     else
       left = cs.size () - (dhash::NUM_DFRAGS + 2);
     for (size_t i = 1; i < left; i++) {
-      if (betweenleftincl (cs[i-1].x, cs[i].x, blockID)) {
+      if (betweenrightincl (cs[i-1].x, cs[i].x, blockID)) {
 	cs.popn_front (i);
 	route r = ci->path ();
 	delete ci;
