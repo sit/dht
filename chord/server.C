@@ -393,9 +393,6 @@ vnode::get_fingers_cb (chordID x, chord_getfingersres *res,  clnt_stat err)
 void
 vnode::challenge (chordID &x, cbchallengeID_t cb)
 {
-  
-  cb (x, true, CHORD_OK);
-  return;
   ptr<chord_challengearg> ca = New refcounted<chord_challengearg>;
   chord_challengeres *res = New chord_challengeres (CHORD_OK);
   nchallenge++;

@@ -46,15 +46,11 @@ dhashclient::dispatch (svccb *sbp)
       chordID next = clntnode->lookup_closestpred (arg->key);
 
       dhash_fetchiter_res *i_res = New dhash_fetchiter_res (DHASH_CONTINUE);
-      
       route path;
       path.push_back (next);
-
       doRPC (next, dhash_program_1, DHASHPROC_FETCHITER, arg,i_res,
 		       wrap(this, &dhashclient::lookup_iter_cb, 
 			    sbp, i_res, path, 0));
-      
-
     } 
     break;
 
@@ -222,7 +218,6 @@ dhashclient::lookup_iter_cb (svccb *sbp,
       dhash_fetchiter_res *nres = New dhash_fetchiter_res (DHASH_CONTINUE);
       /* assumes an in-order RPC transport, otherwise retry
 	 might reach prev before alert can update tables*/
-
       doRPC (plast, dhash_program_1, DHASHPROC_FETCHITER, 
 		       rarg, nres,
 		       wrap(this, &dhashclient::lookup_iter_cb, 

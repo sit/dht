@@ -907,5 +907,6 @@ dhash::stop ()
     warnx << "stop replica timer\n";
     timecb_remove (check_replica_tcb);
     check_replica_tcb = NULL;
+    update_replica_list ();
   }
 }

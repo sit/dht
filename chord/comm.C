@@ -22,7 +22,7 @@
 #include "chord.h"
 #include "math.h"
 
-#define TIMEOUT 60
+#define TIMEOUT 5
 
 #ifdef FAKE_DELAY
 long geo_distance (chordID x, chordID y) 
@@ -221,7 +221,6 @@ locationtable::stats ()
   warnx <<  "       RPCs outstanding: " <<  npending << "\n";
   sprintf(buf, "       Average latency: %f\n", ((float) (rpcdelay/nrpc)));
   warnx << buf << "  Per link avg. RPC latencies\n";
-
   for (location *l = locs.first (); l ; l = locs.next (l)) {
     warnx << "    link " << l->n << " : refcnt: " << l->refcnt << " # RPCs: "
 	  << l->nrpc << "\n";
