@@ -69,6 +69,7 @@ static char *monitor_host;
 ptr<chord> chordnode;
 static str p2psocket;
 int ss_mode;
+bool nojoin_ok = false;
 int lbase;
 vec<ref<dhash> > dh;
 int myport;
@@ -175,7 +176,7 @@ get_fingerlike (int mode)
 static void
 newvnode_cb (int n, ptr<vnode> my, chordstat stat)
 {  
-  if (stat != CHORD_OK) {
+  if (stat != CHORD_OK && !nojoin_ok) {
     warnx << "newvnode_cb: status " << stat << "\n";
     fatal ("unable to join\n");
   }
@@ -518,7 +519,7 @@ main (int argc, char **argv)
 
   char *cffile = NULL;
 
-  while ((ch = getopt (argc, argv, "b:d:fFj:l:L:M:m:n:O:Pp:S:s:T:tv:w:")) != -1)
+  while ((ch = getopt (argc, argv, "b:d:fFj:l:L:M:m:n:O:Pp:S:s:T:tv:w:x"))!=-1)
     switch (ch) {
     case 'b':
       lbase = atoi (optarg);
@@ -614,6 +615,9 @@ main (int argc, char **argv)
       break;
     case 'w':
       monitor_host = optarg;
+      break;
+    case 'x':
+      nojoin_ok = true;
       break;
     default:
       usage ();

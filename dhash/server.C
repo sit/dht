@@ -217,8 +217,8 @@ dhash_impl::init_after_chord (ptr<vnode> node)
   delaycb (synctm (), wrap (this, &dhash_impl::sync_cb));
 
   if (!JOSH) {
-    merkle_rep_tcb = 
-      delaycb (reptm (), wrap (this, &dhash_impl::replica_maintenance_timer, 0));
+    merkle_rep_tcb = delaycb
+      (reptm (), wrap (this, &dhash_impl::replica_maintenance_timer, 0));
   }
 
   keyhash_mgr_rpcs = 0;
@@ -226,7 +226,6 @@ dhash_impl::init_after_chord (ptr<vnode> node)
     delaycb (keyhashtm (), wrap (this, &dhash_impl::keyhash_mgr_timer));
   pmaint_obj = New pmaint (cli, host_node, db, 
 			   wrap (this, &dhash_impl::dbdelete));
-
 }
 
 

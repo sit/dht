@@ -611,8 +611,14 @@ vnode_impl::join_getsucc_cb (ptr<location> n,
     status = CHORD_OK;
   }
   if (status != CHORD_OK) {
-    // XXX
-    warnx << myID << ": should remove me from vnodes since I failed to join.\n";
+    warnx << myID << ": join failed, remove from vnodes?\n";
+    n->set_alive (false);
+    dead_nodes.push_back (n);
+    
+    // continue to run, even if join has failed... lsd will remove us
+    // if necessary
+    stabilize ();
+    v = mkref (this);
   }
   cb (v, status);
   delete route;

@@ -87,7 +87,7 @@ order_succs_by_latency (const vec<float> &l,
                         const vec<chord_node> &succs,
 	                vec<chord_node> &out)
 {
-  lod *od = New lod[succs.size()];
+  lod *od = New lod [succs.size()];
   for (size_t i = 0; i < succs.size (); i++) {
     od[i].l = l [i];
     od[i].i = i;
@@ -103,6 +103,7 @@ order_succs_by_latency (const vec<float> &l,
          << ", " << buf << "\n";
 #endif
   }
+  delete[] od;
 }
 
 #endif

@@ -252,7 +252,7 @@ static void
 order_succs (const vec<float> &me, const vec<chord_node> &succs,
 	     vec<chord_node> &out)
 {
-  orderer *d2me = New orderer[succs.size()];
+  orderer *d2me = New orderer [succs.size()];
   vec<float> cursucc;
   for (size_t i = 0; i < succs.size (); i++) {
     cursucc.setsize (succs[i].coords.size ());
@@ -273,6 +273,7 @@ order_succs (const vec<float> &me, const vec<chord_node> &succs,
 #endif /* VERBOSE_LOG */    
     out.push_back (succs[d2me[i].i_]);
   }
+  delete[] d2me;
 }
 
 static void
