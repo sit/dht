@@ -57,10 +57,11 @@ dhash_impl::dofetchrec (user_args *sbp, dhash_fetchrec_arg *arg)
   header << host_node->my_ID () << ": dofetchrec (" << id << "): ";
 
   // First attempt to directly return the block if we have it.
-  if (key_status (id) != DHASH_NOTPRESENT) {
+  // XXX Really should have a better way of knowing when we have
+  //     the entire block, as opposed to a fragment of something.
+  if (id.ctype == DHASH_KEYHASH && key_status (id) != DHASH_NOTPRESENT) {
     trace << header << "key present!\n";
-    fetch (id, 0,
-	   wrap (this, &dhash_impl::dofetchrec_sbp_gotdata_cb, sbp, arg));
+    dofetchrec_local (sbp, arg);
     return;
   }
 
@@ -98,7 +99,9 @@ dhash_impl::dofetchrec (user_args *sbp, dhash_fetchrec_arg *arg)
 
       dofetchrec_assembler (sbp, arg, cs);
       return;
-    } else if ((int)m - (int)overlap < (int)cs.size ()) {
+    }
+#if 0    
+    else if ((int)m - (int)overlap < (int)cs.size ()) {
       // Override the absolute best we could've done, which probably
       // is the predecessor since our succlist spans the key, and
       // select someone nice and fast to get more successors from.
@@ -130,6 +133,7 @@ dhash_impl::dofetchrec (user_args *sbp, dhash_fetchrec_arg *arg)
 	return;
       }
     }
+#endif /* 0 */    
   }
   dofetchrec_nexthop (sbp, arg, p);
 }
@@ -180,13 +184,22 @@ dhash_impl::dofetchrec_nexthop_cb (user_args *sbp, dhash_fetchrec_arg *arg,
 }
 
 void
-dhash_impl::dofetchrec_sbp_gotdata_cb (user_args *sbp, dhash_fetchrec_arg *arg,
-				       int cookie, ptr<dbrec> val,
-				       dhash_stat err)
+dhash_impl::dofetchrec_local (user_args *sbp, dhash_fetchrec_arg *arg)
 {
-  // dhash_fetchiter_res *res = block_to_res (err, arg, cookie, val);
-  fatal << "XXX fetchrec_sbp_gotdata_cb\n";
-  //  sbp->reply (res);
+  blockID id (arg->key, arg->ctype, arg->dbtype);
+  ptr<dbrec> b = dblookup (id); assert (b != NULL);
+  dhash_fetchrec_res res (DHASH_OK);
+  
+  res.resok->res.setsize (b->len);
+  memcpy (res.resok->res.base (), b->value, b->len);
+  res.resok->fetch_time = 0;
+  res.resok->path.setsize (arg->path.size () + 1);
+  for (size_t i = 0; i < arg->path.size (); i++) {
+    res.resok->path[i] = arg->path[i];
+  }
+  host_node->my_location ()->fill_node (res.resok->path[arg->path.size()]);
+  sbp->reply (&res);
+  sbp = NULL;
 }
 
 void

@@ -170,11 +170,7 @@ class dhash_impl : public dhash {
   void dofetchrec_nexthop_cb (user_args *sbp, dhash_fetchrec_arg *arg,
 			      ptr<dhash_fetchrec_res> res,
 			      clnt_stat err);
-  void dofetchrec_sbp_gotdata_cb (user_args *sbp,
-				  dhash_fetchrec_arg *arg,
-				  int cookie,
-				  ptr<dbrec> val,
-				  dhash_stat err);
+  void dofetchrec_local (user_args *sbp, dhash_fetchrec_arg *arg);
   void dofetchrec_assembler (user_args *sbp, dhash_fetchrec_arg *arg,
 			     vec<ptr<location> > succs);
   void dofetchrec_assembler_cb (user_args *sbp, dhash_fetchrec_arg *arg,
