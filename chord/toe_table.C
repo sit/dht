@@ -3,6 +3,7 @@
 #include "toe_table.h"
 
 #include <prox_prot.h>
+#include <proxroute.h>
 #include <coord.h>
 #include <location.h>
 #include <locationtable.h>
@@ -10,11 +11,12 @@
 #include <modlogger.h>
 #define trace modlogger ("toes")
 
-toe_table::toe_table (ptr<vnode> v, ptr<locationtable> l)
+#define VERBOSE_LOG
+toe_table::toe_table (ptr<proxroute> v, ptr<locationtable> l)
   :  locations (l), myvnode (v), in_progress (0)
 {
   for (int i=0; i < MAX_LEVELS; i++) {
-    target_size[i] = 5; //must be less than nsucc to bootstrap
+    target_size[i] = 6; //must be less than nsucc to bootstrap
     toes[i] = New vec<ptr<location> >;
   }
   
@@ -216,7 +218,7 @@ toe_table::filled_level ()
       return level;
     }
   }
-  return 0;
+  return -1;
 }
 
 //probably useful for stats
@@ -256,30 +258,29 @@ toe_table::stabilize_toes ()
 {
   stable_toes = true;
 
-  int level = get_last_level () + 1;
+  int level = filled_level () + 1;
 
   if(level >= MAX_LEVELS)
     level = 0;
 
   
-#if 0
   if ((level < MAX_LEVELS) 
       && (level == get_last_level ())
       && (level > 0)) {
     //we failed to find enough nodes to fill the last level we tried
     //go back and get more donors and try again
     
-    bump_target (level - 1);
-    warn << "bumped " << level - 1 << " and retrying\n";
-    level = filled_level ();
+    target_size[level - 1] *= 2;
+    warn << "bumped " << level - 1 << " to " << target_size[level - 1] << 
+      " and retrying\n";
+    level = filled_level () + 1;
   }
-#endif 
 
   set_last_level (level);
   prune_toes(level);
   if (level == 0) { 
     // grab the succlist and stick it in the toe table
-    vec<ptr<location> > succs = myvnode->succs ();
+    vec<ptr<location> > succs = myvnode->fingers ();
     for (u_int i = 0; i < succs.size (); i++) {
       chord_node n;
       succs[i]->fill_node (n);

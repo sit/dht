@@ -3,6 +3,7 @@
 #include <id_utils.h>
 #include <misc_utils.h>
 #include "finger_table.h"
+#include "finger_table_pns.h"
 #include "pred_list.h"
 #include "succ_list.h"
 
@@ -14,17 +15,18 @@ fingerroute::produce_vnode (ref<chord> _chordnode,
 			    ref<rpc_manager> _rpcm,
 			    ref<location> _l)
 {
-  return New refcounted<fingerroute> (_chordnode, _rpcm, _l);
+  return New refcounted<fingerroute> (_chordnode, _rpcm, _l, wrap (&finger_table::produce_finger_table));
 }
 
 fingerroute::fingerroute (ref<chord> _chord,
 			  ref<rpc_manager> _rpcm,
-			  ref<location> _l)
+			  ref<location> _l,
+			  cb_fingertableproducer_t ftp)
   : vnode_impl (_chord, _rpcm, _l),
     gotfingers_ (false)
 {
-  fingers = New refcounted<finger_table> (mkref (this), locations);
-  stabilizer->register_client (fingers);
+  fingers_ = ftp (mkref (this), locations);
+  stabilizer->register_client (fingers_);
 
   addHandler (fingers_program_1, wrap (this, &fingerroute::dispatch));
 
@@ -41,7 +43,7 @@ fingerroute::print (strbuf &outbuf) const
 {
   // XXX maybe should call parent print.
   outbuf << "======== " << myID << " ====\n";
-  fingers->print (outbuf);
+  fingers_->print (outbuf);
   successors->print (outbuf);
   outbuf << "pred : " << my_pred ()->id () << "\n";
   outbuf << "=====================================================\n";
@@ -74,7 +76,7 @@ void
 fingerroute::dogetfingers (user_args *sbp)
 {
   chord_nodelistres res(CHORD_OK);
-  fingers->fill_nodelistres (&res);
+  fingers_->fill_nodelistres (&res);
   sbp->reply (&res);
 }
 
@@ -83,7 +85,7 @@ void
 fingerroute::dogetfingers_ext (user_args *sbp)
 {
   chord_nodelistextres res(CHORD_OK);
-  fingers->fill_nodelistresext (&res);
+  fingers_->fill_nodelistresext (&res);
   sbp->reply (&res);
 }
 
@@ -123,7 +125,7 @@ fingerroute::closestpred (const chordID &x, const vec<chordID> &failed)
 {
   ptr<location> s;
   
-  ptr<location> f = fingers->closestpred (x, failed);
+  ptr<location> f = fingers_->closestpred (x, failed);
   ptr<location> u = successors->closestpred (x, failed);
   if (between (myID, f->id (), u->id ())) 
     s = f;
@@ -153,3 +155,8 @@ fingerroute::first_fingers_cb (vec<chord_node> nlist, chordstat s)
     locations->insert (nlist[i]);
 }
 
+vec<ptr<location> > 
+fingerroute::fingers () 
+{
+  return fingers_->get_fingers (); 
+}

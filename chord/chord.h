@@ -51,6 +51,7 @@ class chord;
 class location;
 class locationtable;
 class rpc_manager;
+class finger_table;
 struct user_args;
 
 typedef vec<ptr<location> > route;
@@ -66,6 +67,7 @@ typedef callback<void, bool>::ref cbupcalldone_t;
 typedef callback<void, int, void *, cbupcalldone_t>::ref cbupcall_t; 
 
 typedef callback<ref<vnode>, ref<chord>, ref<rpc_manager>, ref<location> >::ref vnode_producer_t;
+typedef callback<ptr<finger_table>, ptr<vnode>, ptr<locationtable> >::ref cb_fingertableproducer_t;
 
 struct user_args {
   //info about the RPC

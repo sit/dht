@@ -5,13 +5,15 @@
 
 #include "stabilize.h"
 
+class proxroute;
+
 class toe_table : public stabilizable {
   static const int max_delay = 800; // ms
 
   vec<vec<ptr<location> >*, MAX_LEVELS> toes;
   ptr<locationtable> locations;
   chordID myID;
-  ptr<vnode> myvnode;
+  ptr<proxroute> myvnode;
 
   short target_size[MAX_LEVELS];
   int in_progress;
@@ -23,7 +25,7 @@ class toe_table : public stabilizable {
   bool stable_toes;
 
  public:
-  toe_table (ptr<vnode> v, ptr<locationtable> l);
+  toe_table (ptr<proxroute> v, ptr<locationtable> l);
   
   bool present (chordID id);
   bool present (chordID id, int level);

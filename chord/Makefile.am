@@ -17,7 +17,8 @@ noinst_HEADERS = aclnt_chord.h \
 		 route_secchord.h \
 		 stabilize.h \
 		 succ_list.h \
-		 toe_table.h
+		 toe_table.h \
+		 finger_table_pns.h
 
 libchord_a_SOURCES = chord.C \
 		      chord_client.C \
@@ -33,7 +34,9 @@ libchord_a_SOURCES = chord.C \
 		      server.C \
 		      stabilize.C \
 		      succ_list.C \
-		      toe_table.C 
+		      toe_table.C \
+		      finger_table_pns.C \
+		      fingerroutepns.C 
 
 EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo

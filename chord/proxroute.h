@@ -22,6 +22,7 @@ class proxroute : public fingerroute {
   ptr<location> closestproxpred (const chordID &x, const vec<float> &n,
 				 const vec<chordID> &failed);
   
+  void start_stabilizing ();
  public:
   static ref<vnode> produce_vnode (ref<chord> _chordnode, 
 				   ref<rpc_manager> _rpcm,
@@ -29,7 +30,8 @@ class proxroute : public fingerroute {
 
   proxroute (ref<chord> _chordnode, 
 	     ref<rpc_manager> _rpcm,
-	     ref<location> _l);
+	     ref<location> _l,
+	     cb_fingertableproducer_t ftp);
   virtual ~proxroute (void);
   
   virtual void dispatch (user_args *a);

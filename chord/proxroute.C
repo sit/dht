@@ -14,28 +14,39 @@ ref<vnode>
 proxroute::produce_vnode (ref<chord> _chordnode, 
 			  ref<rpc_manager> _rpcm,
 			  ref<location> _l)
+      
 {
-  return New refcounted<proxroute> (_chordnode, _rpcm, _l);
+  return New refcounted<proxroute> (_chordnode, _rpcm, _l, wrap(&finger_table::produce_finger_table));
 }
 
 proxroute::proxroute (ref<chord> _chord,
 		      ref<rpc_manager> _rpcm,
-		      ref<location> _l)
-  : fingerroute (_chord, _rpcm, _l)
+		      ref<location> _l,
+		      cb_fingertableproducer_t ftp)
+  
+  : fingerroute (_chord, _rpcm, _l, ftp)
 {
   toes = New refcounted<toe_table> (mkref (this), locations);
-  stabilizer->register_client (toes);
+
+  delaycb (10, wrap (this, &proxroute::start_stabilizing));
+	   
   addHandler (prox_program_1, wrap (this, &proxroute::dispatch));
 }
 
 proxroute::~proxroute () {}
 
 void
+proxroute::start_stabilizing ()
+{
+  stabilizer->register_client (toes);
+}
+
+void
 proxroute::print (strbuf &outbuf) const
 {
   // XXX maybe should call parent print.
   outbuf << "======== " << myID << " ====\n";
-  fingers->print (outbuf);
+  fingers_->print (outbuf);
   successors->print (outbuf);
 
   outbuf << "pred : " << my_pred ()->id () << "\n";
@@ -141,28 +152,22 @@ bool candidate_is_closer (const ptr<location> &c, // new candidate node
 			  const chordID &x, // target
 			  const vec<chordID> &failed, // avoid these
 			  const vec<float> &qc, // their coords
-			  float &mindist)   // previous best dist
+			  chordID &mindist)   // previous best dist
 {
   // Don't give back nodes that querier doesn't want.
   if (in_vector (failed, c->id ())) return false;
   // Do not overshoot, do not go backwards.
   if (!between (myID, x, c->id ())) return false;
-      
-  vec<float> them = c->coords ();
-  if (!them.size ())
-    return false; // XXX weird.
-      
+            
   // See if this improves the distance.
-  float newdist = Coord::distance_f (qc, them);
-  if (mindist < 0 || newdist < mindist) {
+  chordID newdist = distance (c->id (), x);
+  if (mindist == 0 || newdist < mindist) {
 #if 0	
     char dstr[24];
     modlogger log = modlogger ("proximity-toe");
     log << "improving " << x << " from ";
-    sprintf (dstr, "%10.2f", mindist);
-    log << dstr << " to ";
-    sprintf (dstr, "%10.2f", newdist);
-    log << dstr << "\n";
+    log << mindist << " to ";
+    log << newdist << "\n";
 #endif /* 0 */	
     mindist = newdist;
     return true;
@@ -183,8 +188,8 @@ proxroute::closestproxpred (const chordID &x, const vec<float> &n,
 {
   ptr<location> p = me_;
   
-  float mindist = -1.0;
-
+  chordID mindist = 0;
+  
   vec<ptr<location> > ts = toes->get_toes (toes->filled_level ());
   for (size_t i = 0; i < ts.size (); i++) {
     if (candidate_is_closer (ts[i], myID, x, failed, n, mindist))
@@ -192,7 +197,7 @@ proxroute::closestproxpred (const chordID &x, const vec<float> &n,
   }
   // We have a toe that makes progress and is acceptable to the
   // querier, let's go for it.
-  if (mindist >= 0.0)
+  if (mindist > 0)
     return p;
     
   // No good toes?  Either we are too close, or they were all rejected.
@@ -207,12 +212,12 @@ proxroute::closestproxpred (const chordID &x, const vec<float> &n,
 	p = sl[i];
     }
   }
-  if (mindist >= 0.0)
+  if (mindist > 0)
     return p;
 
   // Okay, we are just too far away, let's just go as far as we can
   // with the fingers.
-  ptr<location> f = fingers->closestpred (x, failed);
+  ptr<location> f = fingers_->closestpred (x, failed);
   ptr<location> u = successors->closestpred (x, failed);
   if (between (myID, f->id (), u->id ())) 
     p = f;
@@ -263,7 +268,7 @@ proxroute::closestgreedpred (const chordID &x, const vec<float> &n,
     x = toes->get_toes (toes->filled_level ());
     while (x.size ()) 
       candidates.push_back (x.pop_front ());
-    x = fingers->get_fingers ();
+    x = fingers_->get_fingers ();
     while (x.size ()) 
       candidates.push_back (x.pop_front ());
     x = successors->succs ();

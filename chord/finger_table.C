@@ -5,6 +5,12 @@
 #include <location.h>
 #include <locationtable.h>
 
+ptr<finger_table> 
+finger_table::produce_finger_table (ptr<vnode> v, ptr<locationtable> l)
+{
+  return New refcounted<finger_table> (v, l);
+}
+
 // fingers are now zero-indexed!
 finger_table::finger_table (ptr<vnode> v, ptr<locationtable> l)
   : myvnode (v),
@@ -45,7 +51,7 @@ finger_table::closestpred (const chordID &x, vec<chordID> failed)
   ptr<location> n;
 
   for (int i = NBIT - 1; i >= 0; i--) {
-    n = finger (i);
+    n = finger_table::finger (i);
     if (between (myID, x, n->id ()) && (!in_vector (failed, n->id ())))
       return n;
   }
@@ -53,19 +59,6 @@ finger_table::closestpred (const chordID &x, vec<chordID> failed)
   return myvnode->my_location ();
 }
 
-
-//  ptr<location>
-//  finger_table::closestpred (const chordID &x)
-//  {
-//    ptr<location> n;
-
-//    for (int i = NBIT - 1; i >= 0; i--) {
-//      n = finger (i);
-//      if (between (myID, x, n->id ()))
-//        return n;
-//    }
-//    return myvnode->my_location ();
-//  }
 
 void
 finger_table::print (strbuf &outbuf)
@@ -135,8 +128,8 @@ finger_table::stabilize_finger ()
   // we looked, do the full work to find out who is right. Otherwise,
   // just quickly check to see if its predecessor has changed.
   nout_backoff++;
-  if (fingers[i] != finger (i)) {
-    fingers[i] = finger (i);
+  if (fingers[i] != finger_table::finger (i)) {
+    fingers[i] = finger_table::finger (i);
     stable_fingers = false;
     // Now go forth and find the real finger
     warnx << myID << ": stabilize_finger: findsucc of finger " << i << "\n";
@@ -171,7 +164,7 @@ finger_table::stabilize_finger_getpred_cb (chordID dn, int i, chord_node p,
       // predecessor is too far back, no need to do anything for this
       // or any of the other fingers for which n is the successor
       nfastfinger++;
-      while (i < NBIT && finger (i)->id () == dn)
+      while (i < NBIT && finger_table::finger (i)->id () == dn)
 	i++;
       f = i;
     } else {
@@ -199,7 +192,7 @@ finger_table::stabilize_findsucc_cb (chordID dn, int i,
     stable_fingers = false;
     // Next round, check this finger again.
   } else {
-    while (i < NBIT && finger (i)->id () == succs[0].x)
+    while (i < NBIT && finger_table::finger (i)->id () == succs[0].x)
       i++;
     f = i;
   }

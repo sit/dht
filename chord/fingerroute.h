@@ -8,7 +8,7 @@ class finger_table;
 
 class fingerroute : public vnode_impl {
  protected:
-  ptr<finger_table> fingers;
+  ptr<finger_table> fingers_;
   
  private:
   bool gotfingers_; // fed locationtable with pred's fingers?
@@ -28,11 +28,14 @@ class fingerroute : public vnode_impl {
   
   fingerroute (ref<chord> _chordnode, 
 	       ref<rpc_manager> _rpcm,
-	       ref<location> _l);
+	       ref<location> _l,
+	       cb_fingertableproducer_t ftp);
+
   virtual ~fingerroute (void);
   
   virtual void dispatch (user_args *a);
   virtual void print (strbuf &outbuf) const;
+  virtual vec<ptr<location> > fingers ();
 
   void get_fingers (ptr<location> n, cbchordIDlist_t cb);
   virtual ptr<location> closestpred (const chordID &x, const vec<chordID> &f);

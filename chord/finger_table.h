@@ -4,6 +4,8 @@
 #include "stabilize.h"
 
 class finger_table : public stabilizable {
+
+protected:
   ptr<vnode> myvnode;
   ptr<locationtable> locations;
   
@@ -26,29 +28,31 @@ class finger_table : public stabilizable {
 			      route path, chordstat status);
 
   
- public:
   finger_table (ptr<vnode> v, ptr<locationtable> l);
+ public:
+  
+  static ptr<finger_table> produce_finger_table (ptr<vnode> v, ptr<locationtable> l);
 
-  ptr<location> finger (int i);
-  ptr<location> operator[] (int i);
+  virtual ptr<location> finger (int i);
+  virtual ptr<location> operator[] (int i);
   chordID start (int i) { return starts[i]; }
   
   vec<ptr<location> > get_fingers ();
 
-  void stabilize_finger ();
+  virtual void stabilize_finger ();
 
   void print (strbuf &outbuf);
-  void stats ();
+  virtual void stats ();
   
   // Stabilize methods
-  bool backoff_stabilizing () { return nout_backoff > 0; }
-  void do_backoff () { stabilize_finger (); }
-  bool isstable () { return stable_fingers && stable_fingers2; }
+  virtual bool backoff_stabilizing () { return nout_backoff > 0; }
+  virtual void do_backoff () { stabilize_finger (); }
+  virtual bool isstable () { return stable_fingers && stable_fingers2; }
 
-  void fill_nodelistres (chord_nodelistres *res);
-  void fill_nodelistresext (chord_nodelistextres *res);
+  virtual void fill_nodelistres (chord_nodelistres *res);
+  virtual void fill_nodelistresext (chord_nodelistextres *res);
 
-  ptr<location> closestpred (const chordID &x, vec<chordID> fail);
+  virtual ptr<location> closestpred (const chordID &x, vec<chordID> fail);
 };
 
 #endif /* _FINGER_TABLE_H_ */
