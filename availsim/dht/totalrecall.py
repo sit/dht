@@ -78,7 +78,7 @@ class totalrecall_base (chord):
 	if ev.type == "insert":
 	    return my.insert_block (ev.id, ev.block, ev.size)
 	elif ev.type == "copy":
-	    return my.copy_block (ev.src_id, ev.id, ev.block, ev.size, ev.desc)
+	    return my.copy_block (ev.src_id, ev.id, ev.src_time, ev.block, ev.size, ev.desc)
 	return chord.process (my, ev)
 
     def available_blocks (my):
@@ -86,7 +86,7 @@ class totalrecall_base (chord):
 	extants = []
 	for b in my.inodes:
 	    hosts = my.inodes[b]
-	    extants.append (len([n for n in hosts if n.alive]))
+	    extants.append (len([n for n in hosts if n.alive and b in n.blocks]))
 	avail = len ([b for b in extants if b >= needed])
 	return avail, extants
 
@@ -106,14 +106,22 @@ class totalrecall_base (chord):
 	    i.store (block, isz)
 	my.inodes[block] = insnodes
 
-    def copy_block (my, src, dst, block, size, desc):
+        n = my.allnodes[id]
+        n.nrpc += ninsert
+        n.sent_bytes += isz * ninsert
+	n.sent_bytes_breakdown['insert'] += isz * ninsert
+
+    def copy_block (my, src, dst, lastsrc, block, size, desc):
 	# Typically used for repairs so should already know about this
 	assert block in my.blocks
 	if src in my.deadnodes or dst in my.deadnodes:
 	    return None
-
 	s = my.allnodes[src]
+	if s.last_alive != lastsrc:
+	    print "# Source failed to copy", block
+	    return None
 	d = my.allnodes[dst]
+	s.sent_bytes += size
 	s.sent_bytes_breakdown['%s_repair_write' % desc] += size
 	d.store (block, size)
 	return None
@@ -156,7 +164,8 @@ class totalrecall_base (chord):
 		# Send to these guys as soon as we can
 		for s in newnodes:
 		    nt = int (fixer.sendremote (t, isz) + 0.5)
-		    events.append (event (nt, "copy", ["failure", fixer.id, s.id, b, isz]))
+		    events.append (event (nt, "copy", 
+			["failure", fixer.id, fixer.last_alive, s.id, b, isz]))
 		if b not in fixer.cached_blocks:
 		    # Account for bytes needed to reassemble the block
 		    # XXX but not for the _time_

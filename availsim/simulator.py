@@ -33,6 +33,7 @@ class event:
     def ev_getcopy (my, args):
 	my.desc = args.pop (0)
 	my.src_id = get_node_id (args.pop (0))
+	my.src_time = args.pop (0)
 	my.ev_getblock (args)
     
     def __init__ (my, time, type, *args):

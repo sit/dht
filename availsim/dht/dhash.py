@@ -34,7 +34,7 @@ class dhash (chord):
 	if ev.type == "insert":
 	    return my.insert_block (ev.id, ev.block, ev.size)
 	elif ev.type == "copy":
-	    return my.copy_block (ev.src_id, ev.id, ev.block, ev.size, ev.desc)
+	    return my.copy_block (ev.src_id, ev.id, ev.src_time, ev.block, ev.size, ev.desc)
 	return chord.process (my, ev)
 
     def _extant_counts_check (my):
@@ -97,15 +97,18 @@ class dhash (chord):
 	n.sent_bytes_breakdown['insert'] += isz * len (succs)
         return None
 
-    def copy_block (my, src, dst, block, size, desc):
+    def copy_block (my, src, dst, lastsrc, block, size, desc):
 	"""."""
 	# Typically used for repairs so should already know about this
 	assert block in my.blocks
 	if src in my.deadnodes or dst in my.deadnodes:
 	    return None
-
 	s = my.allnodes[src]
+	if s.last_alive != lastsrc:
+	    print "# Source failed to copy", block
+	    return None
 	d = my.allnodes[dst]
+	s.sent_bytes += size
 	s.sent_bytes_breakdown['%s_repair_write' % desc] += size
 	d.store (block, size)
 
@@ -146,7 +149,8 @@ class dhash (chord):
                 for s in donthaves:
 		    # Round event time up to the next whole unit
 		    nt = int (fixer.sendremote (t, isz) + 0.5)
-		    events.append (event (nt, "copy", [desc, fixer.id, s.id, b, isz]))
+		    events.append (event (nt, "copy",
+			[desc, fixer.id, fixer.last_alive, s.id, b, isz]))
 		    needed -= 1
 		    if needed <= 0: break
 		if b not in fixer.cached_blocks:
@@ -403,6 +407,6 @@ class dhash_cates (dhash):
 		    isz = my.insert_piece_size (my.blocks[b])
 		    n.store (b, isz)
 		    s.sent_bytes += isz
-		    s.sent_bytes_breakdown['pm'] += isz
+		    s.sent_bytes_breakdown['pmaint'] += isz
 		s.unstore (b)
 	return events
