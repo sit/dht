@@ -42,6 +42,7 @@
 #include "chord_util.h"
 #include "comm.h"
 #include "location.h"
+#include "modlogger.h"
 
 long outbytes;
 ihash<str, rpcstats, &rpcstats::key, &rpcstats::h_link> rpc_stats_tab;
@@ -395,7 +396,7 @@ stp_manager::doRPC_dead (ptr<location> l,
 			 ptr<void> in, void *out, aclnt_cb cb,
 			 long fake_seqno /* = 0 */)
 {
-  warn << "dead RPC call\n";
+  modlogger ("stp_manager") << "dead_rpc " << l->n << " " << l->addr << "\n";
     
   ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
 			       (sockaddr *)&(l->saddr));

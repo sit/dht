@@ -209,29 +209,36 @@ locationtable::doRPC (const chordID &n, const rpc_program &prog,
 void
 locationtable::doRPCcb (ptr<location> l, aclnt_cb realcb, clnt_stat err)
 {
-  assert (locs[l->n]);
-  // This code assumes that the location is still in the locs[], etc
-  // structures.  Otherwise, the good bookkeeping is probably wrong and
-  // the checkdead stuff is extraneous.  However, it is unlikely (?)
-  // that a node would get evicted while it has an RPC in flight.
-  
+  if (!locs[l->n]) {
+    loctrace << "evicted-response " << l->n << " " << l->addr << "\n";
+    (realcb) (err);
+    return;
+  }
+
+  // This code is designed to deal with nodes that have dropped RPCs
+  // but are still in the locationtable.  Periodically, those nodes
+  // will be pinged to check if they are still alive.
   if (err) {
     if (l->alive) {
+      loctrace << "dead " << l->n << " " << l->addr << "\n";
       good--;
       l->alive = false;
-      loctrace << "dead " << l->n << " " << l->addr << "\n";
       if (!l->checkdeadcb)
 	l->checkdeadcb = delaycb (60, 0,
 	  wrap(this, &locationtable::check_dead, l, 120));
     }
   } else {
     if (!l->alive) {
-      l->alive = true;
-      good++;
       loctrace << "alive " << l->n << " " << l->addr << "\n";
+      good++;
+      l->alive = true;
+      if (l->checkdeadcb) {
+	timecb_remove (l->checkdeadcb);
+	l->checkdeadcb = NULL;
+      }
     }
   }
-
+  
   (realcb) (err);
 }
 
@@ -431,6 +438,7 @@ locationtable::lookup (const chordID &n)
     return NULL;
   }
 
+  // XXX only MTF (okay, it's really "MTT") if the node is alive?
   cachedlocs.remove (l);
   cachedlocs.insert_tail (l);
   return l->loc_;
@@ -659,7 +667,7 @@ locationtable::stats ()
 void
 locationtable::check_dead (ptr<location> l, unsigned int newwait)
 {
-  warnx << "check_dead: " << l->n << "\n";
+  warnx << gettime () << " check_dead: " << l->n << "\n";
   l->checkdeadcb = NULL;
 
   // Only bother if we still have this node around.
@@ -684,17 +692,26 @@ locationtable::check_dead_cb (ptr<location> l, unsigned int newwait,
   // doRPCcb has already fixed up the the cases where the node is
   // alive. We're just here to reschedule a check in case the node was
   // still unreachable.
-  
   if (s == CHORD_OK) {
+    if (l->checkdeadcb) {
+      loctrace << "!!checkdeadcb!!" << l->n << " " << l->addr << "double dispatch?\n";
+      timecb_remove (l->checkdeadcb);
+    }
     l->checkdeadcb = NULL;
     return;
   }
 
+  // Otherwise, try again later...
   if (newwait > 3600) {
-    warnx << "check_dead: " << l->n << " dead too long. Giving up.\n";
+    warnx << gettime () << " check_dead: " << l->n << " dead too long. Giving up.\n";
     remove (locs[l->n]);
   } else {
-    warnx << "check_dead: " << l->n << " still dead; waiting " << newwait << "\n";
+    warnx << gettime () << " check_dead: " << l->n << " still dead; waiting " << newwait << "\n";
+    if (l->checkdeadcb) {
+      loctrace << "!!checkdeadcb!!" << l->n << " " << l->addr << " overriding existing cb!?\n";
+      timecb_remove (l->checkdeadcb);
+      // assert (0); // this should never happen.
+    }
     l->checkdeadcb = delaycb (newwait, 0,
       wrap (this, &locationtable::check_dead, l, newwait*2));
   }
