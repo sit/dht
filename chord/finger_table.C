@@ -169,7 +169,7 @@ void
 finger_table::print ()
 {
   for (int i = 1; i <= NBIT; i++) {
-    if (!succ_alive ()) continue;
+    if (!fingers[i].first.alive) continue;
     warnx << "finger: " << i << " : " << fingers[i].start << " : succ " 
 	  << fingers[i].first.n << "\n";
     

@@ -48,11 +48,11 @@ vnode::get_successor_cb (chordID n, cbchordID_t cb, chord_noderes *res,
 {
   if (err) {
     net_address dr;
-    warnx << "get_successor_cb: RPC failure " << err << "\n";
+    //    warnx << "get_successor_cb: RPC failure " << err << "\n";
     cb (n, dr, CHORD_RPCFAILURE);
   } else if (res->status) {
     net_address dr;
-    warnx << "get_successor_cb: RPC error " << res->status << "\n";
+    // warnx << "get_successor_cb: RPC error " << res->status << "\n";
     cb (n, dr, res->status);
   } else {
     cb (res->resok->node, res->resok->r, CHORD_OK);
@@ -77,11 +77,9 @@ vnode::get_predecessor_cb (chordID n, cbchordID_t cb, chord_noderes *res,
 {
   if (err) {
     net_address dr;
-    warnx << "get_predecessor_cb: RPC failure " << err << "\n";
     cb (n, dr, CHORD_RPCFAILURE);
   } else if (res->status) {
     net_address dr;
-    warnx << "get_predecessor_cb: RPC error " << res->status << "\n";
     cb (n, dr, res->status);
   } else {
     cb (res->resok->node, res->resok->r, CHORD_OK);
@@ -216,10 +214,12 @@ vnode::notify (chordID &n, chordID &x)
 void
 vnode::notify_cb (chordID n, chordstat *res, clnt_stat err)
 {
-  if (err) {
-    warnx << "notify_cb: RPC failure " << n << " " << err << "\n";
-  } else if (*res != CHORD_OK) {
-    warnx << "notify_cb: RPC error" << n << " " << *res << "\n";
+  if (err || *res) {
+    if (err)
+      warnx << "notify_cb: RPC failure " << n << " " << err << "\n";
+    else
+      warnx << "notify_cb: RPC error" << n << " " << *res << "\n";
+    deletefingers (n);
   }
   delete res;
 }
@@ -299,20 +299,17 @@ vnode::challenge_cb (int challenge, chordID x, cbchallengeID_t cb,
 		     chord_challengeres *res, clnt_stat err)
 {
   if (err) {
-    warnx << "challenge_cb: RPC failure " << err << "\n";
+    //    warnx << "challenge_cb: RPC failure " << err << "\n";
     cb (x, false, CHORD_RPCFAILURE);
   } else if (res->status) {
-    warnx << "challenge_cb: error " << res->status << "\n";
+    //    warnx << "challenge_cb: error " << res->status << "\n";
     cb (x, false, res->status);
   } else if (challenge != res->resok->challenge) {
-    warnx << "challenge_cb: challenge mismatch\n";
+    //    warnx << "challenge_cb: challenge mismatch\n";
     cb (x, false, res->status);
   } else {
     net_address r = locations->getaddress (x);
     bool ok = is_authenticID (x, r.hostname, r.port, res->resok->index);
-    if (!ok) {
-      warnx << "challenge_cb: " << myID << " x " << x << " is not authentic\n";
-    }
     cb (x, ok, res->status);
   }
   delete res;

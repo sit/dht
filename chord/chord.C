@@ -44,9 +44,9 @@ vnode::vnode (ptr<locationtable> _locations, ptr<chord> _chordnode,
   nout_continuous = 0;
   nout_backoff = 0;
 
-  toes = New refcounted<toe_table> (locations);
   fingers = New refcounted<finger_table> (locations, myID);
   successors = New refcounted<succ_list> (locations, myID);
+  toes = New refcounted<toe_table> (locations, successors);
 
   stable_fingers = false;
   stable_fingers2 = false;

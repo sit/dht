@@ -79,48 +79,50 @@ vnode::stabilize_continuous (u_int32_t t)
 void
 vnode::stabilize_succ ()
 {
-  chordID s = fingers->succ ();
   if (!fingers->succ_alive ()) {   // notify() may result in failure
     fingers->replacefinger (1);
+    chordID s = fingers->succ ();
     notify (s, myID); 
   }
   nout_continuous++;
   get_predecessor (fingers->succ (), 
-		   wrap (this, &vnode::stabilize_getpred_cb));
+		   wrap (this, &vnode::stabilize_getpred_cb, fingers->succ ()));
 }
 
 void
-vnode::stabilize_getpred_cb (chordID p, net_address r, chordstat status)
+vnode::stabilize_getpred_cb (chordID sd,
+			     chordID p, net_address r, chordstat status)
 {
   // receive predecessor from my successor; in stable case it is me
   if (status) {
     warnx << "stabilize_getpred_cb: " << myID << " " 
-	  << fingers->succ () << " failure " << status << "\n";
+	  << sd << " failure " << status << "\n";
     stable_fingers = false;
+    if (status == CHORD_RPCFAILURE)
+      deletefingers (sd);
     nout_continuous--;
   } else {
     if (fingers->better_ith_finger (1, p)) {
       locations->cacheloc (p, r);
-      challenge (p, wrap (this, &vnode::stabilize_getpred_cb_ok));
+      challenge (p, wrap (this, &vnode::stabilize_getpred_cb_ok, sd));
     } else {
       nout_continuous--;
-      chordID s = fingers->succ ();
-      notify (s, myID);
+      notify (sd, myID);
     }
   }
 }
 
 
 void
-vnode::stabilize_getpred_cb_ok (chordID p, bool ok, chordstat status)
+vnode::stabilize_getpred_cb_ok (chordID sd,
+				chordID p, bool ok, chordstat status)
 {
   nout_continuous--;
   if ((status == CHORD_OK) && ok) {
     if (fingers->better_ith_finger (1, p)) {
       fingers->updatefinger (p);
       stable_fingers = false;
-      chordID s = fingers->succ ();
-      notify (s, myID);
+      notify (sd, myID);
     }
   }
 }
@@ -131,20 +133,24 @@ vnode::stabilize_pred ()
   if (predecessor.alive) {
     nout_continuous++;
     get_successor (predecessor.n,
-		   wrap (this, &vnode::stabilize_getsucc_cb));
+		   wrap (this, &vnode::stabilize_getsucc_cb,
+			 predecessor.n));
   } else 
     stable_fingers = false;
 }
 
 void
-vnode::stabilize_getsucc_cb (chordID s, net_address r, chordstat status)
+vnode::stabilize_getsucc_cb (chordID pred, 
+			     chordID s, net_address r, chordstat status)
 {
   // receive successor from my predecessor; in stable case it is me
   nout_continuous--;
   if (status) {
-    warnx << "stabilize_getpred_cb: " << myID << " " << predecessor.n 
+    warnx << "stabilize_getpred_cb: " << myID << " " << pred 
 	  << " failure " << status << "\n";
     stable_fingers = false;
+    if (status == CHORD_RPCFAILURE)
+      deletefingers (pred);
   } else {
     //XXX do something to fix situation?
     if (s != myID) 
@@ -183,9 +189,7 @@ vnode::stabilize_backoff (int f, int s, u_int32_t t)
   } else {
     f = stabilize_finger (f);
     s = stabilize_succlist (s);
-#ifdef TOES
     stabilize_toes ();
-#endif /*TOES*/
     if (isstable () && (t <= stabilize_timer_max * 1000))
       if(aimd)
         t = (int)(1.2 * t);
@@ -237,7 +241,7 @@ vnode::stabilize_finger (int f)
       // warnx << "stabilize: " << myID << " findsucc of finger " << i << "\n";
       nout_backoff++;
       chordID n = fingers->start (i);
-      find_successor (n, wrap (this, &vnode::stabilize_findsucc_cb, i));
+      find_successor (n, wrap (this, &vnode::stabilize_findsucc_cb, n, i));
       i++;
     }
   }
@@ -245,14 +249,16 @@ vnode::stabilize_finger (int f)
 }
 
 void
-vnode::stabilize_findsucc_cb (int i, chordID s, route search_path, 
-			    chordstat status)
+vnode::stabilize_findsucc_cb (chordID dn, int i, chordID s, route search_path, 
+			      chordstat status)
 {
   nout_backoff--;
   if (status) {
     warnx << "stabilize_findsucc_cb: " << myID << " " 
-	  << (*fingers)[i] << " failure " << status << "\n";
+	  << dn << " failure " << status << "\n";
     stable_fingers = false;
+    if (status == CHORD_RPCFAILURE)
+      deletefingers (dn);
   } else {
     if (fingers->better_ith_finger (i, s)) {
       challenge (s, wrap (this, &vnode::stabilize_findsucc_ok, i));
@@ -286,22 +292,25 @@ vnode::stabilize_succlist (int s)
     successors->replace_succ(j);
   }
   nout_backoff++;
-  get_successor ((*successors)[j],
-		 wrap (this, &vnode::stabilize_getsucclist_cb, j));
+  chordID jid = (*successors)[j];
+  get_successor (jid,
+		 wrap (this, &vnode::stabilize_getsucclist_cb, jid, j));
   return j+1;
 }
 
 
 void
-vnode::stabilize_getsucclist_cb (int i, chordID s, net_address r, 
+vnode::stabilize_getsucclist_cb (chordID jid, int i, chordID s, net_address r, 
 				 chordstat status)
 {
   int nsucc = successors->num_succ ();
   nout_backoff--;
   if (status) {
     warnx << "stabilize_getsucclist_cb: " << myID << " " << i << " : " 
-	  << (*successors)[i] << " failure " << status << "\n";
+	  << jid << " failure " << status << "\n";
     stable_succlist = false;
+    if (status == CHORD_RPCFAILURE)
+      deletefingers (jid);
   } else if (s == myID) {  // did we go full circle?
     if (nsucc > i) {  // remove old entries?
       stable_succlist = false;
@@ -347,4 +356,42 @@ vnode::stop ()
     timecb_remove (stabilize_backoff_tmo);
     stabilize_backoff_tmo = NULL;
   }
+}
+
+
+void
+vnode::stabilize_toes ()
+{
+  return;
+
+  int level = toes->filled_level ();
+  warn << "stabilizing toes at level " << level << "\n";
+  if (toes->stabilizing ()) return;
+  
+  if ((level < MAX_LEVELS) 
+      && (level == toes->get_last_level ())
+      && (level > 0)) {
+    //we failed to find enough nodes to fill the last level we tried
+    //go back and get more donors and try again
+    toes->bump_target (level - 1);
+    warn << "bumped " << level - 1 << " and retrying\n";
+    level = toes->filled_level ();
+  }
+
+  toes->set_last_level (level);
+  if (level < 0) { //bootstrap off succ list
+    //grab the succlist and stick it in the toe table
+    for (int i = 1; i < successors->num_succ (); i++) 
+      if (successors->nth_alive(i)) {
+	chordID ith_succ = (*successors)[i];
+    	toes->add_toe (ith_succ, locations->getaddress (ith_succ), 0);
+      }
+  } else if (level < MAX_LEVELS) { //building table
+    //contact level (level) nodes and get their level (level) toes
+    toes->get_toes_rmt (level + 1);
+  } else { //steady state
+    
+  }
+
+  return;
 }

@@ -1,31 +1,16 @@
 #include "chord.h"
 
-#define NTOES 2
-#define MAX_LEVELS 5
-
 bool present (vec<chordID> toes, chordID id);
 
-void
-vnode::stabilize_toes ()
-{
-  int level = toes->filled_level ();
-  warn << "stabilizing toes at level " << level << "\n";
-  if (toes->stabilizing ()) return;
-
-  if (level < 0) {
-    //grab the succlist and stick it in the toe table
-    //    for (unsigned int i = 1; i < ; i++) 
-    //  if (succlist[i].alive) {
-    //	toes->add_toe (succlist[i].n,
-    //		       locations->getaddress (succlist[i].n), 0);
-    //  }
-  } else if (level < MAX_LEVELS) {
-    //contact level (level) nodes and get their level (level) toes
-    toes->get_toes_rmt (level + 1);
-  } 
-
-  return;
-}
+toe_table::toe_table (ptr<locationtable> locs,
+		      ptr<succ_list> succ) 
+  : locations (locs), successors (succ), in_progress (0) {
+  
+  for (int i=0; i < MAX_LEVELS; i++) 
+    target_size[i] = 2; //must be less than nsucc to bootstrap
+  
+  last_level = -2;
+};
 
 void
 toe_table::get_toes_rmt (int level) 
@@ -112,11 +97,15 @@ toe_table::get_toes (int level)
 int
 toe_table::filled_level () 
 {
-  for (int level = 0; ; level++) {
+  for (int level = 0; level < MAX_LEVELS; level++) {
     vec<chordID> res = get_toes (level);
-    if (res.size () < NTOES) return level - 1;
+    if (res.size () < (unsigned short)target_size[level]) {
+      warn << res.size () << " of " << target_size[level] << " at " 
+	   << level << "\n";
+      return level - 1;
+    }
   }
-  
+  return MAX_LEVELS;
 }
 
 void

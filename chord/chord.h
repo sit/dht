@@ -69,18 +69,25 @@ struct finger {
   node first; // first ID after start
 };
 
+class succ_list;
+
+#define MAX_LEVELS 5
 class toe_table {
   static const int max_delay = 800; // ms
 
   vec<chordID> toes;
   ptr<locationtable> locations;
+  ptr<succ_list> successors;
+  short target_size[MAX_LEVELS];
   int in_progress;
+  short last_level;
 
   void add_toe_ping_cb (chordID id, int level);
   void get_toes_rmt_cb (chord_gettoes_res *res, int level, clnt_stat err);
 
  public:
-  toe_table (ptr<locationtable> locs) : locations (locs), in_progress (0) {};
+  toe_table (ptr<locationtable> locs,
+	     ptr<succ_list> succ); 
 
   vec<chordID> get_toes (int level);
   void add_toe (chordID id, net_address r, int level);
@@ -90,10 +97,9 @@ class toe_table {
   bool stabilizing () { return (in_progress > 0); };
   int level_to_delay (int level);
   void dump ();
-  void fill_getfingersres (chord_getfingersres *res);
-  void fill_getfingersresext (chord_getfingers_ext_res *res);
-  bool in_ith_arc (int i, chordID s);
-
+  short get_last_level () { return last_level; };
+  void set_last_level (int l) { last_level = l; };
+  void bump_target (int l) { target_size[l] *= 2; };
 };
 
 class finger_table {
@@ -220,12 +226,16 @@ class vnode : public virtual refcount {
   void stabilize_toes ();
   void stabilize_succ (void);
   void stabilize_pred (void);
-  void stabilize_getpred_cb (chordID s, net_address r, chordstat status);
-  void stabilize_getpred_cb_ok (chordID p, bool ok, chordstat status);
+  void stabilize_getpred_cb (chordID s, chordID p,
+			     net_address r, chordstat status);
+  void stabilize_getpred_cb_ok (chordID sd, 
+				chordID p, bool ok, chordstat status);
   void stabilize_findsucc_ok (int i, chordID s, bool ok, chordstat status);
-  void stabilize_findsucc_cb (int i, chordID s, route path, chordstat status);
-  void stabilize_getsucc_cb (chordID s, net_address r, chordstat status);
-  void stabilize_getsucclist_cb (int i, chordID s, net_address r, 
+  void stabilize_findsucc_cb (chordID dn,
+			      int i, chordID s, route path, chordstat status);
+  void stabilize_getsucc_cb (chordID pred,
+			     chordID s, net_address r, chordstat status);
+  void stabilize_getsucclist_cb (chordID jid, int i, chordID s, net_address r, 
 				 chordstat status);
   void stabilize_getsucclist_ok (int i, chordID s, bool ok, chordstat status);
 
