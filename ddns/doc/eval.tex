@@ -76,12 +76,13 @@ storage among the peers.
 \epsfig{file=figures/both.fetch.eps}%,angle=270,width=3in}
 \caption{Load balance for the three tests.
 The graph shows a cumulative distribution for the number
-of RPCs served by each node during the test.}
+of RPCs served (normalized by the total number of lookups in the trace)
+ by each node during the test.}
 \label{fig:both-rpc}
 \end{figure}
 
 DHash's block caching helped provide load balance as
-measured by RPCs served per node.
+measured by RPCs served per lookup per node.
 As shown in figure~\ref{fig:both-rpc},
 in the successful query test, nodes served RPCs in
 approximate proportion to the number of records they stored.
@@ -102,6 +103,14 @@ This does a worse job of load balancing since there is
 no caching; for example, the node responsible for the
 PTR record for {\em 39.246.224.209.in-addr.arpa} was
 heavily loaded due to the 82,000 queries for that record.
+
+%Athicha: I just added the following paragraph in 
+%response to the normalized graph. The ones above are 
+%unedited.
+The graphs shows that the loads are similar for both
+successful and unsuccessful queries, unlike in the current
+DNS, where unresponsive queries might result in spurious 
+retransmissions of requests.
 
 \begin{figure}
 \epsfig{file=figures/hops.eps}%,angle=270,width=3in}
