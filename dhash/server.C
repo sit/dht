@@ -106,7 +106,7 @@ dhash::dispatch(unsigned long procno,
     break;
   }
   pred = host_node->my_pred ();
-  delete arg;
+  //  delete arg;
   return;
 }
 
