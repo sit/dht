@@ -456,12 +456,15 @@ Kademlia::touch(NodeID id)
 {
   assert(id);
   assert(flyweight.find(id) != flyweight.end());
+  KDEBUG(1) << "Kademlia::touch " << Kademlia::printbits(id) << endl;
+
+
+  // k_dumper dump;
+  // _root->traverse(&dump);
 
   k_finder find(id);
   _root->traverse(&find);
   assert(find.found() == 1);
-
-  KDEBUG(1) << "Kademlia::touch " << Kademlia::printbits(id) << endl;
 
   if(!flyweight[id]->firstts)
     flyweight[id]->firstts = now();
@@ -872,7 +875,7 @@ k_bucket::k_bucket(k_bucket *parent, bool leaf, Kademlia *k) : leaf(leaf), paren
 void
 k_bucket::traverse(k_traverser *traverser, string prefix, unsigned depth)
 {
-  // checkrep();
+  checkrep();
 
   // XXX: for KDEBUG
   Kademlia::NodeID _id = kademlia()->id();
@@ -888,8 +891,7 @@ k_bucket::traverse(k_traverser *traverser, string prefix, unsigned depth)
 
   traverser->execute((k_bucket_leaf*) this, prefix, depth);
 
-  // the divide() may have killed us.
-  // checkrep();
+  // no checkrep.  the divide() may have killed us.
 }
 // }}}
 // {{{ k_bucket::insert
@@ -1152,6 +1154,10 @@ k_finder::execute(k_bucket_leaf *k, string prefix, unsigned depth)
 {
   k->checkrep();
   for(Kademlia::nodeinfo_set::const_iterator i = k->nodes->nodes.begin(); i != k->nodes->nodes.end(); ++i)
+    if((*i)->id == _n)
+      _found++;
+
+  for(set<k_nodeinfo*, Kademlia::younger>::const_iterator i = k->replacement_cache->begin(); i != k->replacement_cache->end(); ++i)
     if((*i)->id == _n)
       _found++;
 }
