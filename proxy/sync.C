@@ -29,10 +29,12 @@
 #include "dbfe.h"
 #include "dhashgateway_prot.h"
 #include "dhash_common.h"
+#include "merkle_misc.h"
 #include "proxy.h"
 
 extern ptr<aclnt> local;
 extern ptr<dbfe> ilog;
+extern ptr<dbfe> cache_db;
 extern str proxyhost;
 extern int proxyport;
 
@@ -76,9 +78,9 @@ sync_insert (bigint n, ptr<aclnt> proxyclnt,
 
 static void
 sync_retrieve (bigint n, ptr<aclnt> proxyclnt,
-               ptr<dhash_retrieve_res> res, clnt_stat err)
+               dhash_retrieve_res* res)
 {
-  if (!err && !res->status) {
+  if (!res->status) {
     dhash_insert_arg a;
     a.blockID = n;
     a.ctype = res->resok->ctype;
@@ -122,9 +124,13 @@ sync_next (bigint n, ptr<aclnt> proxyclnt)
   a.blockID = n;
   a.ctype = t;
   a.options = DHASHCLIENT_USE_CACHE;
-  ptr<dhash_retrieve_res> res = New refcounted<dhash_retrieve_res> ();
-  local->call
-    (DHASHPROC_RETRIEVE, &a, res, wrap (sync_retrieve, n, proxyclnt, res));
+
+  warn << "syncing " << n << "to remote dhash\n";
+  ptr<dbrec> cache_ret = cache_db->lookup (id2dbrec(a.blockID));
+  assert(cache_ret);
+
+  ptr<dhash_retrieve_res> res = block_to_res(cache_ret, t);
+  sync_retrieve(n, proxyclnt, res);
 }
 
 static void

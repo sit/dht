@@ -39,11 +39,12 @@ str proxyhost;
 int proxyport = 0;
 extern void proxy_sync ();
 
+ptr<dbfe> cache_db;
+
 static void
-local_disconnect ()
-{
-  warn << "connection to local lsd down, shutting down proxy\n";
-  exit (0);
+sync_diskcache_cb(ptr<dbfe> db) {
+  db->sync();
+  delaycb(SYNC_TIME, wrap(&sync_diskcache_cb, db));
 }
 
 static void
@@ -51,10 +52,10 @@ client_accept (int fd)
 {
   if (fd < 0)
     fatal ("EOF\n");
-  assert (local);
+  assert (cache_db);
   assert (ilog);
   ref<axprt_stream> x = axprt_stream::alloc (fd, 1024*1025);
-  vNew refcounted<proxygateway> (x, local, ilog, proxyhost, proxyport);
+  vNew refcounted<proxygateway> (x, cache_db, ilog, proxyhost, proxyport);
 }
 
 static void
@@ -98,28 +99,34 @@ startclntd()
   client_listen (clntfd);
 }
 
+
 static void
-connect_local (int tries)
+open_worker (ptr<dbfe> mydb, str name, dbOptions opts, str desc)
 {
-  if (local == 0) {
-    int lfd = unixsocket_connect (lsd_socket);
-    if (lfd < 0) {
-      if (tries > 20)
-	fatal ("proxy: Error connecting to %s: %s\n",
-	       lsd_socket.cstr (), strerror (errno));
-      else {
-	delaycb (2, wrap (connect_local, tries+1));
-	return;
-      }
-    }
-    local = aclnt::alloc
-      (axprt_unix::alloc (lfd, 1024*1025), dhashgateway_program_1);
-    local->seteofcb (wrap (local_disconnect));
-  
-    warn << "starting proxy between local lsd and remote lsd\n";
-    startclntd();
-    delaycb (1, wrap (proxy_sync));
+  if (int err = mydb->opendb (const_cast <char *> (name.cstr ()), opts)) {
+    warn << desc << ": " << name <<"\n";
+    warn << "open returned: " << strerror (err) << "\n";
+    exit (-1);
   }
+}
+
+static void
+initialize_cache ()
+{
+  dbOptions opts;
+  opts.addOption ("opt_async", 1);
+  opts.addOption ("opt_cachesize", 1000);
+  opts.addOption ("opt_nodesize", 4096);
+
+  cache_db = New refcounted<dbfe> ();
+  str cdbs = strbuf () << "db.c";
+  open_worker (cache_db, cdbs, opts, "cache db file");
+  delaycb (SYNC_TIME, wrap (&sync_diskcache_cb, cache_db));
+  
+  warn << "starting proxy between local cache and remote lsd\n";
+  startclntd();
+  delaycb (1, wrap (proxy_sync));
+
 }
 
 static void
@@ -160,8 +167,11 @@ main (int argc, char **argv)
 	*bs_port = 0;
 	bs_port++;
 	if (inet_addr (optarg) == INADDR_NONE) {
+	  struct hostent *h;
+
 	  //yep, this blocks
-	  struct hostent *h = gethostbyname (optarg);
+	  h = gethostbyname (optarg);
+
 	  if (!h) {
 	    warn << "Invalid address or hostname: " << optarg << "\n";
 	    usage ();
@@ -192,7 +202,7 @@ main (int argc, char **argv)
     exit (-1);
   }
 
-  delaycb (2, wrap (connect_local, 0));
+  initialize_cache();
   amain ();
 }
 

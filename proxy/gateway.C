@@ -23,11 +23,44 @@
 #include "proxy.h"
 #include "dbfe.h"
 #include "arpc.h"
+#include "verify.h"
+#include "merkle_misc.h"
 
-proxygateway::proxygateway (ptr<axprt_stream> x, ptr<aclnt> l,
+ptr<dhash_retrieve_res>
+block_to_res (ptr<dbrec> val, dhash_ctype ctype)
+{
+  ptr<dhash_retrieve_res> res = New refcounted<dhash_retrieve_res> (DHASH_OK);
+  int n = val->len;
+
+  // YIPAL: not sure if I have to set these to anything.
+  res->resok->ctype = ctype;
+  res->resok->len = n;
+  res->resok->hops = 0;
+  res->resok->errors = 0;
+  res->resok->retries = 0;
+  res->resok->path.setsize(0);
+  res->resok->block.setsize(n);
+  memcpy (res->resok->block.base (), val->value, n);
+
+  return res;
+}
+
+
+bool
+is_keyhash_stale (ref<dbrec> prev, ref<dbrec> d)
+{
+  long v0 = keyhash_version (prev);
+  long v1 = keyhash_version (d);
+  if (v0 >= v1)
+    return true;
+  return false;
+}
+
+
+proxygateway::proxygateway (ptr<axprt_stream> x, ptr<dbfe> cache,
                             ptr<dbfe> il, str host, int port)
 {
-  local = l;
+  cache_db = cache;
   ilog = il;
 
   proxyclnt = 0;
@@ -59,6 +92,51 @@ proxygateway::~proxygateway ()
 }
 
 void
+proxygateway::insert_to_localcache(chordID id, char* block, int32_t len, dhash_ctype ctype) {
+  // insert into DB
+  ref<dbrec> k = id2dbrec(id);
+  ref<dbrec> d = New refcounted<dbrec> (block, len);
+  ptr<dbrec> prev;
+
+  if (!verify (id, ctype, block, len)) {
+    warn  << "proxy: cannot verify (" << len << ") " << id << " bytes\n";
+    assert(0);
+  }
+
+  switch(ctype) {
+  case DHASH_CONTENTHASH:
+    if (!cache_db->lookup (k)) {
+      cache_db->insert (k, d);
+      warn << "db write: " << ctype << " " << id << " " << len << "\n";
+    } else {
+      warn << "db write: " << ctype << " " << id << " already in block cache.\n";
+    }
+  case DHASH_KEYHASH: 
+    prev = cache_db->lookup(k);
+    if (prev) {
+      if (is_keyhash_stale(prev, d)) {
+	break;
+      }
+      else {
+	warn << "replacing block " << id << " with " << len << " bytes.\n";
+	cache_db->del(k);
+      }
+    }
+    cache_db->insert(k, d);
+    warn << "db write: " << ctype << " " << id << " " << len << "\n";
+    break;
+
+  case DHASH_NOAUTH:
+  case DHASH_APPEND:
+  case DHASH_UNKNOWN:
+  default:
+    warn << "proxy can't handle inserting ctype: " << ctype << "\n";
+  }
+
+  return;
+}
+
+void
 proxygateway::dispatch (svccb *sbp)
 {
   if (!sbp) {
@@ -78,18 +156,14 @@ proxygateway::dispatch (svccb *sbp)
       dhash_insert_arg *arg = sbp->template getarg<dhash_insert_arg> ();
 
       if (arg->options & DHASHCLIENT_USE_CACHE) {
-	ptr<dhash_insert_res> res = New refcounted<dhash_insert_res> ();
-	local->call
-	  (DHASHPROC_INSERT, arg, res, 
-	   wrap (mkref(this), &proxygateway::local_insert_cb, false, sbp, res));
+	insert_to_localcache(arg->blockID, arg->block.base(), arg->block.size(), arg->ctype);
+	local_insert_done(false, sbp);
       }
 
       else if (proxyclnt == 0) {
 	arg->options = (arg->options | DHASHCLIENT_USE_CACHE);
-	ptr<dhash_insert_res> res = New refcounted<dhash_insert_res> ();
-	local->call
-	  (DHASHPROC_INSERT, arg, res,
-	   wrap (mkref (this), &proxygateway::local_insert_cb, true, sbp, res));
+	insert_to_localcache(arg->blockID, arg->block.base(), arg->block.size(), arg->ctype);
+	local_insert_done(true, sbp);
       }
 
       else {
@@ -107,15 +181,19 @@ proxygateway::dispatch (svccb *sbp)
   case DHASHPROC_RETRIEVE:
     {
       dhash_retrieve_arg *arg = sbp->template getarg<dhash_retrieve_arg> ();
-      if ((arg->options & DHASHCLIENT_USE_CACHE) || proxyclnt == 0) {
-	arg->options = (arg->options | DHASHCLIENT_USE_CACHE);
-	ptr<dhash_retrieve_res> res = New refcounted<dhash_retrieve_res> ();
-	local->call
-	  (DHASHPROC_RETRIEVE, arg, res,
-	   wrap (mkref (this), &proxygateway::local_retrieve_cb, sbp, res));
+      ptr<dbrec> cache_ret;
+
+      if (arg->options & DHASHCLIENT_USE_CACHE) {
+	cache_ret = cache_db->lookup (id2dbrec (arg->blockID));
       }
 
-      else {
+      if (cache_ret) {
+	warn << "using cached block " << cache_ret->len << " " << arg->blockID << "\n";
+	ptr<dhash_retrieve_res> res = block_to_res (cache_ret, arg->ctype);
+	sbp->reply (res);
+	return;
+          
+      } else if (proxyclnt) {
 	int options = arg->options;
 	arg->options =
 	  (arg->options & (~DHASHCLIENT_USE_CACHE));
@@ -124,7 +202,12 @@ proxygateway::dispatch (svccb *sbp)
 	  (DHASHPROC_RETRIEVE, arg, res,
 	   wrap (mkref (this), &proxygateway::proxy_retrieve_cb,
 	         options, sbp, res));
+
+      }  else {
+	dhash_retrieve_res res (DHASH_NOENT);
+	sbp->reply (&res);
       }
+
     }
     break;
     
@@ -132,15 +215,6 @@ proxygateway::dispatch (svccb *sbp)
     sbp->reject (PROC_UNAVAIL);
     break;
   }
-}
-
-void
-proxygateway::insert_cache_cb (dhash_insert_arg *arg,
-                               ptr<dhash_insert_res> res, clnt_stat err)
-{
-  if (err || res->status)
-    warn << "insert into cache failed\n";
-  delete arg;
 }
 
 void
@@ -174,16 +248,12 @@ proxygateway::proxy_insert_cb (int options, svccb *sbp,
   sbp->reply (res);
 
   if (na) {
-    ptr<dhash_insert_res> res = New refcounted<dhash_insert_res> ();
-    local->call
-      (DHASHPROC_INSERT, na, res,
-       wrap (mkref (this), &proxygateway::insert_cache_cb, na, res));
+    insert_to_localcache(na->blockID, na->block.base(), na->len, na->ctype);
   }
 }
 
 void
-proxygateway::local_insert_cb (bool disconnected, svccb *sbp,
-                               ptr<dhash_insert_res> res, clnt_stat err)
+proxygateway::local_insert_done (bool disconnected, svccb *sbp)
 {
   if (disconnected) {
     dhash_insert_arg *arg = sbp->template getarg<dhash_insert_arg> ();
@@ -203,6 +273,7 @@ proxygateway::local_insert_cb (bool disconnected, svccb *sbp,
     }
   }
 
+  ptr<dhash_insert_res> res = New refcounted<dhash_insert_res> (DHASH_OK);
   sbp->reply (res);
 }
 
@@ -238,10 +309,7 @@ proxygateway::proxy_retrieve_cb (int options, svccb *sbp,
   sbp->reply (res);
 
   if (na) {
-    ptr<dhash_insert_res> res = New refcounted<dhash_insert_res> ();
-    local->call
-      (DHASHPROC_INSERT, na, res,
-       wrap (mkref (this), &proxygateway::insert_cache_cb, na, res));
+    insert_to_localcache(na->blockID, na->block.base(), na->len, na->ctype);
   }
 }
 
@@ -263,4 +331,5 @@ proxygateway::local_retrieve_cb (svccb *sbp,
     (DHASHPROC_RETRIEVE, arg, r,
      wrap (mkref (this), &proxygateway::proxy_retrieve_cb, options, sbp, r));
 }
+
 
