@@ -252,6 +252,8 @@ class chord : public virtual refcount {
   void print (void);
   void stop (void);
 
+  int get_port () { return myport; }
+
   //support for demultiplexing RPCs to vnodes
   void register_handler (int progno, chordID dest, cbdispatch_t hand);
 

@@ -259,7 +259,6 @@ init_chordID (int index, int port)
   // XXX we probably should marshall this!
   str ids = my_addr ();
   ids = ids << "." << port << "." << index;
-  warnx << "init_chordID: my address: " << ids << "\n";
   char id[sha1::hashsize];
   sha1_hash (id, ids, ids.len());
   mpz_set_rawmag_be (&ID, id, sizeof (id));  // For big endian

@@ -31,19 +31,21 @@
 chord::chord (str _wellknownhost, int _wellknownport, 
 	      int port, int max_cache, 
 	      int server_selection_mode) :
-  wellknownID (make_chordID (_wellknownhost, _wellknownport)), 
-  ss_mode (server_selection_mode % 10), 
+  ss_mode (server_selection_mode % 10),
   active (NULL)
 {
   myport = startchord (port);
   wellknownhost.hostname = _wellknownhost;
-  wellknownhost.port = _wellknownport;
+  wellknownhost.port = _wellknownport ? _wellknownport : myport;
+  wellknownID  = make_chordID (wellknownhost.hostname, wellknownhost.port);
+
   warnx << "chord: running on " << my_addr () << ":" << myport << "\n";
   locations = New refcounted<locationtable> (mkref (this), max_cache);
   locations->insert (wellknownID, wellknownhost.hostname, wellknownhost.port);
   nvnode = 0;
   srandom ((unsigned int) (getusec() & 0xFFFFFFFF));
 }
+
 
 int
 chord::startchord (int myp)
