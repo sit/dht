@@ -7,8 +7,9 @@
 
 using namespace std;
 
+/* Gummadi's Chord PNS algorithm  (static) */
 
-ChordFingerPNS::ChordFingerPNS(Node *n, uint base, uint successors, uint samples) : Chord(n, successors), _base(base), _samples(samples)
+ChordFingerPNS::ChordFingerPNS(Node *n, uint base, uint successors, int samples) : Chord(n, successors), _base(base), _samples(samples)
 {
 }
 
@@ -41,34 +42,47 @@ ChordFingerPNS::init_state(vector<IDMap> ids)
       uint candidates = (e_pos - s_pos) % sz;
       double prob = (double)_samples/(double)(candidates);
       IDMap min_f = me;
-      uint min_l = 10000000;
-      if (candidates > 10 * _samples) {
+      IDMap min_f_pred = me;
+      uint min_l = 100000000;
+      if (_samples > 0 && candidates > 10 * _samples) {
 	//use a more efficient sampling technique
-	for (uint i = 0; i < _samples; i++) {
-	  i = uint (((double)random()/(double)RAND_MAX) * candidates);
+	for (uint j = 0; j < _samples; j++) {
+	  uint i = uint ((((double)random()/(double)RAND_MAX) * candidates));
+	  assert(i>= 0 && i < candidates);
 	  if (t->latency(me.ip, ids[(s_pos + i) % sz].ip) < min_l) {
 	    min_f = ids[(s_pos + i) % sz];
 	    min_l = t->latency(me.ip, ids[(s_pos + i)%sz].ip);
+	    min_f_pred = ids[(s_pos + i - 1) % sz];
 	  }
 	}
-      }else {
+      } else {
 	for (uint i = s_pos; i!= e_pos; i = (i+1)%sz) {
 	  double r = (double) random()/(double)RAND_MAX;
-	  if (r < prob) { //sample only _samples out of all candidates approximately
+	  if (_samples < 0 || r < prob) { //sample only _samples out of all candidates approximately
 	    if (t->latency(me.ip,ids[i].ip) < min_l) {
 	      min_f = ids[i];
 	      min_l = t->latency(me.ip, ids[i].ip);
+	      min_f_pred = ids[(s_pos + i - 1) % sz];
 	    }
 	  }
 	}
       }
       loctable->add_node(min_f);
+      //Gummadi assumes the node knows the idspace each of the neighbors is 
+      //responsible for. this is equivalent to knowing each of the neighbors' predecessor.
+      //so add the predecessor for this finger
+      //loctable->add_node(min_f_pred);
     }
   }
 
   _inited = true;
-  //add successors
-  Chord::init_state(ids);
+  //add successors and (each of the successor's predecessor)
+  for (uint i = 1; i <= nsucc; i++) {
+    loctable->add_node(ids[(my_pos + i) % sz]);
+  }
+  //add predecessor
+  loctable->add_node(ids[(my_pos-1) % sz]);
+  printf("ChordFingerPNS::init_state (%u,%qx) loctable size %d\n", me.ip, me.id, loctable->size());
 }
 
 bool

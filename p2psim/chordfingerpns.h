@@ -7,7 +7,7 @@
 
 class ChordFingerPNS: public Chord {
   public:
-    ChordFingerPNS(Node *n, uint base, uint successors, uint samples = 16);
+    ChordFingerPNS(Node *n, uint base, uint successors, int samples = 64);
     ~ChordFingerPNS() {};
     string proto_name() { return "ChordFingerPNS"; }
 
@@ -17,7 +17,7 @@ class ChordFingerPNS: public Chord {
 
   protected:
     uint _base;
-    uint _samples;
+    int _samples;
 };
 
 #endif

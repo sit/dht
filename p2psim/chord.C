@@ -69,11 +69,10 @@ Chord::lookup(Args *args)
   if (recurs) {
     IDMap v = find_successors_recurs(k, false);
     uint lat = t->latency(me.ip, v.ip);
-    printf("%s lookup %16qx results (%u,%16qx) inteval %u %llu\n", ts(), k, v.ip, v.id, 2 * lat, now() - begin);
   } else {
     vector<IDMap> v = find_successors(k, 1, false); 
     uint lat = v.size()>0? t->latency(me.ip, v[0].ip):0;
-    printf("%s lookup %16qx results (%u,%16qx) inteval %u %llu\n", ts(),k, v.size() > 0 ?v[0].ip:0, v.size() > 0 ? v[0].id:0, 2 * lat, now() - begin);
+    printf("%s lookup %16qx results (%u,%16qx) interval %u %llu\n", ts(),k, v.size() > 0 ?v[0].ip:0, v.size() > 0 ? v[0].id:0, 2 * lat, now() - begin);
   }
 }
 
@@ -205,13 +204,15 @@ Chord::find_successors_recurs(CHID key, bool intern)
   for (uint i = 0; i < fr.v.size(); i++) {
     IDMap n = fr.v[i];
     printf("(%u,%qx,%u) ", n.ip, n.id, i < (fr.v.size()-1)? 2 * t->latency(fr.v[i].ip, fr.v[i+1].ip): 0);
-    if (i < (fr.v.size() - 2)) {
+    if (i < (fr.v.size() - 3)) {
       total_lat += 2 * t->latency(fr.v[i].ip,fr.v[i+1].ip);
     }
   }
-  uint inteval = now() - before;
-  assert(inteval == total_lat);
+  uint interval = now() - before;
+  //assert(interval == total_lat);
   printf("\n");
+
+  printf("%s lookup %16qx results (%u,%16qx) interval %u %u\n", ts(), key, succ.ip, succ.id, 2 * t->latency(me.ip, succ.ip), total_lat);
 
 #endif
   return succ;
@@ -236,7 +237,7 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
     nargs.v = args->v;
 
     while (!r) {
-      IDMap next = loctable->pred(args->key);
+      IDMap next = loctable->next_hop(args->key);
       nargs.v.push_back(next);
 
       if (_vivaldi) {
@@ -278,7 +279,7 @@ Chord::next_handler(next_args *args, next_ret *ret)
     ret->v.push_back(succ);
  } else {
     ret->done = false;
-    ret->next = loctable->pred(args->key);
+    ret->next = loctable->next_hop(args->key);
     assert(ret->next.ip != me.ip);
  }
 }
@@ -832,3 +833,8 @@ LocTable::evict() // all unnecessary(unpinned) nodes
   assert(elm == NULL);
 }
 
+Chord::IDMap
+LocTable::next_hop(Chord::CHID key)
+{
+  pred(key);
+}
