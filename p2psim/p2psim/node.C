@@ -30,19 +30,14 @@
 #include <cassert>
 using namespace std;
 
-Node::Node(IPAddress ip) : _ip(ip), _alive (true), _pktchan(0)
+Node::Node(IPAddress ip) : _ip(ip), _alive (true)
 {
-  _pktchan = chancreate(sizeof(Packet*), 0);
-  assert(_pktchan);
-
   // add all the protocols
   set<string> allprotos = ProtocolFactory::Instance()->getnodeprotocols();
   for(set<string>::const_iterator i = allprotos.begin(); i != allprotos.end(); ++i) {
     Protocol *prot = ProtocolFactory::Instance()->create(*i, this);
     register_proto(prot);
   }
-
-  thread();
 }
 
 Node::~Node()
@@ -50,7 +45,6 @@ Node::~Node()
   for(PMCI p = _protmap.begin(); p != _protmap.end(); ++p)
     delete p->second;
   _protmap.clear();
-  chanfree(_pktchan);
 }
 
 
@@ -65,55 +59,19 @@ Node::register_proto(Protocol *p)
   _protmap[name] = p;
 }
 
-//
-// The network has just delivered a packet to a Node.
-// If it's an RPC reply, send to channel of waiting caller.
-// If it's an RPC request, start a new thread to handle it.
-//
+// Called by NetEvent::execute() to deliver a packet to a Node,
+// after Network processing (i.e. delays and failures).
 void
 Node::got_packet(Packet *p)
 {
-  // first half of RPC
-  if(!p->reply()){
+  if(p->reply()){
+    // RPC reply, give to waiting thread.
+    send(p->channel(), &p);
+  } else {
+    // RPC request, start a handler thread.
     ThreadManager::Instance()->create(Node::Receive, p);
-    return;
-  }
-
-  // packet is a reply and has been punished for its failure according to some
-  // failure model. so now it can finally arrive.
-  send(p->channel(), &p);
-}
-
-void
-Node::run()
-{
-  Alt a[2];
-  Packet *p;
-
-  a[0].c = _pktchan;
-  a[0].v = &p;
-  a[0].op = CHANRCV;
-
-  a[1].op = CHANEND;
-
-  while(1) {
-    int i;
-    if((i = alt(a)) < 0) {
-      cerr << "interrupted" << endl;
-      continue;
-    }
-
-    switch(i) {
-      case 0:
-        got_packet(p);
-        break;
-
-      default:
-        break;
-    }
   }
 }
-
 
 //
 // Send off a request packet asking Node::Receive to
@@ -141,8 +99,8 @@ Node::_doRPC_send(IPAddress dst, void (*fn)(void *), void (*killme)(void *), voi
   // where to send the reply, buffered for single reply
   Channel *c = p->_c = chancreate(sizeof(Packet*), 1);
 
-  // send it off. blocks, but Network reads constantly
-  send(Network::Instance()->pktchan(), &p);
+  Network::Instance()->here(p);
+
   return New RPCHandle(c, p);
 }
 
@@ -160,7 +118,7 @@ Node::_doRPC_receive(RPCHandle *rpch)
 
 
 //
-// Node::run() invokes Receive() when an RPC request arrives.
+// Node::got_packet() invokes Receive() when an RPC request arrives.
 // The reply goes back directly to the appropriate channel.
 //
 void
@@ -185,7 +143,7 @@ Node::Receive(void *px)
 
   // send it back, potentially with a latency punishment for when this node was
   // dead.
-  send(Network::Instance()->pktchan(), &reply);
+  Network::Instance()->here(reply);
 
   // ...and we're done
   threadexits(0);

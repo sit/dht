@@ -26,6 +26,7 @@
 #ifndef __EVENTQUEUE_H
 #define __EVENTQUEUE_H
 
+#include "threaded.h"
 #include "event.h"
 #include "observed.h"
 #include "../utils/skiplist.h"
@@ -59,13 +60,11 @@ private:
 
   static EventQueue *_instance;
   Time _time;
-  Channel *_eventchan;
   Channel *_gochan;
 
   virtual void run();
   void add_event(Event*);
   bool advance();
-  Channel* eventchan() { return _eventchan; }
 
   // for debuging
   void dump();

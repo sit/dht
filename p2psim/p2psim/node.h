@@ -26,14 +26,13 @@
 #ifndef __NODE_H
 #define __NODE_H
 
-#include "threaded.h"
 #include "rpchandle.h"
 #include "observed.h"
 #include "p2psim_hashmap.h"
 
 class Protocol;
 
-class Node : public Threaded {
+class Node {
 public:
   Node(IPAddress);
   virtual ~Node();
@@ -68,8 +67,6 @@ public:
     return rpch;
   }
 
-
-  Channel *pktchan() { return _pktchan; }
   void crash () { _alive = false; }
   bool alive () { return _alive; }
   void set_alive() { _alive = true;}
@@ -119,13 +116,8 @@ private:
     return t;
   }
 
-
-
-  virtual void run();
-
   IPAddress _ip;        // my ip address
   bool _alive;
-  Channel *_pktchan;    // for packets
 
   typedef hash_map<string, Protocol*> PM;
   typedef PM::const_iterator PMCI;

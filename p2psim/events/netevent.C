@@ -36,5 +36,5 @@ NetEvent::~NetEvent()
 void
 NetEvent::execute()
 {
-  send(node->pktchan(), &p);
+  node->got_packet(p);
 }

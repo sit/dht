@@ -36,8 +36,8 @@ class Network : public Threaded {
 public:
   static Network* Instance() { return Instance(0, 0); }
   static Network* Instance(Topology*, FailureModel*);
-  Channel* pktchan() { return _pktchan; }
   Channel* nodechan() { return _nodechan; }
+  void here(Packet *);
 
   // information
   Node* getnode(IPAddress id) { return _nodes[id]; }
@@ -58,7 +58,6 @@ private:
   Topology *_top;
   FailureModel *_failure_model;
 
-  Channel *_pktchan;
   Channel *_nodechan;
 };
 

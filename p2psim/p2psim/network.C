@@ -41,11 +41,9 @@ Network::Instance(Topology *top, FailureModel *fm)
 }
 
 
-Network::Network(Topology *top, FailureModel *fm) : _top(0), _pktchan(0),
+Network::Network(Topology *top, FailureModel *fm) : _top(0),
   _nodechan(0)
 {
-  _pktchan = chancreate(sizeof(Packet*), 0);
-  assert(_pktchan);
   _nodechan = chancreate(sizeof(Node*), 0);
   assert(_nodechan);
   _top = top;
@@ -62,7 +60,6 @@ Network::~Network()
 {
   for(NMCI p = _nodes.begin(); p != _nodes.end(); ++p)
     delete p->second;
-  chanfree(_pktchan);
   chanfree(_nodechan);
   delete _top;
 }
@@ -78,28 +75,43 @@ Network::getallprotocols(string proto)
   return pl;
 }
 
+// Protocols should call here() to send a packet into the network.
+void
+Network::here(Packet *p)
+{
+  extern bool with_failure_model;
 
+  Node *dstnode = _nodes[p->dst()];
+  Node *srcnode = _nodes[p->src()];
+  assert (dstnode);
+  assert (srcnode);
+
+  Time latency = _top->latency(srcnode->ip(), dstnode->ip());
+
+  // p->ok is set on the receiving side, so if it's false, this must be a
+  // reply.  punish the packet by delaying it according to the failure model.
+  if(with_failure_model && !p->ok())
+    latency += _failure_model->failure_latency(p);
+
+  NetEvent *ne = New NetEvent();
+  assert(ne);
+  ne->ts = now() + latency;
+  ne->node = dstnode;
+  ne->p = p;
+  EventQueue::Instance()->here(ne);
+}
 
 void
 Network::run()
 {
-  extern bool with_failure_model;
-
   Alt a[3];
-  Packet *p;
   Node *node;
-  NetEvent *ne;
-  Time latency;
 
-  a[0].c = _pktchan;
-  a[0].v = &p;
+  a[0].c = _nodechan;
+  a[0].v = &node;
   a[0].op = CHANRCV;
 
-  a[1].c = _nodechan;
-  a[1].v = &node;
-  a[1].op = CHANRCV;
-
-  a[2].op = CHANEND;
+  a[1].op = CHANEND;
   
   while(1) {
     int i;
@@ -109,32 +121,9 @@ Network::run()
       continue;
     }
 
-    Node *dstnode, *srcnode;
     switch(i) {
-      // get packet from network and schedule delivery
-      case 0:
-        dstnode = _nodes[p->dst()];
-	srcnode = _nodes[p->src()];
-	assert (dstnode);
-	assert (srcnode);
-        latency = _top->latency(srcnode->ip(), dstnode->ip());
-
-        // p->ok is set on the receiving side, so if it's false, this must be a
-        // reply.  punish the packet by delaying it according to the failure
-        // model
-        if(with_failure_model && !p->ok())
-          latency += _failure_model->failure_latency(p);
-
-        ne = New NetEvent();
-        assert(ne);
-        ne->ts = now() + latency;
-        ne->node = dstnode;
-        ne->p = p;
-        EventQueue::Instance()->here(ne);
-        break;
-    
       // register node on network
-      case 1:
+      case 0:
         if(_nodes[node->ip()])
           cerr << "warning: " << node->ip() << " already in network" << endl;
         _nodes[node->ip()] = node;
