@@ -40,26 +40,36 @@ chord::chord (str _wellknownhost, int _wellknownport,
   wellknownhost.hostname = _wellknownhost;
   wellknownhost.port = _wellknownport ? _wellknownport : myport;
   wellknownID  = make_chordID (wellknownhost.hostname, wellknownhost.port);
-  bool fake = false;
-  char *fakehost = 0;
-  unsigned int fakeport = 0;
 
   warnx << "chord: running on " << myname << ":" << myport << "\n";
   locations = New refcounted<locationtable> (mkref (this), max_cache);
 
-  if((fake = (getenv("LSD_FAKEMYHOST") && getenv("LSD_FAKEMYPORT")))) {
-    fakehost = getenv("LSD_FAKEMYHOST");
-    fakeport = atoi(getenv("LSD_FAKEMYPORT"));
-  }
+#if 0
+  // XXX this is not what the old code did; actually, I don't know
+  //     how these environment variables are supposed to interact
+  //     with -l, -p and -j. Here are some options that will work
+  //     better than the previous buggy code. Maybe we should talk. -ES
 
-  // trick lsd into thinking it has a different own ID. test purposes.
-  chordID testID = make_chordID (myname, myport);
-  if(fake)
-    testID = make_chordID(fakehost, fakeport);
+  // trick lsd into think it has a different own ID. test purposes.
+  if (getenv("LSD_FAKEMYHOST") && getenv("LSD_FAKEMYPORT")) {
+    char *fakehost = getenv ("LSD_FAKEMYHOST");
+    unsigned int fakeport = atoi (getenv ("LSD_FAKEMYPORT"));
+    chordID fakeID = make_chordID (fakehost, fakeport);
+
+    // Do you just want to avoid challenging this host?
+    locations->insertgood (fakeID, fakehost, fakeport);
+
+    // Do you want this node to listen on one addr/port but
+    // think that it's on another? This would obviate the need
+    // for the above line and also for the changes in newvnode.
+    myname = strdup (fakehost);
+    myport = fakeport;
+  }
+#endif /* 0 */  
 
   // Special case the very first node: don't need to challenge yourself
-  if (wellknownID == testID)
-    locations->insertgood (wellknownID, fakehost, fakeport);
+  if (wellknownID == make_chordID (myname, myport))
+    locations->insertgood (wellknownID, myname, myport);
   else
     locations->insert (wellknownID, wellknownhost.hostname, wellknownhost.port,
 		       wrap (this, &chord::checkwellknown_cb));
@@ -153,14 +163,17 @@ chord::newvnode (cbjoin_t cb)
     
   chordID newID = init_chordID (nvnode, myname, myport);
 
+#if 0
+  // XXX see chord::chord comments.
   // test hack
-  if(getenv("LSD_FAKEMYHOST") && getenv("LSD_FAKEMYPORT"))
-    newID = init_chordID(nvnode, getenv("LSD_FAKEMYHOST"), atoi(getenv("LSD_FAKEMYPORT")));
+  if (getenv("LSD_FAKEMYHOST") && getenv("LSD_FAKEMYPORT"))
+    newID = init_chordID (nvnode,
+    			  getenv ("LSD_FAKEMYHOST"),
+			  atoi (getenv ("LSD_FAKEMYPORT")));
+#endif /* 0 */
 
-  if (newID != wellknownID) {
-    warn << "insertgood\n";
+  if (newID != wellknownID)
     locations->insertgood (newID, myname, myport);
-  }
 
   ptr<locationtable> nlocations = locations;
 #ifdef PNODE
