@@ -91,6 +91,7 @@ grouplist::next (str *f, unsigned long *i)
     xdr_delete (reinterpret_cast<xdrproc_t> (xdr_group_entry), group);
   } else {
     *i = 0;
+    delete group;
   }
 
   d = it->nextElement();
@@ -137,6 +138,10 @@ int
 newsgroup::open (str g)
 {
   ptr<dbrec> gn = New refcounted<dbrec> (g, g.len ());
+  if (group) {
+    xdr_delete (reinterpret_cast<xdrproc_t> (xdr_group_entry), group);
+    group = NULL;
+  }
   group = load (gn);
   if (group == NULL)
     return -1;
