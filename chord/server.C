@@ -89,6 +89,16 @@ vnode_impl::get_succlist (ptr<location> n, cbchordIDlist_t cb)
 }
 
 void
+vnode_impl::get_predlist (ptr<location> n, cbchordIDlist_t cb)
+{
+  ngetsucclist++;
+  chord_nodelistres *res = New chord_nodelistres (CHORD_OK);
+  ptr<chordID> v = New refcounted<chordID> (n->id ());
+  //we can use the same callback
+  doRPC (n, chord_program_1, CHORDPROC_GETPREDLIST, v, res,
+	 wrap (mkref (this), &vnode_impl::get_succlist_cb, cb, res));
+}
+void
 vnode_impl::get_succlist_cb (cbchordIDlist_t cb, chord_nodelistres *res,
 			     clnt_stat err)
 {

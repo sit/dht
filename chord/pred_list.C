@@ -16,11 +16,11 @@
 pred_list::pred_list (ptr<vnode> v,
 		      ptr<locationtable> locs)
   : myID (v->my_ID ()), v_ (v), locations (locs),
-    nout_continuous (0),
 #ifdef PRED_LIST
-    backkey_ (0),
+    //    backkey_ (0),
     npred_ (0),
 #endif /* PRED_LIST */    
+    nout_continuous (0),
     nout_backoff (0),
     stable_predlist (false)
 {
@@ -51,7 +51,7 @@ pred_list::preds ()
   ptr<location> start = cur;
   // XXX it's not always safe to go backwards. Nodes we run
   //     into going backwards might point off the ring!
-  for (u_int i = 1; i < npred_ && cur != start; i++) {
+  for (int i = 1; i < npred_ && cur != start; i++) {
     cur = locations->closestpredloc (decID (cur->id ()));
     ret.push_back (cur);
   }
@@ -71,6 +71,10 @@ pred_list::update_pred (const chord_node &p)
 
   oldpred_ = pred ();
 }
+
+//XXX this doesn't appear in the PODC paper which relies only on notify to 
+//    stabilize the pred. Jinyang suggests that it helped performance under
+//    the simultator, however.
 
 void
 pred_list::stabilize_pred ()
@@ -103,47 +107,37 @@ void
 pred_list::stabilize_predlist ()
 {
 #ifdef PRED_LIST  
-  u_long n = locations->usablenodes ();
-  chordID preddist (1);
-  // XXX should this depend on npred_?
-  preddist = (preddist << NBIT) * log2 (n) / n;
-  if (preddist == 0) {
-    stable_predlist = true;
-    return;
+  //get pred's pred list
+  ptr<location> p = pred ();
+  if (p) {
+    v_->get_predlist (p, wrap (this, &pred_list::stabilize_predlist_cb));
+    nout_backoff++;
   }
-  // warnx << myID << ": stabilizing pred list with preddist " << preddist
-  //	<< " for estimated " << n << " nodes.\n";
-
-  backkey_ = diff (preddist, myID);
-  // warnx << myID << ": searching for successor to " << backkey_ << ".\n";
-
-  nout_backoff++;
-  v_->find_successor (backkey_,
-		      wrap (this, &pred_list::stabilize_predlist_gotpred));
 #endif /* PRED_LIST */  
 }
 
 void
-pred_list::stabilize_predlist_gotpred (vec<chord_node> sl,
-				       route r, chordstat stat)
+pred_list::stabilize_predlist_cb (vec<chord_node> pl,
+				  chordstat stat)
 {
   nout_backoff--;
-
+  
   // Wait until next time to stabilize me.
   if (stat)
     return;
   
   stable_predlist = true;
-  for (u_int i = 0; i < sl.size (); i++) {
-    if (locations->cached (sl[i].x))
+  for (u_int i = 0; i < pl.size (); i++) {
+    if (locations->cached (pl[i].x))
       continue;
     stable_predlist = false;
     // XXX should ping this nodes to ensure they are up?
-    bool ok = locations->insert (sl[i]);
+    bool ok = locations->insert (pl[i]);
     const char *stat = ok ? "new" : "bad";
-    warnx << myID << ": stabilize_predlist: received " << stat << " predecessor "
-	  << sl[i] << ".\n";
-
+    warnx << myID << ": stabilize_predlist: received " 
+	  << stat << " predecessor "
+	  << pl[i] << ".\n";
+    
   }
 }
 
@@ -181,16 +175,30 @@ pred_list::fill_nodelistresext (chord_nodelistextres *res)
   // XXX it's not always safe to go backwards. Nodes we run
   //     into going backwards might point off the ring!
   u_int i = 0;
-  res->resok->nlist.setsize (npred_); // over allocate
-  chordID curpred = locations->closestsuccloc (backkey_);
-  for (i = 0; (i < npred_) && curpred != myID; i++) {
-    locations->lookup (curpred)->fill_node_ext (res->resok->nlist[i]);
-    curpred = locations->closestsuccloc (incID (curpred));
+  unsigned int curnpred = num_pred ();
+  res->resok->nlist.setsize (curnpred); // over allocate
+  ptr<location> curpred = v_->my_location ();
+  for (i = 0; (i < curnpred); i++) {
+    curpred->fill_node_ext (res->resok->nlist[i]);
+    curpred = locations->closestpredloc (decID (curpred->id ()));
   }
-  res->resok->nlist.setsize (i + 1);
 #else
   fatal << "not implemented.\n";
 #endif /* 0 */
+}
+
+unsigned int
+pred_list::num_pred ()
+{
+  int goodnodes = locations->usablenodes () - 1;
+  int newnpred = (npred_ > goodnodes) ? goodnodes : npred_;
+  
+  if (newnpred < 0) {
+    warn << "succ_list::num_succ () n:" << newnpred 
+	 << " g:" << goodnodes << "\n";
+    newnpred = 0;
+  }
+  return newnpred;
 }
 
 void
@@ -198,13 +206,13 @@ pred_list::fill_nodelistres (chord_nodelistres *res)
 {
 #ifdef PRED_LIST  
   u_int i = 0;
-  res->resok->nlist.setsize (npred_); // over allocate
-  chordID curpred = locations->closestsuccloc (backkey_);
-  for (i = 0; (i < npred_) && curpred != myID; i++) {
-    locations->lookup (curpred)->fill_node (res->resok->nlist[i]);
-    curpred = locations->closestsuccloc (incID (curpred));
+  unsigned int curnpred = num_pred ();
+  res->resok->nlist.setsize (curnpred); // over allocate
+  ptr<location> curpred = v_->my_location ();
+  for (i = 0; (i < curnpred); i++) {
+    curpred->fill_node (res->resok->nlist[i]);
+    curpred = locations->closestpredloc (decID (curpred->id ()));
   }
-  res->resok->nlist.setsize (i + 1);
 #else
   fatal << "not implemented.\n";
 #endif /* PRED_LIST */

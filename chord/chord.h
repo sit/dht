@@ -139,6 +139,7 @@ class vnode : public virtual refcount {
   virtual void get_successor (ptr<location> n, cbchordID_t cb) = 0;
   virtual void get_predecessor (ptr<location> n, cbchordID_t cb) = 0;
   virtual void get_succlist (ptr<location> n, cbchordIDlist_t cb) = 0;
+  virtual void get_predlist (ptr<location> n, cbchordIDlist_t cb) = 0;
   virtual void notify (ptr<location> n, chordID &x) = 0;
   virtual void alert (ptr<location> n, ptr<location> x) = 0;
   virtual void ping (ptr<location> n, cbping_t cb) = 0;

@@ -294,14 +294,3 @@ succ_list::closestpred (const chordID &x, vec<chordID> failed)
   return best;
 }
 
-//  ptr<location>
-//  succ_list::closestpred (const chordID &x)
-//  {
-//    ptr<location> best = myvnode->my_location ();
-//    for (u_int i = 0; i < num_succ (); i++) {
-//      ptr<location> n = locations->closestsuccloc (incID (best->id ()));
-//      if (between (myID, x, n->id ()))
-//        best = n;
-//    }
-//    return best;
-//  }

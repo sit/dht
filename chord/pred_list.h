@@ -2,7 +2,7 @@
 #define _PRED_LIST_H_
 
 // Predecessor lists are totally broken. DO NOT USE!
-#undef PRED_LIST
+#define PRED_LIST
 
 #include "stabilize.h"
 
@@ -22,7 +22,7 @@ class pred_list : public stabilizable {
   ptr<locationtable> locations;
 
 #ifdef PRED_LIST
-  size_t npred_;
+  int npred_;
   chordID backkey_;
 #endif /* PRED_LIST */
 
@@ -36,7 +36,7 @@ class pred_list : public stabilizable {
   void stabilize_getsucc_cb (chordID sd, chord_node s, chordstat status);
 
   void stabilize_predlist ();
-  void stabilize_predlist_gotpred (vec<chord_node> sl, route r, chordstat stat);
+  void stabilize_predlist_cb (vec<chord_node> nlist, chordstat status);
 
   void update_pred_fingers_cb (vec<chord_node> nlist, chordstat s);
   
@@ -48,7 +48,8 @@ class pred_list : public stabilizable {
   vec<ptr<location> > preds ();
 
   void update_pred (const chord_node &p);
-  
+  unsigned int num_pred ();
+
   // Stabilizable methods
   bool backoff_stabilizing () { return nout_backoff > 0; }
   bool continuous_stabilizing () { return nout_continuous > 0; }

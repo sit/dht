@@ -162,6 +162,11 @@ vnode_impl::dispatch (user_args *a)
       dogetsucclist (a);
     }
     break;
+  case CHORDPROC_GETPREDLIST:
+    {
+      dogetpredlist (a);
+    }
+    break;
   case CHORDPROC_TESTRANGE_FINDCLOSESTPRED:
     {
       chord_testandfindarg *fa = a->template getarg<chord_testandfindarg> ();
@@ -485,9 +490,8 @@ void
 vnode_impl::dogetpred_ext (user_args *sbp)
 {
   ndogetpred_ext++;
-  chord_nodeextres res(CHORD_OK);
-  ptr<location> p = my_pred ();
-  p->fill_node_ext(*res.resok);
+  chord_nodelistextres res(CHORD_OK);
+  predecessors->fill_nodelistresext (&res);
   sbp->reply (&res);
 }
 
@@ -497,6 +501,15 @@ vnode_impl::dogetsucclist (user_args *sbp)
   ndogetsucclist++;
   chord_nodelistres res (CHORD_OK);
   successors->fill_nodelistres (&res);
+  sbp->reply (&res);
+}
+
+void
+vnode_impl::dogetpredlist (user_args *sbp)
+{
+  ndogetpredlist++;
+  chord_nodelistres res (CHORD_OK);
+  predecessors->fill_nodelistres (&res);
   sbp->reply (&res);
 }
 

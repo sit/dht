@@ -104,6 +104,7 @@ class vnode_impl : public vnode {
   u_long ndonotify;
   u_long ndoalert;
   u_long ndogetsucclist;
+  u_long ndogetpredlist;
   u_long ndogetsucc_ext;
   u_long ndogetpred_ext;
 
@@ -151,6 +152,7 @@ class vnode_impl : public vnode {
   void donotify (user_args *sbp, chord_nodearg *na);
   void doalert (user_args *sbp, chord_nodearg *na);
   void dogetsucclist (user_args *sbp);
+  void dogetpredlist (user_args *sbp);
   void dogetsucc_ext (user_args *sbp);
   void dogetpred_ext (user_args *sbp);
   void dofindroute (user_args *sbp, chord_findarg *fa);
@@ -186,6 +188,7 @@ class vnode_impl : public vnode {
   virtual void get_successor (ptr<location> n, cbchordID_t cb);
   virtual void get_predecessor (ptr<location> n, cbchordID_t cb);
   virtual void get_succlist (ptr<location> n, cbchordIDlist_t cb);
+  virtual void get_predlist (ptr<location> n, cbchordIDlist_t cb);
   virtual void notify (ptr<location> n, chordID &x);
   virtual void alert (ptr<location> n, ptr<location> x);
   virtual void ping (ptr<location> n, cbping_t cb);
