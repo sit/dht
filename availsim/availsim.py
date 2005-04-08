@@ -173,7 +173,11 @@ if __name__ == '__main__':
     sim.run (eg, monitor, monint)
 
     if dump_bw_cdf:
-	print "###### Per-node sent-bytes (node sent_bytes stored_bytes lifetime)"
+	print "###### Per-node sent-bytes (node lifetime stored_bytes sent_bytes",
+	print " ".join (sbkeys)
 	for n in gdh.allnodes:
 	    v = gdh.allnodes[n]
-	    print "#B", n, v.sent_bytes, v.bytes, v.lifetime
+	    print "#B", n, v.lifetime, v.bytes, v.sent_bytes,
+	    for k in sbkeys:
+		print v.sent_bytes_breakdown[k],
+	    print
