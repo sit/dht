@@ -14,6 +14,8 @@ We will still simulate by the "second".
 import sha
 import sys
 from utils import random_id, random_interval, make_chordID
+import random
+import getopt
 
 def str2bigint(s):
     a = map(ord, s)
@@ -37,29 +39,40 @@ def random_blockid ():
 
 firsttime = None
 lasttime  = 0
-progname  = sys.argv.pop (0)
 
-fh = open (sys.argv.pop (0))
 try:
-    maxblocks = int (sys.argv.pop (0))
-except:
-    maxblocks = 1000
-try:
-    size = int (sys.argv.pop (0))
-except:
-    size = 8192
-try:
-    nodesforjoin = int (sys.argv.pop (0))
-except:
-    nodesforjoin = 250
+    opts, cmdv = getopt.getopt (sys.argv[1:], 'N:n:s:v:')
+except getopt.GetoptError:
+    print >>sys.stderr, sys.argv[0], "[-Nnsv] eventsfile"
+    sys.exit (1)
+if len(cmdv) != 1:
+    print >>sys.stderr, sys.argv[0], "[-Nnsv] eventsfile"
+    sys.exit (1)
+
+maxblocks = 1000
+size = 8192
+nodesforjoin = 250
+nvnodes = 1
+for o, a in opts:
+    if o == '-n':
+	maxblocks = int (a)
+    elif o == '-N':
+	nodesforjoin = int (a)
+    elif o == '-s':
+	size = int (a)
+    elif o == '-v':
+	print >>sys.stderr, "-v currently ignored!"
+	nvnodes = int (a)
+
+fh = open (cmdv[0])
 
 # Control the "rate" at which blocks are inserted.
 mu_i	= maxblocks / 10
 sd_i	= maxblocks / 20
 
 count = 0
-onode = 0
 insertok = 0
+livenodes = {}
 for line in fh.readlines ():
     (t, e, ip) = line.strip ().split ()
 
@@ -67,14 +80,14 @@ for line in fh.readlines ():
     t = int (t)
     if not firsttime:
 	firsttime = t
-	nnode = ip
     t = t - firsttime
 
     if e == 'join':
 	count += 1
-	onode = ip
-    elif count > 0 and e == 'fail':
+	livenodes[ip] = 1
+    elif count > 0 and (e == 'fail' or e == 'crash'):
 	count -= 1
+	del livenodes[ip]
     if count > nodesforjoin:
 	insertok = 1
 
@@ -85,10 +98,8 @@ for line in fh.readlines ():
 		# the last event and this one.
 		ni = random_interval (mu_i, sd_i)
 		while ni > 0 and maxblocks > 0:
-		    print nt, "insert", nnode, random_blockid (), size
+		    print nt, "insert", random.choice(livenodes.keys ()), random_blockid (), size
 		    ni -= 1
 		    maxblocks -= 1
 	lasttime = t
     print t, e, ip
-    nnode = onode
-
