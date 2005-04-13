@@ -39,7 +39,7 @@ vector<double> Accordion::sort_dead;
 
 Accordion::Accordion(IPAddress i, Args& a) : P2Protocol(i)
 {
-  _stab_basic_timer = a.nget<uint>("basictimer", 18000, 10);
+  _stab_basic_timer = a.nget<uint>("basictimer", 144000, 10);
   _fixed_lookup_to = (double)(a.nget<uint>("fixed_lookup_to",90,10))/100.0;
   _fixed_stab_to = (double)(a.nget<uint>("fixed_stab_to",100,10))/100.0;
   _fixed_stab_int = a.nget<uint>("fixed_stabtimer",0,10);

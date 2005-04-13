@@ -2475,6 +2475,7 @@ LocTable::rand_sample(Chord::IDMap &askwhom, Chord::IDMap &start, Chord::IDMap &
   end = elm->n;
 
   askwhom = start;
+  //XXX jinyang: this is an ugly hack, budget should be included as part of the IDMap field
   uint prev_budget = ((Accordion *)Network::Instance()->getnode(askwhom.ip))->budget();
   ConsistentHash::CHID gap = ConsistentHash::distance(start.id,end.id);
   uint i = 0;
