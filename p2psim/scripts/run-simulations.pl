@@ -22,7 +22,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# $Id: run-simulations.pl,v 1.31 2005/03/04 20:00:23 jinyang Exp $
+# $Id: run-simulations.pl,v 1.32 2005/04/13 17:42:02 strib Exp $
 
 use strict;
 use Getopt::Long;
@@ -106,8 +106,8 @@ if( $options{"protocol"} ) {
     } elsif( $prot eq "Chord" or $prot eq "chord" ) {
 	$protocol = "ChordFingerPNS";
 	$observer = "ChordObserver";
-    } elsif ($prot eq "ChordAdapt" or $prot eq "chordadapt") {
-        $protocol = "ChordAdapt";
+    } elsif ($prot eq "Accordion" or $prot eq "accordion") {
+        $protocol = "Accordion";
 	$observer = "";
     } elsif ($prot eq "ChordFinger") {
 	$protocol = "ChordFinger";

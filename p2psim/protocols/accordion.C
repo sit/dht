@@ -22,22 +22,22 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  */
-#include "chordadapt.h"
+#include "accordion.h"
 #include <math.h>
 #include <stdio.h>
 #include <assert.h>
 #include <iostream>
 
-vector<uint> ChordAdapt::rtable_sz;
+vector<uint> Accordion::rtable_sz;
 
 #define EST_TIMEOUT_SZ 100
 
-vector<IDMap> ChordAdapt::ids;
-bool ChordAdapt::sorted;
-vector<double> ChordAdapt::sort_live;
-vector<double> ChordAdapt::sort_dead;
+vector<IDMap> Accordion::ids;
+bool Accordion::sorted;
+vector<double> Accordion::sort_live;
+vector<double> Accordion::sort_dead;
 
-ChordAdapt::ChordAdapt(IPAddress i, Args& a) : P2Protocol(i)
+Accordion::Accordion(IPAddress i, Args& a) : P2Protocol(i)
 {
   _stab_basic_timer = a.nget<uint>("basictimer", 18000, 10);
   _fixed_lookup_to = (double)(a.nget<uint>("fixed_lookup_to",90,10))/100.0;
@@ -87,7 +87,7 @@ ChordAdapt::ChordAdapt(IPAddress i, Args& a) : P2Protocol(i)
   _id = _me.id;
 
 
-  _rate_queue = new RateControlQueue(this, (double)_bw_overhead, _burst_sz, _fixed_stab_int, ChordAdapt::empty_cb);
+  _rate_queue = New RateControlQueue(this, (double)_bw_overhead, _burst_sz, _fixed_stab_int, Accordion::empty_cb);
 
   _next_adjust = _adjust_interval;
 
@@ -111,7 +111,7 @@ ChordAdapt::ChordAdapt(IPAddress i, Args& a) : P2Protocol(i)
   _join_scheduled = 0;
   _last_stab = 0;
 
-  loctable = new LocTable();
+  loctable = New LocTable();
   loctable->init(_me);
 
   _wkn.ip = 0;
@@ -128,7 +128,7 @@ ChordAdapt::ChordAdapt(IPAddress i, Args& a) : P2Protocol(i)
     _tt = 0.9;
 }
 
-ChordAdapt::~ChordAdapt()
+Accordion::~Accordion()
 {
   if (alive()) {
     vector<IDMap>::iterator p = find(ids.begin(),ids.end(),_me);
@@ -153,17 +153,18 @@ ChordAdapt::~ChordAdapt()
     }
   }
   delete loctable;
+  delete _rate_queue;
 }
 
 unsigned
-ChordAdapt::PKT_SZ(unsigned ids, unsigned others)
+Accordion::PKT_SZ(unsigned ids, unsigned others)
 {
   return PKT_OVERHEAD + 4 * ids + others;
 }
 
 /* -------------- initstate ---------------- */
 void
-ChordAdapt::initstate()
+Accordion::initstate()
 {
   if (!sorted)
     sort(ids.begin(),ids.end(), IDMap::cmp);
@@ -202,7 +203,7 @@ ChordAdapt::initstate()
 
 /* -------------- join --------------------- */
 void
-ChordAdapt::join(Args *args)
+Accordion::join(Args *args)
 {
   if (!alive()) return;
 
@@ -244,16 +245,16 @@ ChordAdapt::join(Args *args)
     _join_scheduled = 0;
     if (!_stab_basic_running) {
       _stab_basic_running = true;
-      delaycb(0,&ChordAdapt::stab_succ,(void *)0);
+      delaycb(0,&Accordion::stab_succ,(void *)0);
     } else {
-      delaycb(0,&ChordAdapt::fix_succ, (void *)0);
+      delaycb(0,&Accordion::fix_succ, (void *)0);
     }
     return;
   }
 
   _join_scheduled = now();
-  lookup_args *la = new lookup_args;
-  lookup_ret *lr = new lookup_ret;
+  lookup_args *la = New lookup_args;
+  lookup_ret *lr = New lookup_ret;
   bzero(la,sizeof(lookup_args));
   la->key = _me.id - 1;
   la->m = _nsucc;
@@ -267,13 +268,13 @@ ChordAdapt::join(Args *args)
   la->overshoot = 0;
   la->nexthop = _wkn;
 
-  _rate_queue->do_rpc(_wkn.ip, &ChordAdapt::find_successors_handler,
-      &ChordAdapt::null_cb, la, lr, (uint)0, la->type,
+  _rate_queue->do_rpc(_wkn.ip, &Accordion::find_successors_handler,
+      &Accordion::null_cb, la, lr, (uint)0, la->type,
       PKT_SZ(1,1), PKT_SZ(2*la->m,1),TIMEOUT(_me.ip, _wkn.ip));
 }
 
 int
-ChordAdapt::null_cb(bool b, lookup_args *a, lookup_ret *r)
+Accordion::null_cb(bool b, lookup_args *a, lookup_ret *r)
 {
   if (!a->nexthop.ip)
     abort();
@@ -288,7 +289,7 @@ ChordAdapt::null_cb(bool b, lookup_args *a, lookup_ret *r)
 }
 
 void
-ChordAdapt::join_handler(lookup_args *la, lookup_ret *lr)
+Accordion::join_handler(lookup_args *la, lookup_ret *lr)
 {
   la->src.timestamp = now();
   loctable->update_ifexists(la->src);
@@ -311,15 +312,15 @@ ChordAdapt::join_handler(lookup_args *la, lookup_ret *lr)
   if (!succ.ip) {
     NDEBUG(1) << "join_handler join failed sz " << lr->v.size() 
       << " locsz " << loctable->size() << endl;
-    delaycb(5000, &ChordAdapt::join, (Args *)0);
+    delaycb(5000, &Accordion::join, (Args *)0);
   } else {
     _join_scheduled = 0;
     //start basic successor stabilization
     if (!_stab_basic_running) {
       _stab_basic_running = true;
-      delaycb(0,&ChordAdapt::stab_succ,(void *)0);
+      delaycb(0,&Accordion::stab_succ,(void *)0);
     } else {
-      delaycb(0,&ChordAdapt::fix_pred,(void *)0);
+      delaycb(0,&Accordion::fix_pred,(void *)0);
     }
     join_learn();
     IDMap succ = loctable->succ(_me.id+1);
@@ -334,7 +335,7 @@ ChordAdapt::join_handler(lookup_args *la, lookup_ret *lr)
 }
 
 void
-ChordAdapt::join_learn()
+Accordion::join_learn()
 {
   vector<IDMap> scs = loctable->succs(_me.id+1,_nsucc);
   if (scs.size() < (_nsucc/2)) return;
@@ -347,8 +348,8 @@ ChordAdapt::join_learn()
       min_n = scs[i];
     }
   }
-  learn_args *la = new learn_args;
-  learn_ret *lr = new learn_ret;
+  learn_args *la = New learn_args;
+  learn_ret *lr = New learn_ret;
   la->m = 3 * _learn_num; //means i want to learn from all
   la->n = min_n;
   la->src = _me;
@@ -356,14 +357,14 @@ ChordAdapt::join_learn()
   la->end = _me;
   NDEBUG(2) << "join_learn from " << la->n.ip << "," 
     << printID(la->n.id) << endl;
-  _rate_queue->do_rpc(min_n.ip, &ChordAdapt::learn_handler, 
-      &ChordAdapt::learn_cb, la, lr, 3, TYPE_FINGER_UP, 
+  _rate_queue->do_rpc(min_n.ip, &Accordion::learn_handler, 
+      &Accordion::learn_cb, la, lr, 3, TYPE_FINGER_UP, 
       PKT_SZ(0,1), PKT_SZ(2*la->m,0),TIMEOUT(_me.ip,min_n.ip));
 
 }
 
 void
-ChordAdapt::find_successors_handler(lookup_args *la, lookup_ret *lr)
+Accordion::find_successors_handler(lookup_args *la, lookup_ret *lr)
 {
   if (la->nexthop.ip == _me.ip)
     la->nexthop.alivetime = now()-_last_joined_time;
@@ -372,17 +373,17 @@ ChordAdapt::find_successors_handler(lookup_args *la, lookup_ret *lr)
   IDMap succ = loctable->succ(_me.id+1);
   if (!succ.ip) {
     /*
-      lookup_args *lla = new lookup_args;
+      lookup_args *lla = New lookup_args;
       lla->src = _me;
       lla->src.alivetime = now()-_last_joined_time;
       lla->from = _me;
       lla->from.alivetime = now()-_last_joined_time;
       bcopy(la,lla,sizeof(lookup_args));
-      lookup_ret *llr = new lookup_ret;
+      lookup_ret *llr = New lookup_ret;
       llr->v.clear();
       lla->nexthop.ip = 0;
-      _rate_queue->do_rpc(la->ori.ip, &ChordAdapt::join_handler,
-	  &ChordAdapt::null_cb, lla, llr, 1, TYPE_JOIN_LOOKUP, 
+      _rate_queue->do_rpc(la->ori.ip, &Accordion::join_handler,
+	  &Accordion::null_cb, lla, llr, 1, TYPE_JOIN_LOOKUP, 
 	  PKT_SZ(2*llr->v.size(),0),PKT_SZ(0,0),TIMEOUT(_me.ip, la->ori.ip));
 	  */
 	NDEBUG(2) << "find_successors_handler failed for " << la->ori.ip 
@@ -406,7 +407,7 @@ ChordAdapt::find_successors_handler(lookup_args *la, lookup_ret *lr)
 
 /* ------------------------ crash ------------------------------------*/
 void
-ChordAdapt::crash(Args *args)
+Accordion::crash(Args *args)
 {
   NDEBUG(1) << "crashed rawsz " << loctable->size(LOC_DEAD) << " locsz " << loctable->size() << " livesz " << loctable->live_size() 
     << " locsz_used " << loctable->size(LOC_HEALTHY, _tt) << " livesz_used " 
@@ -450,12 +451,12 @@ ChordAdapt::crash(Args *args)
 
 /* ------------------------ lookup ----------------------------------*/
 void
-ChordAdapt::lookup(Args *args)
+Accordion::lookup(Args *args)
 {
   IDMap succ = loctable->succ(_me.id+1);
   if (!succ.ip) {
     if (!_join_scheduled || (now()-_join_scheduled) > 20000) 
-      delaycb(0,&ChordAdapt::join,(Args *)0);
+      delaycb(0,&Accordion::join,(Args *)0);
     NDEBUG(2) << "lookup key failed not yet joined" << endl;
     record_lookup_stat(_me.ip, _me.ip, 0, false, false, 0, 0, 0);
     return;
@@ -493,7 +494,7 @@ ChordAdapt::lookup(Args *args)
 
 /* ------------------------ lookup (iterative) ------------------------*/
 void
-ChordAdapt::next_iter(lookup_args *la, lookup_ret *lr)
+Accordion::next_iter(lookup_args *la, lookup_ret *lr)
 {
   if (now() >= _next_adjust)
     adjust_parallelism();
@@ -535,13 +536,13 @@ ChordAdapt::next_iter(lookup_args *la, lookup_ret *lr)
   ConsistentHash::CHID mostprog = _progress.find(la->key);
   list<IDMap> *s = _sent.find(la->key);
   if (!s) {
-    s = new list<IDMap>;
+    s = New list<IDMap>;
     s->clear();
     _sent.insert(la->key,s);
   }
   list<IDMap> *d = _dead.find(la->key);
   if (!d) {
-    d = new list<IDMap>;
+    d = New list<IDMap>;
     d->clear();
     _dead.insert(la->key,d);
   }
@@ -570,7 +571,7 @@ ChordAdapt::next_iter(lookup_args *la, lookup_ret *lr)
       }
       if (!seen) {
 	s->insert(li,nh);
-	lookup_args *lla = new lookup_args;
+	lookup_args *lla = New lookup_args;
 	lla->key = la->key;
 	lla->no_drop = la->no_drop;
         lla->from = la->from;
@@ -595,15 +596,15 @@ ChordAdapt::next_iter(lookup_args *la, lookup_ret *lr)
 	  else
 	    break;
 	}
-	lookup_ret *llr = new lookup_ret;
+	lookup_ret *llr = New lookup_ret;
 	llr->is_succ = false;
 	llr->done = false;
 	llr->v.clear();
 	NDEBUG(4) << " key moha " << printID(la->key) << " to " << nh.ip 
 	  << "," << printID(nh.id) << " dead " 
 	  << (lla->deadnodes.size()?lla->deadnodes[0].ip:0) << endl;
-	_rate_queue->do_rpc(nh.ip, &ChordAdapt::next,
-	    &ChordAdapt::next_iter_cb, lla, llr, 0, TYPE_USER_LOOKUP, 
+	_rate_queue->do_rpc(nh.ip, &Accordion::next,
+	    &Accordion::next_iter_cb, lla, llr, 0, TYPE_USER_LOOKUP, 
 	    PKT_SZ(1+2*lla->deadnodes.size(),0), PKT_SZ(0,0),TIMEOUT(_me.ip, nh.ip));
 	sentout++;
       }
@@ -619,7 +620,7 @@ ChordAdapt::next_iter(lookup_args *la, lookup_ret *lr)
   if (!outstanding && !sentout) {
     assert(nexthops.size());
     nh = nexthops[0];
-    lookup_args *lla = new lookup_args;
+    lookup_args *lla = New lookup_args;
     lla->key = la->key;
     lla->no_drop = la->no_drop;
     lla->from = la->from;
@@ -644,15 +645,15 @@ ChordAdapt::next_iter(lookup_args *la, lookup_ret *lr)
       else
 	break;
     }
-    lookup_ret *llr = new lookup_ret;
+    lookup_ret *llr = New lookup_ret;
     llr->is_succ = false;
     llr->done = false;
     llr->v.clear();
     NDEBUG(4) << " key resend " << printID(la->key) << " to " << nh.ip 
       << "," << printID(nh.id) << " dead " 
       << (lla->deadnodes.size()?lla->deadnodes[0].ip:0) << endl;
-    _rate_queue->do_rpc(nh.ip, &ChordAdapt::next,
-	&ChordAdapt::next_iter_cb, lla, llr, 0, TYPE_USER_LOOKUP, 
+    _rate_queue->do_rpc(nh.ip, &Accordion::next,
+	&Accordion::next_iter_cb, lla, llr, 0, TYPE_USER_LOOKUP, 
 	PKT_SZ(1+2*lla->deadnodes.size(),0), PKT_SZ(0,0),TIMEOUT(_me.ip, nh.ip));
     sentout++;
   }
@@ -660,7 +661,7 @@ ChordAdapt::next_iter(lookup_args *la, lookup_ret *lr)
 }
 
 void
-ChordAdapt::next(lookup_args *la, lookup_ret *lr)
+Accordion::next(lookup_args *la, lookup_ret *lr)
 {
   loctable->update_ifexists(la->from,0);
   la->nexthop.alivetime = now() - _last_joined_time;
@@ -692,7 +693,7 @@ ChordAdapt::next(lookup_args *la, lookup_ret *lr)
 }
 
 int
-ChordAdapt::next_iter_cb(bool b, lookup_args *la, lookup_ret *lr)
+Accordion::next_iter_cb(bool b, lookup_args *la, lookup_ret *lr)
 {
   int ret_sz = 0;
   uint outstanding =  _forwarded_nodrop.find(la->key);
@@ -714,13 +715,13 @@ ChordAdapt::next_iter_cb(bool b, lookup_args *la, lookup_ret *lr)
       ret_sz = PKT_SZ(2*lr->v.size(),0);
       /*
       if ((la->prevhop.ip!=_me.ip) && lr->v.size() > 0) {
-	alert_args *aa = new alert_args;
+	alert_args *aa = New alert_args;
 	aa->v.clear();
 	aa->dn.ip = 0;
 	for (uint i = 0; i < lr->v.size(); i++) 
 	  aa->v.push_back(lr->v[i]);
-	_rate_queue->do_rpc(la->prevhop.ip, &ChordAdapt::alert_nodes,
-	           &ChordAdapt::alert_cb, aa, (lookup_ret *)NULL, 0, TYPE_USER_LOOKUP,
+	_rate_queue->do_rpc(la->prevhop.ip, &Accordion::alert_nodes,
+	           &Accordion::alert_cb, aa, (lookup_ret *)NULL, 0, TYPE_USER_LOOKUP,
 		           PKT_SZ(2*lr->v.size(),0), PKT_SZ(0,0),TIMEOUT(_me.ip, la->prevhop.ip));
       }
       */
@@ -747,11 +748,11 @@ ChordAdapt::next_iter_cb(bool b, lookup_args *la, lookup_ret *lr)
 	<< "," << printID(la->nexthop.id) << " DEAD " << (d?d->size():0) << endl;
 /*
       if (la->prevhop.ip!=_me.ip) {
-	alert_args *aa = new alert_args;
+	alert_args *aa = New alert_args;
 	aa->v.clear();
 	aa->dn = la->nexthop;
-	_rate_queue->do_rpc(la->prevhop.ip, &ChordAdapt::alert_nodes,
-	    &ChordAdapt::alert_cb, aa, (lookup_ret *)NULL, 0, TYPE_USER_LOOKUP,
+	_rate_queue->do_rpc(la->prevhop.ip, &Accordion::alert_nodes,
+	    &Accordion::alert_cb, aa, (lookup_ret *)NULL, 0, TYPE_USER_LOOKUP,
 	    PKT_SZ(2,0), PKT_SZ(0,0),TIMEOUT(_me.ip, la->prevhop.ip));
       }
       */
@@ -779,7 +780,7 @@ ChordAdapt::next_iter_cb(bool b, lookup_args *la, lookup_ret *lr)
 }
 
 void
-ChordAdapt::alert_lookup_nodes(ConsistentHash::CHID key, Time to)
+Accordion::alert_lookup_nodes(ConsistentHash::CHID key, Time to)
 {
   list<IDMap> *s = _sent.find(key);
   if (!s) return;
@@ -803,7 +804,7 @@ ChordAdapt::alert_lookup_nodes(ConsistentHash::CHID key, Time to)
   //vector<IDMap> v = loctable->preds(key, _learn_num, LOC_HEALTHY, to);
 
   for (list<IDMap>::iterator i = s->begin(); i != s->end(); ++i) {
-    alert_args *la = new alert_args;
+    alert_args *la = New alert_args;
     la->v.clear();
     for (uint j = 0; j < v.size(); j++) 
       la->v.push_back(v[j]);
@@ -812,8 +813,8 @@ ChordAdapt::alert_lookup_nodes(ConsistentHash::CHID key, Time to)
     la->src = _me;
     for (list<IDMap>::iterator jj = dd->begin(); jj!=dd->end();++jj)
       la->d.push_back(*jj);
-    _rate_queue->do_rpc((*i).ip, &ChordAdapt::alert_nodes,
-	&ChordAdapt::alert_cb, la, (lookup_ret *)NULL, 0, TYPE_USER_LOOKUP,
+    _rate_queue->do_rpc((*i).ip, &Accordion::alert_nodes,
+	&Accordion::alert_cb, la, (lookup_ret *)NULL, 0, TYPE_USER_LOOKUP,
 	PKT_SZ(2*(la->v.size()+la->d.size()),0), 
 	PKT_SZ(0,0),
 	TIMEOUT(_me.ip, (*i).ip)); 
@@ -830,7 +831,7 @@ ChordAdapt::alert_lookup_nodes(ConsistentHash::CHID key, Time to)
 }
 
 void
-ChordAdapt::alert_nodes(alert_args *la, lookup_ret *lr)
+Accordion::alert_nodes(alert_args *la, lookup_ret *lr)
 {
   NDEBUG(4) << " alert_nodes key " << printID(la->k) << " " 
     << print_succs(la->v) << " " << 
@@ -846,7 +847,7 @@ ChordAdapt::alert_nodes(alert_args *la, lookup_ret *lr)
 }
 
 int
-ChordAdapt::alert_cb(bool b, alert_args *la, lookup_ret *lr)
+Accordion::alert_cb(bool b, alert_args *la, lookup_ret *lr)
 {
   if (la)
     delete la;
@@ -855,7 +856,7 @@ ChordAdapt::alert_cb(bool b, alert_args *la, lookup_ret *lr)
 
 /* ------------------------ lookup (recursive) ----------------------- */
 void
-ChordAdapt::donelookup_handler(lookup_args *la, lookup_ret *lr)
+Accordion::donelookup_handler(lookup_args *la, lookup_ret *lr)
 {
   if (la->nexthop.ip == _me.ip) {
     la->nexthop.alivetime = now() - _last_joined_time;
@@ -867,17 +868,17 @@ ChordAdapt::donelookup_handler(lookup_args *la, lookup_ret *lr)
     loctable->add_node(la->from);
   }
   if (la->ori.ip) {
-    lookup_args *lla = new lookup_args;
+    lookup_args *lla = New lookup_args;
     bcopy(la,lla,sizeof(lookup_args));
     la->nexthop = la->ori;
-    lookup_ret *llr = new lookup_ret;
+    lookup_ret *llr = New lookup_ret;
     llr->v = lr->v;
     if (lr->v.size() > 0) {
       la->ori.timestamp = now();
       loctable->add_node(la->ori);
     }
-    _rate_queue->do_rpc(la->ori.ip, &ChordAdapt::join_handler,
-	&ChordAdapt::null_cb, lla, llr, 0, TYPE_JOIN_LOOKUP, 
+    _rate_queue->do_rpc(la->ori.ip, &Accordion::join_handler,
+	&Accordion::null_cb, lla, llr, 0, TYPE_JOIN_LOOKUP, 
 	PKT_SZ(2*llr->v.size(),0), PKT_SZ(0,0),TIMEOUT(_me.ip, la->ori.ip));
      return;
   };
@@ -914,7 +915,7 @@ ChordAdapt::donelookup_handler(lookup_args *la, lookup_ret *lr)
 }
 
 void
-ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
+Accordion::next_recurs(lookup_args *la, lookup_ret *lr)
 {
 
   IDMap succ = loctable->succ(_me.id+1);
@@ -967,7 +968,7 @@ ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
     NDEBUG(4) << "next_recurs not joined key " << printID(la->key) 
       << "failed" << endl;
     if ((!_join_scheduled) || (now()-_join_scheduled) > 20000)
-      delaycb(0,&ChordAdapt::join, (Args *)0); //join again
+      delaycb(0,&Accordion::join, (Args *)0); //join again
     if (lr) {
       lr->v.clear();
       lr->done = false;
@@ -976,12 +977,12 @@ ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
   }
 
   if (succ.ip && ConsistentHash::between(_me.id,succ.id,la->key)) {
-    lookup_args *lla = new lookup_args;
+    lookup_args *lla = New lookup_args;
     bcopy(la,lla,sizeof(lookup_args));
     lla->from = _me;
     lla->from.alivetime = now()-_last_joined_time;
     lla->nexthop = lla->src;
-    lookup_ret *llr = new lookup_ret;
+    lookup_ret *llr = New lookup_ret;
     llr->done = true;
     llr->v = loctable->succs(_me.id+1,la->m);
     NDEBUG(3) << "next_recurs key " << printID(la->key) << "src " << 
@@ -990,8 +991,8 @@ ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
       << succ.ip << "," << printID(succ.id) 
       << " quota " << _rate_queue->quota() << " qsz " << _rate_queue->size() 
       << " hops " << lla->hops << endl;
-    _rate_queue->do_rpc(lla->src.ip, &ChordAdapt::donelookup_handler,
-	&ChordAdapt::null_cb, lla, llr, lla->ori.ip?0:1, lla->type, 
+    _rate_queue->do_rpc(lla->src.ip, &Accordion::donelookup_handler,
+	&Accordion::null_cb, lla, llr, lla->ori.ip?0:1, lla->type, 
 	PKT_SZ(2*llr->v.size(),0), PKT_SZ(0,0),TIMEOUT(_me.ip,lla->src.ip));
     return;
   }
@@ -1038,7 +1039,7 @@ ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
   for (i = 0; i < nexthops.size(); i++) {
     if (!ConsistentHash::between(_me.id,la->key,nexthops[i].id))
       break;
-    lookup_args *lla = new lookup_args;
+    lookup_args *lla = New lookup_args;
     bcopy(la,lla,sizeof(lookup_args));
     if ((la->no_drop) && i == 0) {
       lla->no_drop = true;
@@ -1053,7 +1054,7 @@ ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
     lla->from = _me;
     //lla->overshoot = overshoot.id;
     lla->overshoot = (i>=1)?nexthops[i-1].id:la->key;
-    lookup_ret *llr = new lookup_ret;
+    lookup_ret *llr = New lookup_ret;
     llr->v.clear();
     NDEBUG(3) << "next_recurs key " << printID(la->key) << " quota " << _rate_queue->quota() << " qsz " 
       << _rate_queue->size() << " locsz " << loctable->size(LOC_HEALTHY, ttt) 
@@ -1069,8 +1070,8 @@ ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
       fprintf(stderr,"what?! loop?!!!\n");
       exit(3);
     }
-    sent_success = _rate_queue->do_rpc(nexthops[i].ip, &ChordAdapt::next_recurs,
-	&ChordAdapt::next_recurs_cb, lla,llr, lla->ori.ip?0:(lla->no_drop?1:3), lla->type,
+    sent_success = _rate_queue->do_rpc(nexthops[i].ip, &Accordion::next_recurs,
+	&Accordion::next_recurs_cb, lla,llr, lla->ori.ip?0:(lla->no_drop?1:3), lla->type,
 	PKT_SZ(1,0), PKT_SZ(2*lla->learnsz,0),TIMEOUT(_me.ip,nexthops[i].ip));
     if (!sent_success) break;
   }
@@ -1079,7 +1080,7 @@ ChordAdapt::next_recurs(lookup_args *la, lookup_ret *lr)
 }
 
 int
-ChordAdapt::next_recurs_cb(bool b, lookup_args *la, lookup_ret *lr)
+Accordion::next_recurs_cb(bool b, lookup_args *la, lookup_ret *lr)
 {
   int ret_sz = 0;
   if (alive()) {
@@ -1168,7 +1169,7 @@ ChordAdapt::next_recurs_cb(bool b, lookup_args *la, lookup_ret *lr)
 
 /* ------------- fix successor routines ----------------- */
 void
-ChordAdapt::stab_succ(void *x)
+Accordion::stab_succ(void *x)
 {
   if (!alive()) {
     _stab_basic_running = false;
@@ -1176,16 +1177,16 @@ ChordAdapt::stab_succ(void *x)
   }
   fix_pred(NULL);
   _last_stab = now();
-  delaycb(_stab_basic_timer, &ChordAdapt::stab_succ, (void *)0);
+  delaycb(_stab_basic_timer, &Accordion::stab_succ, (void *)0);
 }
 
 void
-ChordAdapt::fix_pred(void *a)
+Accordion::fix_pred(void *a)
 {
   if (!alive()) return;
   IDMap pred = loctable->pred(_me.id-1);
-  get_predsucc_args *gpa = new get_predsucc_args;
-  get_predsucc_ret *gpr = new get_predsucc_ret;
+  get_predsucc_args *gpa = New get_predsucc_args;
+  get_predsucc_ret *gpr = New get_predsucc_ret;
   gpa->m = 1;
   gpa->n = pred;
   gpa->src = _me;
@@ -1193,13 +1194,13 @@ ChordAdapt::fix_pred(void *a)
   gpr->v.clear();
   NDEBUG(3) << " fix_pred " << pred.ip << "," << printID(pred.id) 
     << " quota " << _rate_queue->quota() << endl;
-  _rate_queue->do_rpc(pred.ip, &ChordAdapt::get_predsucc_handler,
-      &ChordAdapt::fix_pred_cb, gpa, gpr, 0, TYPE_FIXPRED_UP, PKT_SZ(0,1), PKT_SZ(2,1),
+  _rate_queue->do_rpc(pred.ip, &Accordion::get_predsucc_handler,
+      &Accordion::fix_pred_cb, gpa, gpr, 0, TYPE_FIXPRED_UP, PKT_SZ(0,1), PKT_SZ(2,1),
       TIMEOUT(_me.ip,pred.ip));
 }
 
 int
-ChordAdapt::fix_pred_cb(bool b, get_predsucc_args *gpa, get_predsucc_ret *gpr)
+Accordion::fix_pred_cb(bool b, get_predsucc_args *gpa, get_predsucc_ret *gpr)
 {
   int ret_sz = 0;
   if (alive()) {
@@ -1213,7 +1214,7 @@ ChordAdapt::fix_pred_cb(bool b, get_predsucc_args *gpa, get_predsucc_ret *gpr)
     } else {
       loctable->del_node(gpa->n,true);
     } 
-    delaycb(10000,&ChordAdapt::fix_succ,(void*)0);
+    delaycb(10000,&Accordion::fix_succ,(void*)0);
   }
   delete gpa;
   delete gpr;
@@ -1221,7 +1222,7 @@ ChordAdapt::fix_pred_cb(bool b, get_predsucc_args *gpa, get_predsucc_ret *gpr)
 }
 
 void 
-ChordAdapt::fix_succ(void *a)
+Accordion::fix_succ(void *a)
 {
   if (!alive()) return;
 
@@ -1231,12 +1232,12 @@ ChordAdapt::fix_succ(void *a)
     NDEBUG(1) << "fix_succ locsz " << loctable->size() 
       << " reschedule join" << endl;
     if ((!_join_scheduled) || (now()-_join_scheduled) > 20000)
-      delaycb(200, &ChordAdapt::join, (Args *)0);
+      delaycb(200, &Accordion::join, (Args *)0);
     return;
   }
 
-  get_predsucc_args *gpa = new get_predsucc_args;
-  get_predsucc_ret *gpr = new get_predsucc_ret;
+  get_predsucc_args *gpa = New get_predsucc_args;
+  get_predsucc_ret *gpr = New get_predsucc_ret;
   gpr->v.clear();
   gpa->n = succ;
   gpa->src = _me;
@@ -1249,13 +1250,13 @@ ChordAdapt::fix_succ(void *a)
     gpa->m= _nsucc;
 
   NDEBUG(2) << "fix_succ succ " << succ.ip << "," << printID(succ.id) << endl;
-  _rate_queue->do_rpc(succ.ip, &ChordAdapt::get_predsucc_handler,
-	&ChordAdapt::fix_succ_cb, gpa,gpr, 0, TYPE_FIXSUCC_UP, PKT_SZ(0,1), PKT_SZ(2*gpa->m,0),
+  _rate_queue->do_rpc(succ.ip, &Accordion::get_predsucc_handler,
+	&Accordion::fix_succ_cb, gpa,gpr, 0, TYPE_FIXSUCC_UP, PKT_SZ(0,1), PKT_SZ(2*gpa->m,0),
 	TIMEOUT(_me.ip,succ.ip));
 }
 
 void
-ChordAdapt::get_predsucc_handler(get_predsucc_args *gpa, 
+Accordion::get_predsucc_handler(get_predsucc_args *gpa, 
     get_predsucc_ret *gpr)
 {
   if (gpa->n.ip == _me.ip) 
@@ -1271,7 +1272,7 @@ ChordAdapt::get_predsucc_handler(get_predsucc_args *gpa,
 }
 
 int
-ChordAdapt::fix_succ_cb(bool b, get_predsucc_args *gpa, get_predsucc_ret *gpr)
+Accordion::fix_succ_cb(bool b, get_predsucc_args *gpa, get_predsucc_ret *gpr)
 {
   int ret_sz = 0;
   if (alive()) {
@@ -1300,11 +1301,11 @@ ChordAdapt::fix_succ_cb(bool b, get_predsucc_args *gpa, get_predsucc_ret *gpr)
 	(newscs.size()>0?printID(newscs[0].id):"??") << " succsz " << newscs.size() << "(" <<
 	print_succs(newscs) << ")" << " retsz " << ret_sz << " newsz " << gpr->v.size() <<  " est_n " << _est_n << endl;
 
-      //delaycb(200,&ChordAdapt::fix_pred,(void *)0);
+      //delaycb(200,&Accordion::fix_pred,(void *)0);
 
     } else {
       loctable->del_node(gpa->n); //XXX: don't delete after one try?
-      delaycb(200,&ChordAdapt::fix_succ, (void *)0);
+      delaycb(200,&Accordion::fix_succ, (void *)0);
     }
   }else{
     _stab_basic_running = false;
@@ -1315,7 +1316,7 @@ ChordAdapt::fix_succ_cb(bool b, get_predsucc_args *gpa, get_predsucc_ret *gpr)
 }
 
 void
-ChordAdapt::consolidate_succ_list(IDMap n, vector<IDMap> oldlist, vector<IDMap> newlist, bool is_succ)
+Accordion::consolidate_succ_list(IDMap n, vector<IDMap> oldlist, vector<IDMap> newlist, bool is_succ)
 {
   IDMap sss;
   IDMap mee;
@@ -1390,21 +1391,21 @@ ChordAdapt::consolidate_succ_list(IDMap n, vector<IDMap> oldlist, vector<IDMap> 
 
 /* ---------------------------- empty queue ------------------------------ */
 void
-ChordAdapt::empty_cb(void *x)  //wrapper function
+Accordion::empty_cb(void *x)  //wrapper function
 {
-  ChordAdapt *c = (ChordAdapt *)x;
+  Accordion *c = (Accordion *)x;
   return c->empty_queue(NULL);
 }
 
 void
-ChordAdapt::empty_queue(void *a) 
+Accordion::empty_queue(void *a) 
 {
   IDMap succ = loctable->succ(_me.id+1);
   if (!succ.ip){
     if (!_join_scheduled || (now()-_join_scheduled)>20000) {
       NDEBUG(4) << "empty_queue locsz " << loctable->size() 
 	<< " reschedule join" << endl;
-      delaycb(0,&ChordAdapt::join,(Args *)0);
+      delaycb(0,&Accordion::join,(Args *)0);
     }
     return;
   }
@@ -1437,10 +1438,10 @@ ChordAdapt::empty_queue(void *a)
   }
 
   if ((askwhom.ip != pred.ip) && (!ConsistentHash::between(askwhom.id,next.id,pred.id) || askwhom.ip == next.ip)) 
-    fprintf(stderr,"%llu %u %u %u %u %u fuck!\n", now(), _me.ip, askwhom.ip, pred.ip, next.ip, ((ChordAdapt *)Network::Instance()->getnode(askwhom.ip))->budget());
+    fprintf(stderr,"%llu %u %u %u %u %u fuck!\n", now(), _me.ip, askwhom.ip, pred.ip, next.ip, ((Accordion *)Network::Instance()->getnode(askwhom.ip))->budget());
 
-  learn_args *la = new learn_args;
-  learn_ret *lr = new learn_ret;
+  learn_args *la = New learn_args;
+  learn_ret *lr = New learn_ret;
   Time to = _stab_basic_timer;
 
 
@@ -1462,13 +1463,13 @@ ChordAdapt::empty_queue(void *a)
     << " para " << _parallelism << " est_tt " << _tt << " op " << op 
     << " statsz " << _stat.size() << " est_n " << _est_n << endl;
 
-  _rate_queue->do_rpc(askwhom.ip, &ChordAdapt::learn_handler, 
-      &ChordAdapt::learn_cb, la, lr, 3, TYPE_FINGER_UP, 
+  _rate_queue->do_rpc(askwhom.ip, &Accordion::learn_handler, 
+      &Accordion::learn_cb, la, lr, 3, TYPE_FINGER_UP, 
       PKT_SZ(0,1), PKT_SZ(2*la->m,0),TIMEOUT(_me.ip,pred.ip));
 }
 
 void
-ChordAdapt::learn_handler(learn_args *la, learn_ret *lr)
+Accordion::learn_handler(learn_args *la, learn_ret *lr)
 {
   la->src.timestamp = now();
   loctable->add_node(la->src);
@@ -1507,7 +1508,7 @@ ChordAdapt::learn_handler(learn_args *la, learn_ret *lr)
 }
 
 int
-ChordAdapt::learn_cb(bool b, learn_args *la, learn_ret *lr)
+Accordion::learn_cb(bool b, learn_args *la, learn_ret *lr)
 {
   uint ret_sz = 0;
   if (alive()) {
@@ -1572,7 +1573,7 @@ ChordAdapt::learn_cb(bool b, learn_args *la, learn_ret *lr)
 	<< " locsz " << loctable->size(LOC_HEALTHY,la->timeout) << " livesz " << loctable->live_size(la->timeout) << endl;
     }
     if (_rate_queue->empty() && !_fixed_stab_int) 
-      delaycb(0, &ChordAdapt::empty_queue, (void *)0);
+      delaycb(0, &Accordion::empty_queue, (void *)0);
   }
   delete la;
   delete lr;
@@ -1580,7 +1581,7 @@ ChordAdapt::learn_cb(bool b, learn_args *la, learn_ret *lr)
 }
 
 string
-ChordAdapt::print_succs(vector<IDMap> v)
+Accordion::print_succs(vector<IDMap> v)
 {
   char buf[1024];
   char *b = buf;
@@ -1598,7 +1599,7 @@ ChordAdapt::print_succs(vector<IDMap> v)
 }
 
 string
-ChordAdapt::printID(ConsistentHash::CHID id)
+Accordion::printID(ConsistentHash::CHID id)
 {
   char buf[128];
   sprintf(buf,"%qx ",id);
@@ -1606,7 +1607,7 @@ ChordAdapt::printID(ConsistentHash::CHID id)
 }
 
 bool 
-ChordAdapt::check_pred_correctness(ConsistentHash::CHID k, IDMap n)
+Accordion::check_pred_correctness(ConsistentHash::CHID k, IDMap n)
 {
   IDMap tmp;
   tmp.id = k;
@@ -1626,7 +1627,7 @@ ChordAdapt::check_pred_correctness(ConsistentHash::CHID k, IDMap n)
 }
 
 void
-ChordAdapt::adjust_parallelism()
+Accordion::adjust_parallelism()
 {
   if (!_fixed_stab_int) {
     uint old_p = _parallelism;
@@ -1667,7 +1668,7 @@ ChordAdapt::adjust_parallelism()
 }
 
 void
-ChordAdapt::add_stat(double ti, bool live)
+Accordion::add_stat(double ti, bool live)
 {
   return; //XXX i do not think this is important
   if ((_fixed_stab_int) || (ti <= 0.0) || (ti >= 1.0))
@@ -1682,14 +1683,14 @@ ChordAdapt::add_stat(double ti, bool live)
 }
 
 double
-ChordAdapt::est_timeout(double prob)
+Accordion::est_timeout(double prob)
 {
   return (1.0-prob);
   //return _calculated_prob[(uint)(10*prob)];
 }
 
 void
-ChordAdapt::adjust_timeout()
+Accordion::adjust_timeout()
 {
   if (_fixed_stab_int)
     return;

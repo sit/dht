@@ -23,7 +23,7 @@
  */
 
 #include "observers/chordobserver.h"
-#include "chordadapt.h"
+#include "accordion.h"
 #include <iostream>
 #include <stdio.h>
 #include <assert.h>
@@ -2475,7 +2475,7 @@ LocTable::rand_sample(Chord::IDMap &askwhom, Chord::IDMap &start, Chord::IDMap &
   end = elm->n;
 
   askwhom = start;
-  uint prev_budget = ((ChordAdapt *)Network::Instance()->getnode(askwhom.ip))->budget();
+  uint prev_budget = ((Accordion *)Network::Instance()->getnode(askwhom.ip))->budget();
   ConsistentHash::CHID gap = ConsistentHash::distance(start.id,end.id);
   uint i = 0;
   while (i < 10) {
@@ -2485,15 +2485,15 @@ LocTable::rand_sample(Chord::IDMap &askwhom, Chord::IDMap &start, Chord::IDMap &
       break;
     if (elmtmp->status <= LOC_HEALTHY) {
       double r1 = 1.0 + (double)ConsistentHash::distance(askwhom.id,elmtmp->n.id)/(double)gap; 
-      double r2 = (double)prev_budget/(double)((ChordAdapt *)Network::Instance()->getnode(elmtmp->n.ip))->budget();
+      double r2 = (double)prev_budget/(double)((Accordion *)Network::Instance()->getnode(elmtmp->n.ip))->budget();
       if (r1 < r2) {
 	askwhom = elmtmp->n;
-	prev_budget = ((ChordAdapt *)Network::Instance()->getnode(elmtmp->n.ip))->budget();
+	prev_budget = ((Accordion *)Network::Instance()->getnode(elmtmp->n.ip))->budget();
       }
       i++;
     }
   }
-  uint my_budget = ((ChordAdapt *)Network::Instance()->getnode(me.ip))->budget();
+  uint my_budget = ((Accordion *)Network::Instance()->getnode(me.ip))->budget();
   if (my_budget > prev_budget) {
     double rr = (double)random()/(double)RAND_MAX;
     if (rr > ((double)prev_budget/(double)my_budget)) 
@@ -2525,7 +2525,7 @@ LocTable::sample_smallworld(uint est_n, Chord::IDMap &askwhom, Chord::IDMap &sta
     start = end = me;
     op = 1;
     askwhom = elm->n;
-    uint prev_budget = ((ChordAdapt *)Network::Instance()->getnode(elm->n.ip))->budget();
+    uint prev_budget = ((Accordion *)Network::Instance()->getnode(elm->n.ip))->budget();
 
     while ((gap <= mingap) && (elm->n.ip!=me.ip)) {
       do {
@@ -2540,10 +2540,10 @@ LocTable::sample_smallworld(uint est_n, Chord::IDMap &askwhom, Chord::IDMap &sta
 
 	if (elm->status <= LOC_HEALTHY) {
 	  double r1 = 1.0+(double)ConsistentHash::distance(askwhom.id,elm->n.id)/(double)mingap; 
-	  double r2 = (double)prev_budget/(double)((ChordAdapt *)Network::Instance()->getnode(elm->n.ip))->budget();
+	  double r2 = (double)prev_budget/(double)((Accordion *)Network::Instance()->getnode(elm->n.ip))->budget();
 	  if ((r1 >= r2) || (askwhom.alivetime < elm->n.alivetime && elm->n.alivetime > 3*MINTIMEOUT)){
 	    askwhom = elm->n;
-	    prev_budget = ((ChordAdapt *)Network::Instance()->getnode(elm->n.ip))->budget();
+	    prev_budget = ((Accordion *)Network::Instance()->getnode(elm->n.ip))->budget();
 	  }
 	}
 
@@ -2780,7 +2780,7 @@ LocTable::next_close_hops(ConsistentHash::CHID key, uint n, Chord::IDMap src, do
 	return l;
       }
 
-      double delay = ndist * topo->latency(src.ip,elm->n.ip) /(double)((ChordAdapt *)Network::Instance()->getnode(elm->n.ip))->budget();
+      double delay = ndist * topo->latency(src.ip,elm->n.ip) /(double)((Accordion *)Network::Instance()->getnode(elm->n.ip))->budget();
       if (dist > dist2) {
 	l.push_back(elm->n);
 	dl.push_back(delay);

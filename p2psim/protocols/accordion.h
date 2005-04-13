@@ -22,8 +22,8 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef __CHORDADAPT_H
-#define __CHORDADAPT_H
+#ifndef __ACCORDION_H
+#define __ACCORDION_H
 
 #include "p2psim/bighashmap.hh"
 #include "chord.h"
@@ -33,11 +33,11 @@
 
 
 typedef Chord::IDMap IDMap;
-class ChordAdapt: public P2Protocol {
+class Accordion: public P2Protocol {
   public:
-    ChordAdapt(IPAddress i, Args& a);
-    ~ChordAdapt();
-    string proto_name() { return "ChordAdapt";}
+    Accordion(IPAddress i, Args& a);
+    ~Accordion();
+    string proto_name() { return "Accordion";}
     IDMap idmap() { return _me;}
     ConsistentHash::CHID id() { return _me.id;}
 

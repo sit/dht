@@ -1,0 +1,10 @@
+lifemean 3600000
+deathmean =lifemean 1
+lookupmean 600000
+exittime *lifemean 6
+stattime *exittime .5
+# Accordion args file, for input into scripts/run-simulations.pl
+successors 16 
+basictimer 144000
+overhead_rate 2 4 6 8 10 20 30 40 60
+burst_size *overhead_rate 100

@@ -66,7 +66,7 @@ class RateControlQueue {
       if (!_start_time) 
 	_start_time = now();
 
-      QueueThunk<BT,AT,RT> *t = new QueueThunk<BT,AT,RT>;
+      QueueThunk<BT,AT,RT> *t = New QueueThunk<BT,AT,RT>;
       t->_target = dynamic_cast<BT*>(Network::Instance()->getnode(dst));
       t->_src = dynamic_cast<BT*>(_node);
       t->_fn = fn;
@@ -74,7 +74,7 @@ class RateControlQueue {
       t->_args = args;
       t->_ret = ret;
 
-      q_elm *qe = new q_elm;
+      q_elm *qe = New q_elm;
       qe->_sz = sz;
       qe->_rsz = rsz;
       qe->_dst = dst;
