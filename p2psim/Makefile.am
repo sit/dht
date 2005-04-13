@@ -8,6 +8,7 @@ EXTRA_DIST = Makefile.incl ../utils/skiplist.h \
 	    example/silly-events.txt \
 	    example/silly-prot.txt \
 	    example/silly-top.txt \
+	    example/accordion_args \
 	    example/chord_args \
 	    example/tapestry_args \
 	    example/kademlia_args \
