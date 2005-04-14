@@ -218,14 +218,16 @@ Chord::check_correctness(CHID k, vector<IDMap> v)
   tmp.id = k;
   uint idsz = ids.size();
   uint pos = upper_bound(ids.begin(), ids.end(), tmp, Chord::IDMap::cmp) - ids.begin();
+  uint iter = 0;
 
-  while (1) {
+  while (iter<idsz) {
     if (pos >= idsz) pos = 0;
     Chord *node = (Chord *)Network::Instance()->getnode(ids[pos].ip);
     if (Network::Instance()->alive(ids[pos].ip)
 	&& node->inited())
       break;
     pos++;
+    iter++;
   }
 
   for (uint i = 0; i < v.size(); i++) {
