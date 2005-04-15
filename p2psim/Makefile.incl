@@ -1,2 +1,2 @@
-CXXFLAGS = -Werror -fno-exceptions -ftemplate-depth-32 -L/usr/local/lib 
+CXXFLAGS = -Werror -O2 -fno-exceptions -ftemplate-depth-32 -L/usr/local/lib 
 INCLUDES = -I$(top_srcdir) -I/usr/local/include $(EXTRA_INCLUDES) $(GTKINCLUDES)
