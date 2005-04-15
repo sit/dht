@@ -1,4 +1,4 @@
 # enumerates all the event generators
 # format:
 # generator {GENERATOR} [KEY=VAL [KEY=VAL [...]]]
-generator ChurnEventGenerator proto=Kademlia ipkeys=1
+generator ChurnEventGenerator proto=Kademlia ipkeys=1 exittime=7200000

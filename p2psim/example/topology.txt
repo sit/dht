@@ -7,7 +7,7 @@
 # node-id x,y
 # ...
 # node-id can't be 0
-topology Euclidean
+topology Euclidean 7
 failure_model ConstantFailureModel
 
 1 0,0
