@@ -2698,7 +2698,7 @@ LocTable::get_closest_in_gap(uint m, ConsistentHash::CHID start, ConsistentHash:
       Time ll = Network::Instance()->gettopology()->latency(src.ip,elm->n.ip);
       lat = (Time)(ti * ll + 3 * ll * (1-ti));
       for (i = v.begin(),j=lv.begin(); i!= v.end(); ++i,++j) {
-	assert(*i.ip > 0);
+	assert((*i).ip > 0);
 	if (lat >= (*j)) 
 	  break;
       }

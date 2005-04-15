@@ -136,7 +136,7 @@ Accordion::~Accordion()
     ids.erase(p);
     for (HashMap<ConsistentHash::CHID, Time>::iterator i = _outstanding_lookups.begin();
 	i != _outstanding_lookups.end(); ++i) {
-      NDEBUG(2) << "done lookup key " << printID(i.key()) << "timeout failed started " 
+      ADEBUG(2) << "done lookup key " << printID(i.key()) << "timeout failed started " 
 	<< i.value() << endl;
       record_lookup_stat(_me.ip, _me.ip, now()-i.value(), false, false, 0, 0, 0);
     }
@@ -197,7 +197,7 @@ Accordion::initstate()
 
 
   IDMap succ = loctable->succ(_me.id+1);
-  NDEBUG(3) << "inited succ " << succ.ip << "," << printID(succ.id) 
+  ADEBUG(3) << "inited succ " << succ.ip << "," << printID(succ.id) 
     << " locsz " << loctable->size() << " succsz " << loctable->succ_size() 
     << " maxp " << _max_p << endl;
 }
@@ -231,11 +231,11 @@ Accordion::join(Args *args)
       ids.insert(p,1,_me);
     if (!_fixed_stab_int) 
       _parallelism = 1;
-    NDEBUG(1) << "start to join " << printID(_me.id-1) << " locsz " << loctable->size()  
+    ADEBUG(1) << "start to join " << printID(_me.id-1) << " locsz " << loctable->size()  
       << " livesz " << loctable->live_size() 
       << " succsz " << loctable->succ_size() << " wkn " << _wkn.ip << endl;
   }else{
-    NDEBUG(1) << "repeated join " << printID(_me.id-1) << " wkn " << _wkn.ip << " locsz " 
+    ADEBUG(1) << "repeated join " << printID(_me.id-1) << " wkn " << _wkn.ip << " locsz " 
       << loctable->size() << endl;
   }
   
@@ -311,7 +311,7 @@ Accordion::join_handler(lookup_args *la, lookup_ret *lr)
   }
   IDMap succ = loctable->succ(_me.id+1);
   if (!succ.ip) {
-    NDEBUG(1) << "join_handler join failed sz " << lr->v.size() 
+    ADEBUG(1) << "join_handler join failed sz " << lr->v.size() 
       << " locsz " << loctable->size() << endl;
     delaycb(5000, &Accordion::join, (Args *)0);
   } else {
@@ -327,7 +327,7 @@ Accordion::join_handler(lookup_args *la, lookup_ret *lr)
     IDMap succ = loctable->succ(_me.id+1);
     IDMap pred = loctable->pred(_me.id-1);
     vector<IDMap> scs = loctable->succs(_me.id+1,100);
-    NDEBUG(1) << "joined succ " << succ.ip << "," << printID(succ.id) 
+    ADEBUG(1) << "joined succ " << succ.ip << "," << printID(succ.id) 
       << "locsz " << loctable->size() << " livesz " 
       << loctable->live_size() << " succs: " << print_succs(scs) << 
       " scs: " << print_succs(lr->v)  << " pred " << la->from.ip 
@@ -356,7 +356,7 @@ Accordion::join_learn()
   la->src = _me;
   la->src.alivetime = now()-_last_joined_time;
   la->end = _me;
-  NDEBUG(2) << "join_learn from " << la->n.ip << "," 
+  ADEBUG(2) << "join_learn from " << la->n.ip << "," 
     << printID(la->n.id) << endl;
   _rate_queue->do_rpc(min_n.ip, &Accordion::learn_handler, 
       &Accordion::learn_cb, la, lr, 3, TYPE_FINGER_UP, 
@@ -387,7 +387,7 @@ Accordion::find_successors_handler(lookup_args *la, lookup_ret *lr)
 	  &Accordion::null_cb, lla, llr, 1, TYPE_JOIN_LOOKUP, 
 	  PKT_SZ(2*llr->v.size(),0),PKT_SZ(0,0),TIMEOUT(_me.ip, la->ori.ip));
 	  */
-	NDEBUG(2) << "find_successors_handler failed for " << la->ori.ip 
+	ADEBUG(2) << "find_successors_handler failed for " << la->ori.ip 
 	  << "," << printID(la->ori.id) << " not joined" << endl;
     }else{
       lookup_args lla;
@@ -398,11 +398,11 @@ Accordion::find_successors_handler(lookup_args *la, lookup_ret *lr)
       lla.from = _me;
       lla.from.alivetime = lla.src.alivetime;
       lla.no_drop = true;
-      NDEBUG(3)<<"find_successors_handler key " << printID(lla.key) << " from " 
+      ADEBUG(3)<<"find_successors_handler key " << printID(lla.key) << " from " 
 	<< lla.ori.ip << "," << printID(lla.ori.id) << endl;
       next_recurs(&lla,NULL);
     }
-  NDEBUG(5) << " find_successors_handler reply " << PKT_SZ(0,1) << " bytes to " 
+  ADEBUG(5) << " find_successors_handler reply " << PKT_SZ(0,1) << " bytes to " 
     << la->ori.ip << " quota " << _rate_queue->quota() << endl;
 }
 
@@ -410,7 +410,7 @@ Accordion::find_successors_handler(lookup_args *la, lookup_ret *lr)
 void
 Accordion::crash(Args *args)
 {
-  NDEBUG(1) << "crashed rawsz " << loctable->size(LOC_DEAD) << " locsz " << loctable->size() << " livesz " << loctable->live_size() 
+  ADEBUG(1) << "crashed rawsz " << loctable->size(LOC_DEAD) << " locsz " << loctable->size() << " livesz " << loctable->live_size() 
     << " locsz_used " << loctable->size(LOC_HEALTHY, _tt) << " livesz_used " 
     << loctable->live_size(_tt) << " live_time " << now()-_last_joined_time 
     << " para " << _parallelism << " timeout " << _tt << " est_n " << _est_n << endl;
@@ -419,7 +419,7 @@ Accordion::crash(Args *args)
   loctable->del_all();
   for (HashMap<ConsistentHash::CHID, Time>::iterator i = _outstanding_lookups.begin();
       i != _outstanding_lookups.end(); ++i) {
-    NDEBUG(2) << "done lookup key " << printID(i.key()) << "timeout failed started "
+    ADEBUG(2) << "done lookup key " << printID(i.key()) << "timeout failed started "
       << i.value() << endl;
     record_lookup_stat(_me.ip, _me.ip, now()-i.value(), false, false, 0, 0, 0);
   }
@@ -458,7 +458,7 @@ Accordion::lookup(Args *args)
   if (!succ.ip) {
     if (!_join_scheduled || (now()-_join_scheduled) > 20000) 
       delaycb(0,&Accordion::join,(Args *)0);
-    NDEBUG(2) << "lookup key failed not yet joined" << endl;
+    ADEBUG(2) << "lookup key failed not yet joined" << endl;
     record_lookup_stat(_me.ip, _me.ip, 0, false, false, 0, 0, 0);
     return;
   }
@@ -485,7 +485,7 @@ Accordion::lookup(Args *args)
   lr.is_succ = false;
 
   _outstanding_lookups.insert(la.key, now());
-  NDEBUG(2) << "start lookup key " << printID(la.key) << endl;
+  ADEBUG(2) << "start lookup key " << printID(la.key) << endl;
   if (_recurs) 
     next_recurs(&la,NULL);
   else 
@@ -601,7 +601,7 @@ Accordion::next_iter(lookup_args *la, lookup_ret *lr)
 	llr->is_succ = false;
 	llr->done = false;
 	llr->v.clear();
-	NDEBUG(4) << " key moha " << printID(la->key) << " to " << nh.ip 
+	ADEBUG(4) << " key moha " << printID(la->key) << " to " << nh.ip 
 	  << "," << printID(nh.id) << " dead " 
 	  << (lla->deadnodes.size()?lla->deadnodes[0].ip:0) << endl;
 	_rate_queue->do_rpc(nh.ip, &Accordion::next,
@@ -613,7 +613,7 @@ Accordion::next_iter(lookup_args *la, lookup_ret *lr)
   }
   uint outstanding =  _forwarded_nodrop.find(la->key);
 
-  NDEBUG(4) << "next_iter key " << printID(la->key) << " mostprog " 
+  ADEBUG(4) << "next_iter key " << printID(la->key) << " mostprog " 
     << printID(mostprog) << " from " << la->nexthop.ip
   << "," << printID(la->nexthop.id) << " quota " << _rate_queue->quota() 
   << "," << para << "," << _parallelism << "," << sentout<< "," << outstanding << endl;
@@ -650,7 +650,7 @@ Accordion::next_iter(lookup_args *la, lookup_ret *lr)
     llr->is_succ = false;
     llr->done = false;
     llr->v.clear();
-    NDEBUG(4) << " key resend " << printID(la->key) << " to " << nh.ip 
+    ADEBUG(4) << " key resend " << printID(la->key) << " to " << nh.ip 
       << "," << printID(nh.id) << " dead " 
       << (lla->deadnodes.size()?lla->deadnodes[0].ip:0) << endl;
     _rate_queue->do_rpc(nh.ip, &Accordion::next,
@@ -686,7 +686,7 @@ Accordion::next(lookup_args *la, lookup_ret *lr)
 	  LOC_HEALTHY, _fixed_stab_to);
   }
 
-  NDEBUG(4) << " KEY " << printID(la->key) << " from " << la->from.ip << " dead " << 
+  ADEBUG(4) << " KEY " << printID(la->key) << " from " << la->from.ip << " dead " << 
       (la->deadnodes.size()?la->deadnodes[0].ip:0) << " next " << (lr->v.size()>0?lr->v[0].ip:0) 
       << "," << printID((lr->v.size()?lr->v[0].id:0)) << 
       " succ " << succ.ip << "," << printID(succ.id) << 
@@ -708,7 +708,7 @@ Accordion::next_iter_cb(bool b, lookup_args *la, lookup_ret *lr)
       	loctable->update_ifexists(la->nexthop,0);
 	for (uint i = 0; i < lr->v.size(); i++)  
 	  loctable->add_node(lr->v[i]);
-      NDEBUG(4) << "next_iter_cb key " << printID(la->key) << "src " 
+      ADEBUG(4) << "next_iter_cb key " << printID(la->key) << "src " 
 	<< la->src.ip << " ori " << la->ori.ip << " from " << la->nexthop.ip
 	<< "," << printID(la->nexthop.id) << " learnsz " << la->learnsz << " learnt " << lr->v.size() << ": " 
 	<< print_succs(lr->v) << " outstanding " << outstanding << " locsz " 
@@ -744,7 +744,7 @@ Accordion::next_iter_cb(bool b, lookup_args *la, lookup_ret *lr)
 	if (di == d->end())
 	  d->push_back(la->nexthop);
       }
-      NDEBUG(4) << "next_iter_cb key " << printID(la->key) << "src " 
+      ADEBUG(4) << "next_iter_cb key " << printID(la->key) << "src " 
 	<< la->src.ip << " ori " << la->ori.ip << " from " << la->nexthop.ip
 	<< "," << printID(la->nexthop.id) << " DEAD " << (d?d->size():0) << endl;
 /*
@@ -834,12 +834,12 @@ Accordion::alert_lookup_nodes(ConsistentHash::CHID key, Time to)
 void
 Accordion::alert_nodes(alert_args *la, lookup_ret *lr)
 {
-  NDEBUG(4) << " alert_nodes key " << printID(la->k) << " " 
+  ADEBUG(4) << " alert_nodes key " << printID(la->k) << " " 
     << print_succs(la->v) << " " << 
     la->src.ip << " dead " << print_succs(la->d) << endl;
   for (uint i = 0; i < la->v.size(); i++) {
     if (la->v[i].ip == 0) 
-      NDEBUG(4) << " wierd " << endl;
+      ADEBUG(4) << " wierd " << endl;
     loctable->add_node(la->v[i]);
   }
 
@@ -888,13 +888,13 @@ Accordion::donelookup_handler(lookup_args *la, lookup_ret *lr)
   Time t = _outstanding_lookups.find(la->key);
   if (t) {
     if (lr->v.size() == 0) {
-      NDEBUG(2) << "done lookup key " << printID(la->key) << "from " 
+      ADEBUG(2) << "done lookup key " << printID(la->key) << "from " 
 	<< la->from.ip << "," << printID(la->from.id) << "failed " << endl;
       record_lookup_stat(_me.ip, la->from.ip, now()-t, false,false, 
 	  la->hops, la->to_num, la->to_lat);
     }else{
       bool b = check_pred_correctness(la->key, la->from);
-      NDEBUG(2) << "done lookup key " << printID(la->key) << "from " 
+      ADEBUG(2) << "done lookup key " << printID(la->key) << "from " 
       << la->from.ip << "," << printID(la->from.id) 
       << "succ " << lr->v.size() << " " << (lr->v.size()>0?lr->v[0].ip:0) << "," 
       << printID(lr->v.size()>0?lr->v[0].id:0) << "best " << 
@@ -953,7 +953,7 @@ Accordion::next_recurs(lookup_args *la, lookup_ret *lr)
   //if i have forwarded pkts for this key
   //and the packet is droppable
   if (_forwarded.find(la->src.id | la->key)) {
-    NDEBUG(3) << "next_recurs key " << printID(la->key) << "src " << 
+    ADEBUG(3) << "next_recurs key " << printID(la->key) << "src " << 
       la->src.ip << " ori " << la->ori.ip << " from " << la->from.ip 
       << " forwarded before no_drop? " << (la->no_drop?1:0) << endl;
     if (!la->no_drop) return;
@@ -966,7 +966,7 @@ Accordion::next_recurs(lookup_args *la, lookup_ret *lr)
   _lookup_times++;
 
   if (!succ.ip || succ.ip == _me.ip) {
-    NDEBUG(4) << "next_recurs not joined key " << printID(la->key) 
+    ADEBUG(4) << "next_recurs not joined key " << printID(la->key) 
       << "failed" << endl;
     if ((!_join_scheduled) || (now()-_join_scheduled) > 20000)
       delaycb(0,&Accordion::join, (Args *)0); //join again
@@ -986,7 +986,7 @@ Accordion::next_recurs(lookup_args *la, lookup_ret *lr)
     lookup_ret *llr = New lookup_ret;
     llr->done = true;
     llr->v = loctable->succs(_me.id+1,la->m);
-    NDEBUG(3) << "next_recurs key " << printID(la->key) << "src " << 
+    ADEBUG(3) << "next_recurs key " << printID(la->key) << "src " << 
       la->src.ip << " ori " << la->ori.ip << " from " << la->from.ip 
       << " no_drop? " << (la->no_drop?1:0) << " done succ " 
       << succ.ip << "," << printID(succ.id) 
@@ -1033,7 +1033,7 @@ Accordion::next_recurs(lookup_args *la, lookup_ret *lr)
     abort();
   }
 
-  NDEBUG(3) << "next_recurs " << printID(la->key) << " para " << para << " nsz " << nsz << ": " << print_succs(nexthops) << endl;
+  ADEBUG(3) << "next_recurs " << printID(la->key) << " para " << para << " nsz " << nsz << ": " << print_succs(nexthops) << endl;
   IDMap overshoot = loctable->succ(la->key);
   bool sent_success;
   uint i;
@@ -1057,7 +1057,7 @@ Accordion::next_recurs(lookup_args *la, lookup_ret *lr)
     lla->overshoot = (i>=1)?nexthops[i-1].id:la->key;
     lookup_ret *llr = New lookup_ret;
     llr->v.clear();
-    NDEBUG(3) << "next_recurs key " << printID(la->key) << " quota " << _rate_queue->quota() << " qsz " 
+    ADEBUG(3) << "next_recurs key " << printID(la->key) << " quota " << _rate_queue->quota() << " qsz " 
       << _rate_queue->size() << " locsz " << loctable->size(LOC_HEALTHY, ttt) 
       << " livesz " << loctable->live_size(ttt) 
       << " src " << la->src.ip << " ori " << la->ori.ip << " from " << la->from.ip << 
@@ -1096,7 +1096,7 @@ Accordion::next_recurs_cb(bool b, lookup_args *la, lookup_ret *lr)
 	vector<IDMap> oldlist = loctable->between(la->nexthop.id+1,lr->v[lr->v.size()-1].id);
 	consolidate_succ_list(la->nexthop,oldlist,lr->v,false);
 	vector<IDMap> newlist = loctable->between(la->nexthop.id+1,lr->v[lr->v.size()-1].id);
-	NDEBUG(4) << "next_recurs_cb After consolidate: " << print_succs(newlist) << endl;
+	ADEBUG(4) << "next_recurs_cb After consolidate: " << print_succs(newlist) << endl;
       } else {
 	loctable->update_ifexists(la->nexthop);
 	for (uint i = 0; i < lr->v.size(); i++)  {
@@ -1106,7 +1106,7 @@ Accordion::next_recurs_cb(bool b, lookup_args *la, lookup_ret *lr)
 	  loctable->add_node(lr->v[i]);
 	}
       }
-      NDEBUG(4) << "next_recurs_cb key " << printID(la->key) << "src " 
+      ADEBUG(4) << "next_recurs_cb key " << printID(la->key) << "src " 
 	<< la->src.ip << " ori " << la->ori.ip << " from " << la->nexthop.ip
 	<< "," << printID(la->nexthop.id) << " learnt " << lr->v.size() << ": " 
 	<< print_succs(lr->v) << " nodes is_succ " << (lr->is_succ?1:0) 
@@ -1114,7 +1114,7 @@ Accordion::next_recurs_cb(bool b, lookup_args *la, lookup_ret *lr)
 	<< loctable->size(LOC_HEALTHY,0.9) << " livesz " << loctable->live_size(0.9) << endl;
       ret_sz = PKT_SZ(2*lr->v.size(),0);
     } else {
-      NDEBUG(4) << "next_recurs_cb key " << printID(la->key) << "src " 
+      ADEBUG(4) << "next_recurs_cb key " << printID(la->key) << "src " 
 	<< la->src.ip << " nexthop " << la->nexthop.ip 
 	<< " dead " << (b?0:1) << endl;
       if (!b) 
@@ -1125,7 +1125,7 @@ Accordion::next_recurs_cb(bool b, lookup_args *la, lookup_ret *lr)
     if (outstanding) {
       if (b && la->no_drop) {
 	_forwarded_nodrop.remove(la->key|la->src.id);
-	NDEBUG(3) << "next_recurs_cb key " << printID(la->key) << "src " 
+	ADEBUG(3) << "next_recurs_cb key " << printID(la->key) << "src " 
 	  << la->src.ip << " ori " << la->ori.ip << " from "
 	  << la->nexthop.ip << "," << printID(la->nexthop.id) << "ori " << 
 	  la->ori.ip << " successfully forwarded nodrop" << endl;
@@ -1136,13 +1136,13 @@ Accordion::next_recurs_cb(bool b, lookup_args *la, lookup_ret *lr)
 	  la->no_drop = true;
 	  _forwarded_nodrop.remove(la->key|la->src.id);
 	  la->parallelism = 1;
-	  NDEBUG(3) << "next_recurs_cb key " << printID(la->key) << "src " 
+	  ADEBUG(3) << "next_recurs_cb key " << printID(la->key) << "src " 
 	    << la->src.ip << " ori " << la->ori.ip << " from "
 	    << la->nexthop.ip << "," << printID(la->nexthop.id) << "ori " << 
 	    la->ori.ip << (b?" live":" dead") << " restransmit" << endl;
 	  next_recurs(la,lr);
        } else {
-	 NDEBUG(3) << "next_recurs_cb key " << printID(la->key) << "src " 
+	 ADEBUG(3) << "next_recurs_cb key " << printID(la->key) << "src " 
 	   << la->src.ip << " ori " << la->ori.ip << " from "
 	   << la->nexthop.ip << "," << printID(la->nexthop.id) << "ori " << 
 	   la->ori.ip << (b?" live":" dead") << " outstanding " << (outstanding-1) << endl; 
@@ -1150,12 +1150,12 @@ Accordion::next_recurs_cb(bool b, lookup_args *la, lookup_ret *lr)
        }
     }else {
       if (succ.ip == la->nexthop.ip && (!b)) {
-	NDEBUG(3) << "next_recurs_cb key " << printID(la->key) << "src " 
+	ADEBUG(3) << "next_recurs_cb key " << printID(la->key) << "src " 
 	  << la->src.ip << " ori " << la->ori.ip << " new succ emerged " << endl;
 	la->no_drop = true;
 	next_recurs(la,lr);
       } else
-	NDEBUG(3) << "next_recurs_cb key " << printID(la->key) << "src " 
+	ADEBUG(3) << "next_recurs_cb key " << printID(la->key) << "src " 
 	  << la->src.ip << " ori " << la->ori.ip << " from "
 	  << la->nexthop.ip << "," << printID(la->nexthop.id) << "ori " << 
 	  la->ori.ip << (b?" live":" dead") << " dont care" << (outstanding-1) << endl; 
@@ -1193,7 +1193,7 @@ Accordion::fix_pred(void *a)
   gpa->src = _me;
   gpa->src.alivetime = now()-_last_joined_time;
   gpr->v.clear();
-  NDEBUG(3) << " fix_pred " << pred.ip << "," << printID(pred.id) 
+  ADEBUG(3) << " fix_pred " << pred.ip << "," << printID(pred.id) 
     << " quota " << _rate_queue->quota() << endl;
   _rate_queue->do_rpc(pred.ip, &Accordion::get_predsucc_handler,
       &Accordion::fix_pred_cb, gpa, gpr, 0, TYPE_FIXPRED_UP, PKT_SZ(0,1), PKT_SZ(2,1),
@@ -1206,7 +1206,7 @@ Accordion::fix_pred_cb(bool b, get_predsucc_args *gpa, get_predsucc_ret *gpr)
   int ret_sz = 0;
   if (alive()) {
     gpa->n.timestamp = now();
-    NDEBUG(4) << "fix_pred_cb pred " << gpa->n.ip << (b?" alive":" dead") << endl;
+    ADEBUG(4) << "fix_pred_cb pred " << gpa->n.ip << (b?" alive":" dead") << endl;
     if (b) {
       ret_sz = PKT_SZ(2,0);
       loctable->update_ifexists(gpa->n);
@@ -1230,7 +1230,7 @@ Accordion::fix_succ(void *a)
   IDMap succ = loctable->succ(_me.id+1, LOC_DEAD-1);
 
   if (succ.ip == 0) {
-    NDEBUG(1) << "fix_succ locsz " << loctable->size() 
+    ADEBUG(1) << "fix_succ locsz " << loctable->size() 
       << " reschedule join" << endl;
     if ((!_join_scheduled) || (now()-_join_scheduled) > 20000)
       delaycb(200, &Accordion::join, (Args *)0);
@@ -1250,7 +1250,7 @@ Accordion::fix_succ(void *a)
   else
     gpa->m= _nsucc;
 
-  NDEBUG(2) << "fix_succ succ " << succ.ip << "," << printID(succ.id) << endl;
+  ADEBUG(2) << "fix_succ succ " << succ.ip << "," << printID(succ.id) << endl;
   _rate_queue->do_rpc(succ.ip, &Accordion::get_predsucc_handler,
 	&Accordion::fix_succ_cb, gpa,gpr, 0, TYPE_FIXSUCC_UP, PKT_SZ(0,1), PKT_SZ(2*gpa->m,0),
 	TIMEOUT(_me.ip,succ.ip));
@@ -1278,7 +1278,7 @@ Accordion::fix_succ_cb(bool b, get_predsucc_args *gpa, get_predsucc_ret *gpr)
   int ret_sz = 0;
   if (alive()) {
     vector<IDMap> scs = loctable->succs(_me.id + 1, _nsucc);
-    NDEBUG(3) << "fix_succ_cb get " << gpr->v.size() << " succs, old succ " << gpa->n.ip << "," 
+    ADEBUG(3) << "fix_succ_cb get " << gpr->v.size() << " succs, old succ " << gpa->n.ip << "," 
       << printID(gpa->n.id) << (b?" alive":" dead") 
       << " succsz " << scs.size() << "(" << print_succs(scs) 
       << ")" << endl;
@@ -1298,7 +1298,7 @@ Accordion::fix_succ_cb(bool b, get_predsucc_args *gpa, get_predsucc_ret *gpr)
 	_est_n = ((ConsistentHash::CHID)-1)/ConsistentHash::distance(_me.id,newscs[newscs.size()-1].id);
 	_est_n = newscs.size()*_est_n;
       }
-      NDEBUG(3) << "fix_succ_cb pred " << gpr->pred.ip << " new succ " << (newscs.size()>0?newscs[0].ip:0) << "," << 
+      ADEBUG(3) << "fix_succ_cb pred " << gpr->pred.ip << " new succ " << (newscs.size()>0?newscs[0].ip:0) << "," << 
 	(newscs.size()>0?printID(newscs[0].id):"??") << " succsz " << newscs.size() << "(" <<
 	print_succs(newscs) << ")" << " retsz " << ret_sz << " newsz " << gpr->v.size() <<  " est_n " << _est_n << endl;
 
@@ -1383,7 +1383,7 @@ Accordion::consolidate_succ_list(IDMap n, vector<IDMap> oldlist, vector<IDMap> n
   }
   if (is_succ) {
     vector<IDMap> updated = loctable->succs(_me.id+1,_nsucc);
-    NDEBUG(4) << "consolidate fix_succ : old (" <<print_succs(oldlist) << ") new: ("
+    ADEBUG(4) << "consolidate fix_succ : old (" <<print_succs(oldlist) << ") new: ("
       << print_succs(newlist) << ") updated (" << print_succs(updated)
       << ")" << endl;
   }
@@ -1404,7 +1404,7 @@ Accordion::empty_queue(void *a)
   IDMap succ = loctable->succ(_me.id+1);
   if (!succ.ip){
     if (!_join_scheduled || (now()-_join_scheduled)>20000) {
-      NDEBUG(4) << "empty_queue locsz " << loctable->size() 
+      ADEBUG(4) << "empty_queue locsz " << loctable->size() 
 	<< " reschedule join" << endl;
       delaycb(0,&Accordion::join,(Args *)0);
     }
@@ -1434,7 +1434,7 @@ Accordion::empty_queue(void *a)
   }
 
   if (askwhom.ip == _me.ip || !askwhom.ip) {
-    NDEBUG(4) << "nothing to learn oldest " << oldest << " locsz " << loctable->size() << endl;
+    ADEBUG(4) << "nothing to learn oldest " << oldest << " locsz " << loctable->size() << endl;
     return;
   }
 
@@ -1454,7 +1454,7 @@ Accordion::empty_queue(void *a)
   la->start = pred;
   la->end = next;
 
-  NDEBUG(2) << "empty_queue quota " << _rate_queue->quota() << " succsz " << loctable->succ_size() 
+  ADEBUG(2) << "empty_queue quota " << _rate_queue->quota() << " succsz " << loctable->succ_size() 
     << " locsz " << loctable->size() << " livesz " 
     << loctable->live_size() << " locsz_used " 
     << loctable->size(LOC_HEALTHY,_tt) << " livesz_used " << loctable->live_size(_tt)
@@ -1504,7 +1504,7 @@ Accordion::learn_handler(learn_args *la, learn_ret *lr)
       }
     }
   }
-  NDEBUG(4) << "learn_handler from src " << la->src.ip << " is_succ " 
+  ADEBUG(4) << "learn_handler from src " << la->src.ip << " is_succ " 
     << lr->is_succ << " nodes " << print_succs(lr->v) << endl;
 }
 
@@ -1537,7 +1537,7 @@ Accordion::learn_cb(bool b, learn_args *la, learn_ret *lr)
 	  consolidate_succ_list(la->n,oldlist,lr->v,false);
 	  if (p2psim_verbose) {
 	    vector<IDMap> newlist = loctable->between(la->n.id+1,lr->v[lr->v.size()-1].id);
-	    NDEBUG(4) << "learn_cb After consolidate " << la->n.ip << "," << la->n.alivetime << " : " << print_succs(newlist) << endl;
+	    ADEBUG(4) << "learn_cb After consolidate " << la->n.ip << "," << la->n.alivetime << " : " << print_succs(newlist) << endl;
 	  }
 	}
       } else {
@@ -1555,7 +1555,7 @@ Accordion::learn_cb(bool b, learn_args *la, learn_ret *lr)
 	  }
 	}
       }
-      NDEBUG(4) << "learn_cb quota " << _rate_queue->quota() << " locsz " 
+      ADEBUG(4) << "learn_cb quota " << _rate_queue->quota() << " locsz " 
 	<< loctable->size(LOC_HEALTHY) << " usedsz " << loctable->size(LOC_HEALTHY,la->timeout)
 	<<  " to " << la->timeout << " livesz " << loctable->live_size(la->timeout) 
 	<< " learn_cb " << la->m 
@@ -1568,7 +1568,7 @@ Accordion::learn_cb(bool b, learn_args *la, learn_ret *lr)
       ret_sz = PKT_SZ(2*lr->v.size()+1,0);
     }else{
       loctable->del_node(la->n); //XXX: should not delete a finger after one failure
-      NDEBUG(4) << " learn_cb quota " << _rate_queue->quota() << " node " << la->n.ip 
+      ADEBUG(4) << " learn_cb quota " << _rate_queue->quota() << " node " << la->n.ip 
 	<< "," << printID(la->n.id)<< "," << (now()-la->n.timestamp) << "," << la->n.alivetime << "," <<
 	(double)(la->n.alivetime)/(double)(now()-la->n.timestamp+la->n.alivetime) << " dead " << (b?0:1)
 	<< " locsz " << loctable->size(LOC_HEALTHY,la->timeout) << " livesz " << loctable->live_size(la->timeout) << endl;
@@ -1620,7 +1620,7 @@ Accordion::check_pred_correctness(ConsistentHash::CHID k, IDMap n)
   if ((ids[pos].ip == n.ip) || (!Network::Instance()->alive(n.ip)))
     return true;
   else {
-    NDEBUG(4) << "key " << printID(k) << "wrong " << n.ip << "," 
+    ADEBUG(4) << "key " << printID(k) << "wrong " << n.ip << "," 
       << printID(n.id) << "right " << ids[pos].ip << "," << 
       printID(ids[pos].id) << endl;
     return false;
@@ -1644,7 +1644,7 @@ Accordion::adjust_parallelism()
 
     unsigned long b = Node::collect_stat()?Node::get_out_bw_stat():0;
 
-    NDEBUG(4) << "adjust_parallelism from " << old_p
+    ADEBUG(4) << "adjust_parallelism from " << old_p
       << " to " << _parallelism << " empty_times " << _empty_times << " lookup_times " 
       << _lookup_times << " bytes " << (b-_last_bytes) << " time " 
       << now()-_last_bytes_time << endl;
@@ -1749,7 +1749,7 @@ Accordion::adjust_timeout()
       new_prob[p] = tt;
   }
   _last_calculated = now();
-  NDEBUG(4) << "estimated timeout " << _calculated_prob[1] << endl;
+  ADEBUG(4) << "estimated timeout " << _calculated_prob[1] << endl;
   if (_calculated_prob[1] > 0.99) {
     printf("sort_live %u:  ",lsz);
     for (uint i = 0; i < sort_live.size(); i++) 

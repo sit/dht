@@ -364,7 +364,7 @@ Node::record_crash()
       if ((_special) && (_special < 4)){
 	Node::_special_node_out[_special-1].push_back((double)1000.0*node_live_outbytes/(double)duration);
 	Node::_special_node_in[_special-1].push_back((double)1000.0*node_live_inbytes/(double)duration);
-	NDEBUG(4) << "special crashed IN: " << node_live_inbytes << " OUT: " 
+	ADEBUG(4) << "special crashed IN: " << node_live_inbytes << " OUT: " 
 	  << node_live_outbytes << " DURATION: " << duration << " AVG_IN: " 
 	  << ((double)1000.0*node_live_outbytes/(double)duration)
 	  << " AVG_OUT: " << ((double)1000.0*node_live_inbytes/(double)duration) << endl;

@@ -88,7 +88,6 @@ RateControlQueue::send_one_rpc(void *x)
       _node->record_bw_stat(qe->_type,0,sz-PKT_OVERHEAD);
       Node::record_inout_bw_stat(qe->_dst,_node->ip(),0,sz-PKT_OVERHEAD);
     }
-    assert((_total_bytes + _quota) < (now()-_start_time)*_rate);
   }
   QDEBUG(5) << " (send_rpc) adding " << (qe->_rsz-sz) << " from old value " << oldq << endl;
   qe->_killme(qe->_t);

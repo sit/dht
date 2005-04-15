@@ -1077,7 +1077,7 @@ if( defined $epsfile ) {
     print GP "set terminal postscript eps color $fontsize\n";
     print GP "set output \"$colorepsfile\"\n";
 }elsif (defined $pngfile) {
-    print GP "set terminal png color medium\n";
+    print GP "set terminal png size 400,300\n";
     print GP "set output \"$pngfile\"\n";
 } else {
     print GP "set terminal postscript color $fontsize\n";

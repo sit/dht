@@ -276,6 +276,6 @@ protected:
   IPAddress _prev_ip;
 };
 
-#define NDEBUG(x) if(p2psim_verbose >= (x)) cout << header() 
+#define ADEBUG(x) if(p2psim_verbose >= (x)) cout << header() 
 
 #endif // __PROTOCOL_H
