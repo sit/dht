@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003-2005 [Jinyang Li]
+ * Copyright (c) 2003-2005 Jinyang Li
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
