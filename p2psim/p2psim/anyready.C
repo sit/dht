@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 Russ Cox
+ * Copyright (c) 2003-2005 Russ Cox
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining

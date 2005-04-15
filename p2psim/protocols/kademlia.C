@@ -1,6 +1,6 @@
 // {{{ headers
 /*
- * Copyright (c) 2003 Thomer M. Gil
+ * Copyright (c) 2003-2005 Thomer M. Gil
  *                    Massachusetts Institute of Technology
  *
  * Permission is hereby granted, free of charge, to any person obtaining

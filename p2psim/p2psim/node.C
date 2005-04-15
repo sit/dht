@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 Thomer M. Gil (thomer@csail.mit.edu),
+ * Copyright (c) 2003-2005 Thomer M. Gil (thomer@csail.mit.edu),
  *                    Robert Morris (rtm@csail.mit.edu).
  *                    Massachusetts Institute of Technology
  * 

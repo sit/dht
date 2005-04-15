@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 Robert Morris, Frank Dabek (rtm, fdabek)@mit.edu
+ * Copyright (c) 2003-2005 Robert Morris, Frank Dabek (rtm, fdabek)@mit.edu
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining

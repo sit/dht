@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 Jeremy Stribling (strib@mit.edu)
+ * Copyright (c) 2003-2005 Jeremy Stribling (strib@mit.edu)
  *                    Thomer M. Gil (thomer@csail.mit.edu)
  *                    Massachusetts Institute of Technology
  * 

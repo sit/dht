@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 Jeremy Stribling
+ * Copyright (c) 2003-2005 Jeremy Stribling
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: tapestry.C,v 1.55 2004/07/04 19:33:31 strib Exp $ */
+/* $Id: tapestry.C,v 1.56 2005/04/15 20:51:30 thomer Exp $ */
 #include "tapestry.h"
 #include "p2psim/network.h"
 #include <stdio.h>

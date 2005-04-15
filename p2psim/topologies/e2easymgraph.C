@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2003 Steve Gerding
+* Copyright (c) 2003-2005 Steve Gerding
 *                    Jeremy Stribling
 *					Massachusetts Institute of Technology
 *

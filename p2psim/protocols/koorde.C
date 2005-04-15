@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [Frans Kaashoek]
+ * Copyright (c) 2003-2005 [Frans Kaashoek]
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining

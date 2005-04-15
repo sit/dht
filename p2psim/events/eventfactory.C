@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003-2005 Thomer M. Gil (thomer@csail.mit.edu)
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -57,9 +57,6 @@ EventFactory::create(string type, vector<string> *v)
   else if(type == "simulator")
     e = New SimEvent(v);
 
-  // else if(type == "observe")
-    // e = New OldobserveEvent(v);
-  
   else
     cerr << "unknown event type" << endl;
 

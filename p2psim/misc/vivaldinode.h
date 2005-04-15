@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 Frank Dabek (fdabek@mit.edu)
+ * Copyright (c) 2003-2005 Frank Dabek (fdabek@mit.edu)
  *                    Robert Morris (rtm@csail.mit.edu).
  *                    Massachusetts Institute of Technology
  * 

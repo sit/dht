@@ -4,7 +4,7 @@ g++ -c vis_viv.C -I /usr/local/include -I /usr/X11R6/include/gtk-2.0/ -I /usr/lo
 
 gcc -o vis vis_viv.o -L/usr/X11R6/lib -lgdk-x11-2.0 -lstdc++ -lgtk-x11-2.0
 
- * Copyright (c) 2003 Frank to Frank (via Emil and Frans)
+ * Copyright (c) 2003-2005 Frank to Frank (via Emil and Frans)
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining

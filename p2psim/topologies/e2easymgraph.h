@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003-2005 Jeremy Stribling
  *                    Massachusetts Institute of Technology
  *
  * Permission is hereby granted, free of charge, to any person obtaining

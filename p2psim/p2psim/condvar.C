@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 Russ Cox
+ * Copyright (c) 2003-2005 Russ Cox
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -22,7 +22,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* $Id: condvar.C,v 1.8 2004/02/24 17:15:39 rsc Exp $ */
+/* $Id: condvar.C,v 1.9 2005/04/15 20:51:26 thomer Exp $ */
 
 #include "condvar.h"
 using namespace std;

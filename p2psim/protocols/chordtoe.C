@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [Frank Dabek]
+ * Copyright (c) 2003-2005 [Frank Dabek]
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003 [NAMES_GO_HERE]
+ * Copyright (c) 2003-2005 Thomer M. Gil (thomer@csail.mit.edu)
  *                    Massachusetts Institute of Technology
  * 
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -47,8 +47,6 @@ SimEvent::execute()
   if(_op == "exit") {
     DEBUG(1) << "simulation exits at the end of cycle " << now() << "." << endl;
     ThreadManager::Instance()->create(&::graceful_exit, (void *)0);
-    //i like ugly exit
-    //exit(1);
   } else
     cerr << "SimEvent::execute(): unknown op " << _op << "\n";
 }
