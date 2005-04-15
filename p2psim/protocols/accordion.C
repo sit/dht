@@ -23,6 +23,7 @@
  *
  */
 #include "accordion.h"
+#include "ratecontrolqueue.h"
 #include <math.h>
 #include <stdio.h>
 #include <assert.h>

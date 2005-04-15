@@ -4,7 +4,7 @@
 
 bool operator< (const q_elm& a, const q_elm& b) { return (b._priority < a._priority); }
 
-RateControlQueue::RateControlQueue(Node *n, double rate, int burst, Time fixed_stab, void (*fn)(void *))
+RateControlQueue::RateControlQueue(Accordion *n, double rate, int burst, Time fixed_stab, void (*fn)(void *))
 {
   _node = n;
   _rate = rate/1000.0;
@@ -116,3 +116,28 @@ RateControlQueue::stop_queue()
   _last_out = 0;
   _outquota = 0;
 }
+
+
+bool
+RateControlQueue::very_critical() { 
+  //return false;
+  if (_fixed_stab)
+    return false;
+  if (_last_out_update) {
+    _outquota += ((int) ((now() - _last_out_update)*_rate));
+    _outquota -= (_node->total_outbytes()-_last_out);
+    if (_outquota < 6*_burst) 
+      _outquota = 6 * _burst;
+    _last_out = _node->total_outbytes();
+    _last_out_update= now();
+    if (_outquota <= 3*_burst) 
+      return true;
+    else
+      return false;
+  }else{
+    _last_out_update= now();
+    _last_out = _node->total_outbytes();
+    return false;
+  }
+}
+

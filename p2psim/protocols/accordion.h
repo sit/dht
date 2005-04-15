@@ -27,9 +27,7 @@
 
 #include "p2psim/bighashmap.hh"
 #include "chord.h"
-#include "ratecontrolqueue.h"
-
-//#define PKT_SZ(ids,others) (PKT_OVERHEAD + 4 * ids + others)
+class RateControlQueue;
 
 
 typedef Chord::IDMap IDMap;
@@ -153,6 +151,17 @@ class Accordion: public P2Protocol {
     static vector<double> sort_live;
     static vector<double> sort_dead;
     static vector<double> min_bw;
+
+    // to allow RateControlQueue to access protected members of Node
+    template<class BT, class AT>
+      void delaycb(int d, void (BT::*fn)(AT), AT args, BT *target = NULL) {
+        P2Protocol::delaycb(d, fn, args, target);
+      }
+
+    // to allow RateControlQueue to access protected members of Node
+    bool _doRPC(IPAddress dst, void (*fn)(void *), void *args, Time timeout) {
+      P2Protocol::_doRPC(dst, fn, args, timeout);
+    }
 
   protected:
     IDMap _me;

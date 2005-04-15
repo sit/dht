@@ -93,7 +93,7 @@ public:
 
   IPAddress first_ip() { return _first_ip; }
 
-//protected: thomer will kill jy
+protected:
   typedef set<unsigned> RPCSet;
 
   // stats

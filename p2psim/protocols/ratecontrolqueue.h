@@ -1,7 +1,7 @@
 #ifndef RATECONTROL_QUEUE__
 #define RATECONTROL_QUEUE__
 
-#include "p2psim/node.h"
+#include "protocols/accordion.h"
 #include <algorithm>
 #include <queue>
 
@@ -50,7 +50,7 @@ class RateControlQueue {
 
   public:
 
-    RateControlQueue(Node *, double, int, Time, void (*fn)(void *));
+    RateControlQueue(Accordion *, double, int, Time, void (*fn)(void *));
 
     template<class BT, class AT, class RT>
     bool do_rpc(IPAddress dst, void (BT::* fn)(AT *, RT *), int (BT::* cb)(bool b, AT *, RT *), 
@@ -136,6 +136,7 @@ class RateControlQueue {
     int quota() { return _quota;}
     uint total_bytes() { return _total_bytes;}
     uint size() { return _qq.size();}
+
     bool critical() { 
       if (_fixed_stab) {
 	return false;
@@ -144,30 +145,12 @@ class RateControlQueue {
       }else 
 	return false;
     }
-    bool very_critical() { 
-      //return false;
-      if (_fixed_stab)
-	return false;
-      if (_last_out_update) {
-	_outquota += ((int) ((now() - _last_out_update)*_rate));
-	_outquota -= (_node->total_outbytes()-_last_out);
-	if (_outquota < 6*_burst) 
-	  _outquota = 6 * _burst;
-	_last_out = _node->total_outbytes();
-	_last_out_update= now();
-	if (_outquota <= 3*_burst) 
-	  return true;
-	else
-	  return false;
-      }else{
-	_last_out_update= now();
-	_last_out = _node->total_outbytes();
-	return false;
-      }
-    }
+    bool very_critical();
+
+
    protected :
     void (*_empty_cb)(void *);
-    Node *_node;
+    Accordion *_node;
     int _burst;
 
     uint _last_out;

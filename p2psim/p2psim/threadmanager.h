@@ -33,7 +33,7 @@ public:
   static ThreadManager* Instance();
   ~ThreadManager();
 
-  int create(void (*)(void*), void*, int ss = 2*DEFAULT_THREAD_STACKSIZE);
+  int create(void (*)(void*), void*, int ss = DEFAULT_THREAD_STACKSIZE);
 
 private:
   ThreadManager();
