@@ -39,7 +39,7 @@
 #include "tmgdmalloc.h"
 
 // multiply per-thread stack size by ...
-#define DEFAULT_THREAD_STACKSIZE 4096
+#define DEFAULT_THREAD_STACKSIZE 8192
 #define THREAD_MULTIPLY 2
 
 extern unsigned p2psim_verbose;
