@@ -8,6 +8,7 @@ extern "C" {
 #endif
 
 #include <stdarg.h>
+#include <unistd.h>	/* prototype yield before we re-#define it */
 
 /*
  * basic procs and threads
