@@ -4,6 +4,7 @@
 #include "protocols/accordion.h"
 #include <algorithm>
 #include <queue>
+#include <iostream>
 
 #define QDEBUG(x) if(p2psim_verbose>=(x)) cout << _node->header() << " qsz " << _qq.size() << " q " << _quota << " last " << _last_update << " total " << _total_bytes
 #define DROPABLE_PRIORITY 3

@@ -313,7 +313,7 @@ class _HashMap_iterator<K, void *> : public _HashMap_const_iterator<K, void *> {
 
   typedef _HashMap_const_iterator<K, void *> inherited;
   
-  void *&value() const			{ return _elt->value; }
+  void *&value() const			{ return this->_elt->value; }
 
  private:
 
@@ -464,7 +464,7 @@ class _HashMap_iterator<K, T *> : public _HashMap_const_iterator<K, T *> { publi
 
   typedef _HashMap_const_iterator<K, T *> inherited;
 
-  T *&value() const	{ return reinterpret_cast<T *&>(_elt->value); }
+  T *&value() const	{ return reinterpret_cast<T *&>(this->_elt->value); }
 
  private:
   
