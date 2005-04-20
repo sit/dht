@@ -146,9 +146,12 @@ doRPCcb (chordID ID, xdrproc_t outproc, dorpc_res *res, void *out, aclnt_cb cb, 
 {
   f_node *nu = nodes[ID];
 
-  if (!nu) return;
   // If we've already removed a node, then there's no reason to even
   // notify the cb of anything in this program.
+  if (!nu) {
+    delete res;
+    return;
+  }
   
   if (err || res->status == DORPC_UNKNOWNNODE) {
     if (!err) warn << "status: " << res->status << "\n";
@@ -158,12 +161,15 @@ doRPCcb (chordID ID, xdrproc_t outproc, dorpc_res *res, void *out, aclnt_cb cb, 
     sprintf (nodess, "%d nodes", nodes.size ());
     gtk_label_set_text (GTK_LABEL (total_nodes), nodess);
     delete nu;
+    delete res;
     return;
   }
 
   // Don't have good results here, so just ignore it.
-  if (res->status != DORPC_OK)
+  if (res->status != DORPC_OK) {
+    delete res;
     return;
+  }
   
   nu->coords.clear ();
   for (unsigned int i = 0; i < 3; i++)
@@ -177,7 +183,7 @@ doRPCcb (chordID ID, xdrproc_t outproc, dorpc_res *res, void *out, aclnt_cb cb, 
   } else 
     cb (err);
 
-
+  delete res;
 }
 
 void
