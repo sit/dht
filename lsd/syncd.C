@@ -5,11 +5,40 @@
 #include <syncer.h>
 #include <location.h>
 #include <locationtable.h>
+#include <modlogger.h>
+
+static char *logfname;
+
+static void
+halt ()
+{
+  warnx << "Exiting on command.\n";
+  exit (0);
+}
+
+void
+start_logs ()
+{
+  static int logfd (-1);
+  // XXX please don't call setlogfd or change errfd anywhere else...
+
+  if (logfname) {
+    if (logfd >= 0)
+      close (logfd);
+    logfd = open (logfname, O_RDWR | O_CREAT, 0666);
+    if (logfd < 0)
+      fatal << "Could not open log file " << optarg << " for appending.\n";
+    lseek (logfd, 0, SEEK_END);
+    errfd = logfd;
+    modlogger::setlogfd (logfd);
+  }
+}
 
 static void
 usage () 
 {
   warnx << "Usage: " << progname << " -j hostname:port\n"
+        << "\t[-L logfilename]\n"
         << "\t[-v <number of vnodes>]\n"
         << "\t[-d <dbprefix>]\n"
         << "\t[-e <efrags>]\n"
@@ -21,7 +50,6 @@ int
 main (int argc, char **argv) 
 {
   str db_name = "/var/tmp/db";
-  char *logfname = NULL;
   int vnodes = 1;
   int efrags = 14, dfrags = 7;
   char ch;
@@ -32,22 +60,16 @@ main (int argc, char **argv)
   setprogname (argv[0]);
   random_init ();
   
-  while ((ch = getopt (argc, argv, "d:S:v:e:c:p:t:j:"))!=-1)
+  while ((ch = getopt (argc, argv, "c:d:e:j:L:v:t"))!=-1)
     switch (ch) {
+    case 'c':
+      dfrags = atoi  (optarg);
+      break;
     case 'd':
       db_name = optarg;
       break;
-    case 'L':
-      logfname = optarg;
-      break;
-    case 'v':
-      vnodes = atoi (optarg);
-      break;
     case 'e':
       efrags = atoi (optarg);
-      break;
-    case 'c':
-      dfrags = atoi  (optarg);
       break;
     case 'j':
       {
@@ -73,6 +95,15 @@ main (int argc, char **argv)
 	*sep = ':'; // restore optarg for argv printing later.
 	break;
       }
+    case 'L':
+      logfname = optarg;
+      break;
+    case 'v':
+      vnodes = atoi (optarg);
+      break;
+    case 't':
+      modlogger::setmaxprio (modlogger::TRACE);
+      break;
      
     default:
       usage ();
@@ -82,8 +113,14 @@ main (int argc, char **argv)
   if (! (dfrags > 0 && efrags > 0 && host.r.port > 0))
     usage ();
 
+  start_logs ();
+
   Configurator::only ().set_int ("dhash.dfrags", dfrags);
   Configurator::only ().set_int ("dhash.efrags", efrags);
+
+  sigcb(SIGHUP, wrap (&start_logs));
+  sigcb(SIGINT, wrap (&halt));
+  sigcb(SIGTERM, wrap (&halt));
 
   ptr<locationtable> locations = New refcounted<locationtable> (1024);
   
