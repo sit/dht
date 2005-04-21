@@ -489,6 +489,7 @@ main (int argc, char **argv)
   sigcb(SIGUSR2, wrap (&stop));
   sigcb(SIGHUP, wrap (&start_logs));
   sigcb(SIGINT, wrap (&halt));
+  sigcb(SIGTERM, wrap (&halt));
 
   int nmodes = sizeof (modes)/sizeof(modes[0]);
     
