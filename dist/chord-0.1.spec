@@ -1,22 +1,31 @@
 # Spec file for Chord
 
-Summary: Chord -- a distributed hash table
+Summary: Chord/DHash -- a distributed hash table
 Name: chord
 Version: 0.1
 Release: 3
 Copyright: BSD 
 Group: Applications/Internet
-Source: http://www.pdos.lcs.mit.edu/~fdabek/chord-0.1.tar.gz
-URL: http://www.pdos.lcs.mit.edu/chord/
-Packager: Chord developers (chord@pdos.lcs.mit.edu)
+Source: http://pdos.csail.mit.edu/~fdabek/chord-0.1.tar.gz
+URL: http://pdos.csail.mit.edu/chord/
+Packager: Chord developers (chord@pdos.csail.mit.edu)
 BuildRoot: %{_tmppath}/%{name}-%{version}-buildroot
-Requires: sfs >= 0.7.1, db4 >= 4.0
-BuildRequires: sfs >= 0.7.1
+Requires: sfs >= 0.8, db4 >= 4.0
+BuildRequires: sfs >= 0.8, db4 >= 4.0
 
 %description
 Chord and DHash are building blocks for developing distributed applications.
 Chord and DHash together provide a distributed hash table implementation.
 This package also includes the UsenetDHT server.
+
+%package vis
+Summary: Chord visualization utilities
+Group: Applications/Internet
+
+%description vis
+Chord and DHash are building blocks for developing distributed applications.
+This package provides the X11/Gtk visualizer.
+
 
 %prep
 %setup -q
@@ -52,10 +61,8 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/sfsrodb
 %{_bindir}/syncd
 %{_bindir}/usenet
-%{_bindir}/usenetlsdmon.py
 %{_bindir}/udbctl
 %{_bindir}/walk
-%{_bindir}/vis
 %{_includedir}/chord-%{version}/chord_types.x
 %{_includedir}/chord-%{version}/dhash_types.x
 %{_includedir}/chord-%{version}/dhashgateway_prot.x
@@ -65,10 +72,17 @@ rm -rf $RPM_BUILD_ROOT
 %{_datadir}/chord-%{version}/dhash_types.py
 %{_datadir}/chord-%{version}/RPCProto.py
 %{_datadir}/chord-%{version}/RPC.py
+
+%files vis
+%{_bindir}/vis
+%{_bindir}/usenetlsdmon.py
 %{_datadir}/chord-%{version}/vischat.py
 
 
 %changelog
+* Thu Apr 21 2005 Emil Sit <sit@mit.edu>
+- vis package
+
 * Thu Mar 10 2005 Emil Sit <sit@mit.edu>
 - syncd!
 
