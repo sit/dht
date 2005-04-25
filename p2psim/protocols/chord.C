@@ -1178,6 +1178,7 @@ Chord::next_recurs_handler(next_recurs_args *args, next_recurs_ret *ret)
 	for (uint i = 0; i < ret->path.size(); i++) {
 	  printf("(%u,%qx,%u) ", ret->path[i].n.ip, ret->path[i].n.id, ret->path[i].tout);
 	}
+	printf("\n");
 	if (_recurs_direct) {
 	  ret->finish_time = now(); //not correct, but what the heck
 	}

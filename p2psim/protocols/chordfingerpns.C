@@ -400,7 +400,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
   if (!alive()) return;
   vector<IDMap> scs = loctable->succs(me.id + 1, _nsucc);
 
-  CDEBUG(3) << "fix_pns_fingers start sz " << loctable->size() << endl;
+  CDEBUG(3) << "fix_pns_fingers start sz " << loctable->size() << " scs " << scs.size() << endl;
 
   uint dead_finger = 0;
   uint missing_finger = 0;
@@ -437,7 +437,7 @@ ChordFingerPNS::fix_pns_fingers(bool restart)
     lap = lap/_base;
     for (uint j = (_base-1); j >= 1; j--) {
       finger = lap * j + me.id;
-      if ((ConsistentHash::betweenrightincl(me.id,finger+lap,scs[scs.size()-1].id)) 
+      if ((ConsistentHash::betweenrightincl(me.id,scs[scs.size()-1].id,finger+lap)) 
 	  || (!lap) || (!alive()))
 	goto PNS_DONE;
       currf = loctable->succ(finger);
