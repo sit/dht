@@ -85,6 +85,10 @@ Node::Node(IPAddress i) : _queue_len(0), _ip(i), _alive(true), _token(1)
   //node_live_bytes = 0;
   node_live_inbytes = 0;
   node_live_outbytes = 0;
+  node_lastburst_live_outbytes = 0;
+  node_lastburst_live_inbytes = 0;
+  node_last_inburstime = node_last_outburstime = join_time;
+
 }
 
 Node::~Node()
