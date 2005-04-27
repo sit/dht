@@ -15,4 +15,9 @@ EXTRA_DIST = Makefile.incl ../utils/skiplist.h \
 	    example/kelips_args \
 	    example/koorde_args \
 	    example/onehop_args \
-	    scripts/run-simulations.pl
+	    scripts/run-simulations.pl \
+	    scripts/merge-stats.pl \
+	    scripts/avg-stats.pl \
+	    scripts/find_convexhull.py \
+	    scripts/convexhull.py \
+	    scripts/make-graph.pl 
