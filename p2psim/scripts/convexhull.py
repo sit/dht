@@ -15,6 +15,7 @@ Usage:
     convexhull.py <numPoints> <squareLength> <outFile>
 
 Dinu C. Gherman
+Downloaded originally from: http://starship.python.net/~gherman/Playground.html
 Modified by Jeremy Stribling
 """
 
