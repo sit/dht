@@ -2,7 +2,7 @@
 
 use strict;
 
-my $BUILD_ROOT = $ENV{BUILD_ROOT} || "$ENV{HOME}/build/sfsnet/devel";
+my $BUILD_ROOT = $ENV{BUILD_ROOT} || "$ENV{HOME}/build/sfsnet";
 my @node_ids;
 my %key_to_nodes;
 my %present;
@@ -19,7 +19,7 @@ my $op = shift || die $usage;
 
 
 for (my $i = 0; $i < $maxvnode; $i++) {
-    open NQ, "$BUILD_ROOT/nodeq $host $port $i|";
+    open NQ, "$BUILD_ROOT/devel/nodeq $host $port $i|";
     while (<NQ>) {
 	if (/^0\.[\ \t]+([a-f0-9]+)/) {
 	    push (@node_ids, convert($1));
@@ -35,7 +35,7 @@ for (my $i = 0; $i < $maxvnode; $i++) {
     my $id = $node_ids[$i];
 
     #read the keys
-    open NQ, "$BUILD_ROOT/nodeq -l $host $port $i|";
+    open NQ, "$BUILD_ROOT/devel/nodeq -l $host $port $i|";
     while (<NQ>) {
 	chomp;
 	my $kid = convert ($_);
