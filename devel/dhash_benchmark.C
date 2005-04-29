@@ -105,7 +105,7 @@ store_cb (dhash_stat status, ptr<insert_info> i)
   out--;
 
   if (status != DHASH_OK) {
-    warn << "store_cb: " << i->key << " " << dhasherr2str(status) << "\n";
+    warn << "store_cb: " << i->key << " " << status << "\n";
     fprintf (outfile, "store error\n");
   } else {
     bps++;

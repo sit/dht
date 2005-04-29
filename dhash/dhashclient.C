@@ -198,18 +198,16 @@ dhashclient::insertcb (cbinsertgw_t cb, bigint key,
 		       ptr<dhash_insert_res> res,
 		       clnt_stat err)
 {
-  str errstr;
   vec<chordID> r;
   ptr<insert_info> i = New refcounted<insert_info>(key, r);
   if (err) {
-    errstr = strbuf () << "rpc error " << err;
-    warn << "dhashclient::insert failed (1): " << key << ": " << errstr << "\n";
+    warn << "dhashclient::insert failed (1): " << key 
+	 << ": rpc error" << err << "\n";
     (*cb) (DHASH_RPCERR, i); //RPC failure
   } else {
     //warn << "dhashclient::insertcb dhash stat " << res->status << "\n";
     if (res->status != DHASH_OK) {
-      errstr = dhasherr2str (res->status);
-      warn << "dhashclient::insert failed (2): " << key << ": " << errstr << "\n";
+      warn << "dhashclient::insert failed (2): " << key << ": " << res->status << "\n";
     }
     else {
       i->path.setsize (res->resok->path.size ());

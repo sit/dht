@@ -284,7 +284,7 @@ dhash_impl::dofetchrec_assembler_cb (user_args *sbp, dhash_fetchrec_arg *arg,
 
   dhash_fetchrec_res res (s);
 
-  trace << header << "fetch returned " << dhasherr2str (s) << "\n";
+  trace << header << "fetch returned " << s << "\n";
   switch (s) {
   case DHASH_OK:
     {

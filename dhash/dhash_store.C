@@ -2,6 +2,11 @@
 #include "location.h"
 #include "misc_utils.h"
 #include "locationtable.h"
+#include <modlogger.h>
+
+#define warning modlogger ("dhash_store", modlogger::WARNING)
+#define info  modlogger ("dhash_store", modlogger::INFO)
+#define trace modlogger ("dhash_store", modlogger::TRACE)
 
 // ---------------------------------------------------------------------------
 // DHASH_STORE
@@ -52,16 +57,13 @@ dhash_store::finish (ptr<dhash_storeres> res, int num, clnt_stat err)
   chord_node pred_node;
 
   if (err) {
-    warn << "dhash_store failed: " << bid << ": RPC error" << "\n";
+    trace << "store failed: " << bid << ": RPC error " << err << "\n";
     error = true;
     status = DHASH_RPCERR;
   }
   else if (res->status != DHASH_OK) {
     if (res->status == DHASH_RETRY)
       pred_node = make_chord_node (res->pred->p);
-    else
-      warn << "dhash_store failed: " << bid
-	   << ": " << dhasherr2str(res->status) << "\n";
     if (!error)
       status = res->status;
     error = true;
@@ -89,7 +91,7 @@ dhash_store::finish (ptr<dhash_storeres> res, int num, clnt_stat err)
 	}
       } else {
 	assert (!returned);
-	warn << "retrying (" << num_retries << "): dest was " 
+	info << "retrying (" << num_retries << "): dest was " 
 	     << dest->id () << " now is " << pred_node.x << "\n";
 	dest = pn;
 	start ();

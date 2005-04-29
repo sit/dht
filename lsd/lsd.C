@@ -43,7 +43,8 @@
 #include <recroute.h>
 
 #include <modlogger.h>
-#define info modlogger ("lsd")
+#define info  modlogger ("lsd", modlogger::INFO)
+#define trace modlogger ("lsd", modlogger::TRACE)
 
 // #define PROFILING 
 
@@ -146,7 +147,7 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
     s->setcb (NULL);
     return;
   }
-  info << "received lsdctl " << sbp->proc () << "\n";
+  trace << "received lsdctl " << sbp->proc () << "\n";
 
   switch (sbp->proc ()) {
   case LSDCTL_NULL:

@@ -529,8 +529,8 @@ recroute<T>::docomplete (user_args *sbp, recroute_complete_arg *ca)
   route_recchord *router = routers[ca->routeid];
   if (!router) {
     chord_node src; sbp->fill_from (&src);
-    rwarning << my_ID () << ": docomplete: unknown routeid " << ca->routeid
-		     << " from host " << src << "\n";
+    rtrace << my_ID () << ": docomplete: unknown routeid " << ca->routeid
+		       << " from host " << src << "\n";
     sbp->reply (NULL);
     return;
   }

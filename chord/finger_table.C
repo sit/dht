@@ -4,6 +4,11 @@
 #include <misc_utils.h>
 #include <location.h>
 #include <locationtable.h>
+#include <modlogger.h>
+
+#define warning modlogger ("finger_table", modlogger::WARNING)
+#define info    modlogger ("finger_table", modlogger::INFO)
+#define trace   modlogger ("finger_table", modlogger::TRACE)
 
 ptr<finger_table> 
 finger_table::produce_finger_table (ptr<vnode> v, ptr<locationtable> l)
@@ -117,7 +122,7 @@ finger_table::stabilize_finger ()
   int i = f % NBIT;
   
   if (i == 0) {
-    // warnx << myID << ": stabilize_finger i = " << i << " f = " << f << "\n";
+    // trace << myID << ": stabilize_finger i = " << i << " f = " << f << "\n";
     stable_fingers2 = stable_fingers;
     stable_fingers = true;
     i = 1; // leave the successor handling to stabilize_succ.
@@ -132,12 +137,12 @@ finger_table::stabilize_finger ()
     fingers[i] = finger_table::finger (i);
     stable_fingers = false;
     // Now go forth and find the real finger
-    warnx << myID << ": stabilize_finger: findsucc of finger " << i << "\n";
+    trace << myID << ": stabilize_finger: findsucc of finger " << i << "\n";
     chordID n = start (i);
     myvnode->find_successor
       (n, wrap (this, &finger_table::stabilize_findsucc_cb, n, i));
   } else {
-    // warnx << myID << ": stabilize_finger: check finger " << i << "\n";    
+    // trace << myID << ": stabilize_finger: check finger " << i << "\n";    
     ptr<location> n = fingers[i];
     myvnode->get_predecessor
       (n, wrap (this, &finger_table::stabilize_finger_getpred_cb, 
@@ -159,7 +164,7 @@ finger_table::stabilize_finger_getpred_cb (chordID dn, int i, chord_node p,
   } else {
     chordID s = start (i);
     if (betweenrightincl (p.x, dn, s)) {
-      // warnx << myID << ": stabilize_finger_getpred_cb: success at " 
+      // trace << myID << ": stabilize_finger_getpred_cb: success at " 
       //       << i << "\n";
       // predecessor is too far back, no need to do anything for this
       // or any of the other fingers for which n is the successor
@@ -169,7 +174,7 @@ finger_table::stabilize_finger_getpred_cb (chordID dn, int i, chord_node p,
       f = i;
     } else {
       // our finger is wrong; better fix it
-      warnx << myID << ": stabilize_finger_getpred_cb: "
+      trace << myID << ": stabilize_finger_getpred_cb: "
 	    << "fixing finger " << i << "\n";
       nslowfinger++;
       nout_backoff++;

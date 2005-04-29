@@ -71,6 +71,11 @@ static inline str dhasherr2str (dhash_stat status)
 {
   return rpc_print (strbuf (), status, 0, NULL, NULL);
 }
+inline const strbuf &
+strbuf_cat (const strbuf &sb, dhash_stat status)
+{
+  return rpc_print (sb, status, 0, NULL, NULL);
+}
 
 class sfs_pubkey2;
 class sfs_sig2;

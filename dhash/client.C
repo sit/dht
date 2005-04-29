@@ -146,7 +146,7 @@ dhashcli::dofetchrec_cb (timespec start, blockID b, cb_ret cb,
   }
   
   if (res->status != DHASH_OK) {
-    trace << prefix << "returned " << dhasherr2str(res->status) << "\n";
+    trace << prefix << "returned " << res->status << "\n";
     // XXX perhaps one should do something cleverer here.
       (*cb) (res->status, NULL, r);
     return;

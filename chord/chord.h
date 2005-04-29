@@ -71,6 +71,12 @@ typedef callback<void, int, void *, cbupcalldone_t>::ref cbupcall_t;
 typedef callback<ref<vnode>, ref<chord>, ref<rpc_manager>, ref<location> >::ref vnode_producer_t;
 typedef callback<ptr<finger_table>, ptr<vnode>, ptr<locationtable> >::ref cb_fingertableproducer_t;
 
+inline const strbuf &
+strbuf_cat (const strbuf &sb, chordstat status)
+{
+  return rpc_print (sb, status, 0, NULL, NULL);
+}
+
 struct user_args {
   //info about the RPC
   void *args;

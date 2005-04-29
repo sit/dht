@@ -79,7 +79,7 @@ void
 pmaint::pmaint_lookup (bigint key, dhash_stat err, vec<chord_node> sl, route r)
 {
   if (err) {
-    warning << host_node->my_ID () << "pmaint: lookup failed. key " << key << ", err " << err << "\n";
+    warning << host_node->my_ID () << " lookup failed. key " << key << ", err " << err << "\n";
     pmaint_next (); //XXX delay?
     return;
   }
@@ -167,7 +167,7 @@ pmaint::pmaint_offer_cb (chord_node dst, bigint key,
 {
 
   if (err) {
-    warning << host_node->my_ID () << " error offerring key " << key << "\n";    
+    warning << host_node->my_ID () << " error offering key " << key << "\n";    
   } else {
     
     switch (res->resok->accepted[0]) {
