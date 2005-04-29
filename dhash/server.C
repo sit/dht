@@ -1088,19 +1088,14 @@ dhash_impl::db_insert_immutable (ref<dbrec> key, ref<dbrec> data,
   if (!exists) {
     action = "N"; // New
     ret = mtree->insert (&blk);
-  }
-  else
+  } else {
     action = "R"; // Re-write
-
-  // Won't deal well if there's a magic expansion in the encoding
-  // vector.  Should really know how big the full block is so that
-  // the right amount of the key's encoding vector is extracted...
-  str x ("");
-  if (key->isFrag() &&
-      (u_long) data->len > 9 + 2 * num_dfrags ())
-    x = strbuf () << " " << hexdump (data->value + 8, 2*(num_dfrags () + 1));
-  info << "db write: " << host_node->my_ID ()
-       << " " << action << " " << dbrec2id(key) << x << "\n";
+  }
+  bigint h = compute_hash (data->value, data->len);
+  info << "db write: " << host_node->my_ID () << " " << action
+       << " " << dbrec2id(key) << " " << data->len 
+       << " " << h
+       << "\n";
   return ret;
 }
 
