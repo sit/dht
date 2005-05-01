@@ -257,16 +257,19 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
     break;
   case LSDCTL_GETDHASHSTATS:
     {
-      int *v = sbp->template getarg<int> ();
+      lsdctl_getdhashstats_arg *arg = sbp->template getarg<lsdctl_getdhashstats_arg> ();
       ptr<lsdctl_dhashstats> ds = New refcounted<lsdctl_dhashstats> ();
-      if (*v < vnodes) {
-	vec<dstat> stats = dh[*v]->stats ();
+      if (arg->vnode < vnodes) {
+	vec<dstat> stats = dh[arg->vnode]->stats ();
 	ds->stats.setsize (stats.size ());
 	for (unsigned int i = 0; i < stats.size (); i++) {
 	  ds->stats[i].desc = stats[i].desc;
 	  ds->stats[i].value = stats[i].value;
 	}
-	ds->hack = dh[*v]->key_info ();
+	if (arg->doblockinfo)
+	  ds->hack = dh[arg->vnode]->key_info ();
+	else
+	  ds->hack = "";
       }
       sbp->reply (ds);
     }

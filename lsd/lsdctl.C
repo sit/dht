@@ -34,7 +34,7 @@ const modevec modes[] = {
   { "loctab", lsdctl_getloctab, "loctab [vnodenum]" },
   { "rpcstats", lsdctl_getrpcstats, "rpcstats [-rf]" },
   { "myids", lsdctl_getmyids, "myids" },
-  { "dhashstats", lsdctl_getdhashstats, "dhashstats [vnodenum]" },
+  { "dhashstats", lsdctl_getdhashstats, "dhashstats [-l] [vnodenum]" },
   { NULL, NULL, NULL }
 };
 
@@ -298,15 +298,28 @@ lsdctl_getrpcstats (int argc, char *argv[])
 void
 lsdctl_getdhashstats (int argc, char *argv[])
 {
-  int vnode (0);
+  int ch;
+  lsdctl_getdhashstats_arg a;
+  a.vnode = 0;
+  a.doblockinfo = false;
+
+  while ((ch = getopt (argc, argv, "l")) != -1)
+    switch (ch) {
+    case 'l':
+      a.doblockinfo = true;
+      break;
+    default:
+      usage ();
+      break;
+    }
 
   if (optind != argc)
-    if (!convertint (argv[optind], &vnode))
+    if (!convertint (argv[optind], &a.vnode))
       usage ();
   
   ptr<aclnt> c = lsdctl_connect (control_socket);
   ptr<lsdctl_dhashstats> ds = New refcounted <lsdctl_dhashstats> ();
-  clnt_stat err = c->scall (LSDCTL_GETDHASHSTATS, &vnode, ds);
+  clnt_stat err = c->scall (LSDCTL_GETDHASHSTATS, &a, ds);
   if (err)
     fatal << "lsdctl_getdhashstats: " << err << "\n";
 
@@ -316,7 +329,8 @@ lsdctl_getdhashstats (int argc, char *argv[])
     out << "  " << ds->stats[i].desc << " " << ds->stats[i].value << "\n";
   for (size_t i = 0; i < ds->blocks.size (); i++) 
     out << ds->blocks[i].id << "\t" << ds->blocks[i].missing.size () << "\n";
-  out << ds->hack;
+  if (a.doblockinfo)
+    out << ds->hack;
   make_sync (1);
   out.tosuio ()->output (1);
   exit (0);

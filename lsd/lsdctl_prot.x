@@ -48,6 +48,11 @@ struct lsdctl_blockstatus {
   chord_node_wire missing<>;
 };
 
+struct lsdctl_getdhashstats_arg  {
+  int vnode;
+  bool doblockinfo;
+};
+
 struct lsdctl_dhashstats {
   lsdctl_stat stats<>;
   lsdctl_blockstatus blocks<>;
@@ -91,7 +96,7 @@ program LSDCTL_PROG {
 		/** Get the list of vnode IDs on this lsd */
 
 		lsdctl_dhashstats
-		LSDCTL_GETDHASHSTATS (int) = 8;
+		LSDCTL_GETDHASHSTATS (lsdctl_getdhashstats_arg) = 8;
 		/** Tell me somthing about the status of DHash on vnode i*/
 	} = 1;
 } = 344500;
