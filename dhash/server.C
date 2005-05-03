@@ -997,14 +997,15 @@ vec<dstat>
 dhash_impl::stats ()
 {
   vec<dstat> s;
-  s.push_back(dstat ("keys cached", keys_cached));
-  s.push_back(dstat ("blocks stored", keys_stored));
-  s.push_back(dstat ("blocks replicated", keys_replicated));
-  s.push_back(dstat ("non-blocks?", keys_others));
-  s.push_back(dstat ("bytes stored", bytes_stored));
+  s.push_back(dstat ("frags on disk", mtree->root.count));
+  s.push_back(dstat ("new keys cached", keys_cached));
+  s.push_back(dstat ("new blocks stored", keys_stored));
+  s.push_back(dstat ("new blocks replicated", keys_replicated));
+  s.push_back(dstat ("new non-blocks?", keys_others));
+  s.push_back(dstat ("new bytes stored", bytes_stored));
   s.push_back(dstat ("keys served", keys_served));
   s.push_back(dstat ("bytes served", bytes_served));
-  s.push_back(dstat ("RPC's answered", rpc_answered));
+  s.push_back(dstat ("RPCs answered", rpc_answered));
   return s;
 }
 
