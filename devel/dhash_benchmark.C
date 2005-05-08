@@ -290,7 +290,7 @@ main (int argc, char **argv)
     port++; // point at port
     char *host = cstr;
     short i_port = atoi (port);
-    warn << "Hi Russ, I'm connecting to " << host << ":" << i_port << "...";
+    warn << "Connecting to " << host << ":" << i_port << " via TCP...";
     tcpconnect (host, i_port, wrap (&tcp_connect_cb, argc, argv));
     while (!fconnected) acheck ();
   } else {
