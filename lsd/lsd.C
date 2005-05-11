@@ -72,6 +72,8 @@ static str p2psocket;
 static bool ctlstarted (false);
 static str ctlsocket;
 
+static str heartbeatfn;
+
 ptr<chord> chordnode;
 vec<ptr<vnode> > vlist;
 vec<ref<dhash> > dh;
@@ -459,6 +461,24 @@ start_logs ()
 }
 
 static void
+do_heartbeat (str fn)
+{
+  struct stat sb;
+  if (stat(fn, &sb)) {
+    int fd = open (fn, O_WRONLY | O_CREAT, 0644);
+    if (fd < 0) {
+      warn ("heartbeat failed: open %m\n");
+    } else {
+      close (fd);
+    }
+  } else {
+    if (utimes (fn, NULL) < 0) 
+      warn ("heartbeat failed: utimes %m\n");
+  }
+  delaycb (60, wrap (&do_heartbeat, fn));
+}
+
+static void
 usage ()
 {
   warnx << "Usage: " << progname << " -j hostname:port -p port\n"
@@ -519,7 +539,7 @@ main (int argc, char **argv)
 
   char *cffile = NULL;
 
-  while ((ch = getopt (argc, argv, "b:C:d:fFj:l:L:M:m:n:O:Pp:rS:s:T:tv:"))!=-1)
+  while ((ch = getopt (argc, argv, "b:C:d:fFH:j:l:L:M:m:n:O:Pp:rS:s:T:tv:"))!=-1)
     switch (ch) {
     case 'b':
       lbase = atoi (optarg);
@@ -534,6 +554,9 @@ main (int argc, char **argv)
       warnx << "-f mode is no longer supported... using -F.\n";
     case 'F':
       mode = MODE_CHORD;
+      break;
+    case 'H':
+      heartbeatfn = optarg;
       break;
     case 'j': 
       {
@@ -698,6 +721,8 @@ main (int argc, char **argv)
   warn << "  vnodes: " << vnodes << "\n";
   warn << "  lookup_mode: " << mode << "\n";
   warn << "  ss_mode: " << ss_mode << "\n";
+  if (heartbeatfn)
+    delaycb (0, wrap (&do_heartbeat, heartbeatfn));
 
   if (p2psocket) 
     startclntd();
