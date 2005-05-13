@@ -20,29 +20,15 @@ main (int argc, char *argv[])
   int r;
   DB *db = NULL;
   DB_ENV* dbe = NULL;
-  char cpath[MAXPATHLEN];
 
   if (mode == MODE_ENV) {
-
     r = db_env_create (&dbe, 0);
     assert (!r);
-    r = chdir (argv[2]);
-    if (r == -1) fatal << "couldn't chdir to " << argv[2] << "\n";
-    
-    getcwd (cpath, MAXPATHLEN);
-    aout << "opening db in: " << cpath << "\n";
-    r = dbe->set_data_dir (dbe, cpath);
-    assert (!r);
-    r = dbe->set_lg_dir (dbe, cpath);
-    assert (!r);
-    r = dbe->set_tmp_dir (dbe, cpath);
-    assert (!r);
-    
     // dbe->set_verbose (dbe, DB_VERB_DEADLOCK, 1);
     // dbe->set_verbose (dbe, DB_VERB_WAITSFOR, 1);
     dbe->set_errfile (dbe, stdout);
 
-    r = dbe->open (dbe, NULL, 
+    r = dbe->open (dbe, argv[2], 
 		   DB_JOINENV,
 		   //		   DB_CREATE| DB_INIT_MPOOL | DB_INIT_LOCK | 
 		   // DB_INIT_LOG | DB_INIT_TXN | DB_RECOVER | DB_JOINENV,
@@ -63,32 +49,34 @@ main (int argc, char *argv[])
 		 DB_BTREE, DB_RDONLY, 0664);
 #endif
     
-} else {
+  } else {
 #if ((DB_VERSION_MAJOR < 4) || ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 1)))
-  r = db->open(db, "db", NULL, DB_BTREE, DB_RDONLY, 0664);
+    r = db->open(db, "db", NULL, DB_BTREE, DB_RDONLY, 0664);
 #else
-  r = db->open(db, NULL, "db", NULL, DB_BTREE, DB_RDONLY, 0664);
+    r = db->open(db, NULL, "db", NULL, DB_BTREE, DB_AUTO_COMMIT|DB_RDONLY, 0664);
 #endif
-  
-}
+  }
 
   assert (r == 0);
     
   DBC *cursor;
   r = db->cursor(db, NULL, &cursor, 0);
-  assert (r==0);
-  
+  assert (r == 0);
 
   DBT key, data;
   unsigned totalsz = 0;
   unsigned keys = 0;
 
+#ifndef DB_BUFFER_SMALL
+/* DB_BUFFER_SMALL is introduced in db4.3 */
+#  define DB_BUFFER_SMALL ENOMEM
+#endif /* DB_BUFFER_SMALL */
+
   for (int i = 0; ; i++) {
     bzero (&key, sizeof (key));
     bzero (&data, sizeof (data));
-    //data.flags = DB_DBT_PARTIAL;
-    int err = cursor->c_get(cursor, &key, &data, 
-			    ((i==0) ? DB_FIRST : DB_NEXT));
+    data.flags = DB_DBT_PARTIAL; // request 0 bytes
+    int err = cursor->c_get (cursor, &key, &data, DB_NEXT);
     if (err == DB_NOTFOUND) {
       aout << "EOF.\n";
       break;
@@ -97,24 +85,12 @@ main (int argc, char *argv[])
     }
 
     aout << "key[" << i << "] " << hexdump (key.data, key.size) << " ";
+    data.flags = DB_DBT_USERMEM;
+    err = cursor->c_get (cursor, &key, &data, DB_CURRENT);
+    if (err == DB_BUFFER_SMALL) { 
+      aout << data.size << "\n"; 
+    } 
 
-#ifdef VERIFY_DATA
-    DBT odata = data;
-
-    bzero (&data, sizeof (data));
-    err = db->get (db, NULL, &key, &data, 0);
-    if (err) {
-      warn << "lookup err: " << err << " " << strerror (err) << "\n";
-    } else {
-      aout << " " << odata.size << " " << data.size << "\n";
-      if (odata.size == data.size &&
-	  memcmp (odata.data, data.data, odata.size)) {
-	aout << "data sizes the same but data is different\n";
-      }
-    }
-#else
-    aout << data.size << "\n"; 
-#endif /* VERIFY_DATA */
     keys++;
     totalsz += data.size;
     

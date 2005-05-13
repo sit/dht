@@ -304,52 +304,63 @@ dbfe::~dbfe() {
 
 #ifdef SLEEPYCAT
 int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) { 
-  char cpath[MAXPATHLEN];
-  int r = -1, fd = -1;
+  int r = -1;
   bool do_dbenv = false;
 
   long use_dbenv = opts.getOption(DBENV_OPT);
-  if(filename && use_dbenv) do_dbenv = true;
+  if (filename && use_dbenv) do_dbenv = true;
 
   long mode = opts.getOption(PERM_OPT);
   if (mode == -1) mode = 0664;
+
   long flags = opts.getOption(FLAG_OPT);
   if (flags == -1) flags = DB_CREATE;
+
   long join = opts.getOption(JOIN_OPT);
+
   long create = opts.getOption(CREATE_OPT);
   if (create == 0) flags |= DB_EXCL;
-  //  long cacheSize = opts.getOption(CACHE_OPT);
 
-  if(do_dbenv) {
-    fd = open(".", O_RDONLY);
-    if(fd == -1) fatal << "can't open current working dir\n";
-    mkdir(filename, 0755);
-    r = chdir(filename);
-    if(r == -1) fatal << "couldn't chdir to " << filename << "\n";
+  long cachesize = opts.getOption(CACHE_OPT);
+  if (cachesize == -1) cachesize = 1024;  /* KB */
 
-    r = db_env_create(&dbe, 0);
+  if (do_dbenv) {
+    r = mkdir (filename, 0755);
+    if (r < 0 && errno != EEXIST) {
+      fatal ("Couldn't mkdir for database %s: %m", filename);
+    }
+
+    r = db_env_create (&dbe, 0);
     if (r) return r;
 
+    /* Generate a configuration file for other processes to use */
+    strbuf db_config_path ("%s/DB_CONFIG", filename);
+    strbuf db_config;
+    db_config << "# MIT lsd db configuration\n\n";
 
     // clean up old log files not available in old versions
 #if ((DB_VERSION_MAJOR >= 4) && (DB_VERSION_MINOR >= 2))
-    r = dbe->set_flags(dbe, DB_LOG_AUTOREMOVE, 1);
-    if (r) return r;
+    db_config << "set_flags db_log_autoremove\n";
 #endif
+    db_config << "# create " << cachesize << " KB cache\n";
+    db_config << "set_cachesize 0 " << cachesize * 1024 << " 1\n";
     
+#if 0
+    /* This should be the default */
+    char cpath[MAXPATHLEN];
     getcwd(cpath, MAXPATHLEN);
+    db_config << "set_data_dir " << cpath << "\n";
+    db_config << "set_lg_dir " << cpath << "\n";
+    db_config << "set_tmp_dir " << cpath << "\n";
+#endif /* 0 */
 
-    r = dbe->set_data_dir(dbe, cpath);
-    if (r) return r;
-    r = dbe->set_lg_dir(dbe, cpath);
-    if (r) return r;
-    r = dbe->set_tmp_dir(dbe, cpath);
-    if (r) return r;
+    // Write out the configuration file
+    str2file (db_config_path, db_config);
     
     if (join < 0) {
-      r = dbe->open(dbe, NULL, DB_CREATE | DB_INIT_MPOOL | DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_TXN | DB_RECOVER , 0);
+      r = dbe->open(dbe, filename, DB_CREATE | DB_INIT_MPOOL | DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_TXN | DB_RECOVER , 0);
     } else {
-      r = dbe->open(dbe, NULL, DB_JOINENV, 0);
+      r = dbe->open(dbe, filename, DB_JOINENV, 0);
     }
 
     if (r){
@@ -360,13 +371,12 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
     dbe->set_errfile (dbe, stderr);
   }
 
-  r = db_create(&db, dbe, 0);
+  r = db_create (&db, dbe, 0);
   if (r) return r;
 
-  db->set_pagesize(db, 16 * 1024);
+  db->set_pagesize (db, 16 * 1024);
   // the below seems to cause the db to grow much larger.
   //  db->set_bt_minkey(db, 60);
-
   
   if(!do_dbenv) {
 #if ((DB_VERSION_MAJOR < 4) || ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 1)))
@@ -390,9 +400,6 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
     if (r) return r;
 
 #endif
-
-    fchdir(fd);
-    close(fd);
   }
 
   return r;
