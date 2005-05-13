@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <iostream>
+#include <string.h>
 
 vector<uint> Accordion::rtable_sz;
 

@@ -29,6 +29,7 @@
 #include "protocols/consistenthash.h"
 #include "p2psim/p2psim_hashmap.h"
 #include <iostream>
+#include <string.h>
 
 using namespace std;
 

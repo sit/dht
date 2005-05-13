@@ -32,6 +32,7 @@
 #include "consistenthash.h"
 #include "observers/onehopobserver.h"
 #include <iostream>
+#include <string.h>
 
 #define TESTPRINT(me,he,tag) if (me.ip==1159 && he.ip==2047) printf("WUWU now %llu tag %s\n", now(),tag);
 
