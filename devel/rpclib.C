@@ -4,7 +4,7 @@
 #include "rpclib.h"
 
 
-static const unsigned int TIMEOUT = 70;
+static const unsigned int TIMEOUT = 15;
 
 static int dgram_fd = -1;
 static ptr<axprt_dgram> dgram_xprt;

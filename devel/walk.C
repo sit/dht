@@ -1,9 +1,11 @@
-#include "chord.h"
-#include "rpclib.h"
-#include <id_utils.h>
-#include "misc_utils.h"
-#include "math.h"
 #include <async.h>
+
+#include <chord.h>
+#include <coord.h>
+#include <id_utils.h>
+#include <misc_utils.h>
+
+#include "rpclib.h"
 
 #define TIMEOUT 10
 
@@ -12,7 +14,7 @@ chordID wellknown_ID = -1;
 bool verify = false;
 vec<chord_node> sequential;
 
-void getsucc_cb (chordID n, chord_nodelistextres *res, clnt_stat err);
+void getsucc_cb (u_int64_t start, chord_node curr, chord_nodelistextres *res, clnt_stat err);
 
 void
 verify_succlist (const vec<chord_node> &zs)
@@ -75,21 +77,22 @@ getsucc (const chord_node &n)
 {
   chord_nodelistextres *res = New chord_nodelistextres ();
   doRPC (n, chord_program_1, CHORDPROC_GETSUCC_EXT, &n.x, res,
-	 wrap (&getsucc_cb, n.x, res));
+	 wrap (&getsucc_cb, getusec (), n, res));
 }
 
 void
-getsucc_cb (chordID id, chord_nodelistextres *res, clnt_stat err)
+getsucc_cb (u_int64_t start, chord_node curr, chord_nodelistextres *res, clnt_stat err)
 {
   chord_node next;
     
   if (err != 0 || res->status != CHORD_OK) {
-    warnx << "failed to get a reading from " << id << "; skipping.\n";
+    warnx << "failed to get a reading from " << curr << "; skipping.\n";
     sequential.pop_front ();
     if (sequential.size () == 0) {
       fatal << "too many consecutive failures.\n";
     }
     next = sequential[0];
+    delete res;
     getsucc (next);
     return;
   }
@@ -105,21 +108,27 @@ getsucc_cb (chordID id, chord_nodelistextres *res, clnt_stat err)
   delete res;
 
   if (verify) {
+    curr = zs[0];
     verify_succlist (zs);
     next = sequential[0];
   } else {
     next = zs[1];
     sequential = zs;
-    sequential.pop_front ();
+    curr = sequential.pop_front ();
   }
 
-  // Print the "next" node we are going to contact.
-  chordID n    = next.x;
-  str host     = next.r.hostname;
-  u_short port = next.r.port;
-  int index    = next.vnode_num;
+  // Print full information for the node we just talked to
+  chordID n    = curr.x;
+  str host     = curr.r.hostname;
+  u_short port = curr.r.port;
+  int index    = curr.vnode_num;
   assert (index >= 0);
-  warnx << n << " " << host << " " << port << " " << index << "\n";
+  char s[128];
+  sprintf (s, "e=%f", curr.e / PRED_ERR_MULT);
+  warnx << n << " " << host << " " << port << " " << index << " "
+        << curr.coords[0] << " " << curr.coords[1] << " " << curr.coords[2] << " "
+	<< s << " "
+	<< (getusec () - start) << "\n";
 
   // wrapped around ring. done.
   if (next.x == wellknown_ID)
