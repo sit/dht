@@ -1,4 +1,5 @@
 #include <async.h>
+#include <aios.h>
 
 #include <chord.h>
 #include <coord.h>
@@ -42,15 +43,15 @@ verify_succlist (const vec<chord_node> &zs)
 	s << "  sequential[" << j << "] = " << sequential[j] << "\n";
 	s << "  nlist[" << i << "] = " << zs[i] << "\n";
 	if (sequential[j].x < zs[i].x) {
-	  warnx << "nlist missing a successor!\n";
+	  aout << "nlist missing a successor!\n";
 	  newseq.push_back (sequential[j]);
 	  j++;
 	} else {
-	  warnx << "sequential missing a successor!\n";
+	  aout << "sequential missing a successor!\n";
 	  newseq.push_back (zs[i]);
 	  i++;
 	}
-	warnx << s;
+	aout << s;
       }
     }
     while (i < sz) {
@@ -62,10 +63,10 @@ verify_succlist (const vec<chord_node> &zs)
     }
     if (bad) {
       for (size_t k = 0; k < zs.size (); k++)
-	warnx << "nlist[" << k << "]: " << zs[k] << "\n";
+	aout << "nlist[" << k << "]: " << zs[k] << "\n";
       for (size_t k = 0; k < sequential.size (); k++)
-	warnx << "sequential[" << k << "]: " << sequential[k] << "\n";
-      warnx << "\n";
+	aout << "sequential[" << k << "]: " << sequential[k] << "\n";
+      aout << "\n";
     }
     sequential.clear ();
     sequential = newseq;
@@ -86,7 +87,7 @@ getsucc_cb (u_int64_t start, chord_node curr, chord_nodelistextres *res, clnt_st
   chord_node next;
     
   if (err != 0 || res->status != CHORD_OK) {
-    warnx << "failed to get a reading from " << curr << "; skipping.\n";
+    aout << "failed to get a reading from " << curr << "; skipping.\n";
     sequential.pop_front ();
     if (sequential.size () == 0) {
       fatal << "too many consecutive failures.\n";
@@ -125,7 +126,7 @@ getsucc_cb (u_int64_t start, chord_node curr, chord_nodelistextres *res, clnt_st
   assert (index >= 0);
   char s[128];
   sprintf (s, "e=%f", curr.e / PRED_ERR_MULT);
-  warnx << n << " " << host << " " << port << " " << index << " "
+  aout  << n << " " << host << " " << port << " " << index << " "
         << curr.coords[0] << " " << curr.coords[1] << " " << curr.coords[2] << " "
 	<< s << " "
 	<< (getusec () - start) << "\n";
@@ -135,7 +136,7 @@ getsucc_cb (u_int64_t start, chord_node curr, chord_nodelistextres *res, clnt_st
     exit (0);
   
   if (next.x != zs[1].x)
-    warnx << "XXX succlist had wrong successor!!!\n";
+    aout << "XXX succlist had wrong successor!!!\n";
   getsucc (next);
 }
 
