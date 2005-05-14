@@ -1,7 +1,8 @@
 ## Process this file with automake to produce Makefile.in
-## $Id: Makefile.am,v 1.9 2005/03/07 01:30:29 sit Exp $
+## $Id: Makefile.am,v 1.10 2005/05/14 06:35:05 strib Exp $
 
-noinst_LIBRARIES = libutil.a
+chordlib_LIBRARIES = libutil.a
+chordinclude_HEADERS = id_utils.h
 
 noinst_HEADERS = \
 	block_status.h \

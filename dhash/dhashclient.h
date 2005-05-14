@@ -3,8 +3,15 @@
 #define __DHASH_CLIENT_H__
 
 #include <dhashgateway_prot.h>
-#include <dhc_prot.h>
-#include <route.h>
+//#include <dhc_prot.h>
+//#include <route.h>
+#include <ihash.h>
+#include <list.h>
+#include <refcnt.h>
+#include <sfsmisc.h>
+#include <async.h>
+#include <amisc.h>
+#include <arpc.h>
 
 struct insert_info
 {

@@ -26,6 +26,14 @@ Group: Applications/Internet
 Chord and DHash are building blocks for developing distributed applications.
 This package provides the X11/Gtk visualizer.
 
+%package devel
+Summary: Chord/DHash development libraries and headers
+Group: Applications/Internet
+
+%description devel
+Chord and DHash are building blocks for developing distributed applications.
+This package provides the necessary development libraries and headers
+
 
 %prep
 %setup -q
@@ -78,8 +86,27 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/usenetlsdmon.py
 %{_datadir}/chord-%{version}/vischat.py
 
+%files devel
+%{_libdir}/chord
+%{_includedir}/chord
+%{_libdir}/chord-%{version}/libdhashclient.a
+%{_libdir}/chord-%{version}/libsvc.a
+%{_libdir}/chord-%{version}/libutil.a
+%{_includedir}/chord-%{version}/dhashclient.h
+%{_includedir}/chord-%{version}/config.h
+%{_includedir}/chord-%{version}/chord_types.h
+%{_includedir}/chord-%{version}/dhash.h
+%{_includedir}/chord-%{version}/dhash_common.h
+%{_includedir}/chord-%{version}/dhash_prot.h
+%{_includedir}/chord-%{version}/dhash_types.h
+%{_includedir}/chord-%{version}/dhashgateway_prot.h
+%{_includedir}/chord-%{version}/id_utils.h
+%{_includedir}/chord-%{version}/verify.h
 
 %changelog
+* Sat May 14 2005 Jeremy Stribling <strib@mit.edu>
+- devel package, for working with dhashclient
+
 * Thu Apr 21 2005 Emil Sit <sit@mit.edu>
 - vis package
 

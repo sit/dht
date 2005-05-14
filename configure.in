@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.50 2005/03/31 04:26:51 sit Exp $
+dnl $Id: configure.in,v 1.51 2005/05/14 06:35:04 strib Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -73,10 +73,10 @@ done
     CPPFLAGS="-I"'$(top_builddir)'"/svc $CPPFLAGS"
 
 dnl Auxilliary files in chord specific subdirs.
-dnl if test -z "$chordlibdir"; then
-dnl        chordlibdir='${pkglibdir}-${VERSION}'
-dnl fi
-dnl AC_SUBST(chordlibdir)
+if test -z "$chordlibdir"; then
+        chordlibdir='${pkglibdir}-${VERSION}'
+fi
+AC_SUBST(chordlibdir)
 if test -z "$chorddatadir"; then
         chorddatadir='${pkgdatadir}-${VERSION}'
 fi

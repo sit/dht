@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.38 2005/03/10 21:54:14 sit Exp $
+# $Id: Makefile.am,v 1.39 2005/05/14 06:35:04 strib Exp $
 
 
 BASEDIRS = svc utils merkle chord dhc dhash sfsrodb devel lsd
@@ -10,6 +10,8 @@ SUBDIRS = $(SUBDIRS_ALL)
 else
 SUBDIRS = $(SUBDIRS_SOME)
 endif
+
+chordinclude_HEADERS = config.h
 
 CLEANFILES = core *.core *~
 
@@ -40,17 +42,17 @@ install-data-local:
                 ln -s $(chordincludedir) $$dst; \
         fi
 
-# install-exec-local:
-# 	-src=$(DESTDIR)$(chordlibdir); dst=$(DESTDIR)$(pkglibdir); \
-#        rm -f $$dst; \
-#        if test "`dirname $$src`" = "`dirname $$dst`"; then \
-#                ln -s "`basename $$src`" $$dst; \
-#        else \
-#                ln -s $(chordlibdir) $$dst; \
-#        fi
+install-exec-local:
+	-src=$(DESTDIR)$(chordlibdir); dst=$(DESTDIR)$(pkglibdir); \
+        rm -f $$dst; \
+        if test "`dirname $$src`" = "`dirname $$dst`"; then \
+                ln -s "`basename $$src`" $$dst; \
+        else \
+                ln -s $(chordlibdir) $$dst; \
+        fi
 
 uninstall-local:
 	-rm -f $(DESTDIR)$(pkgdatadir) $(DESTDIR)$(chorddatadir)
-#	-rm -f $(DESTDIR)$(pkglibdir) $(DESTDIR)$(chordlibdir) 
+	-rm -f $(DESTDIR)$(pkglibdir) $(DESTDIR)$(chordlibdir) 
 	-rm -f $(DESTDIR)$(pkgincludedir) $(DESTDIR)$(chordincludedir) 
 	-rmdir $(DESTDIR)$(confdir)

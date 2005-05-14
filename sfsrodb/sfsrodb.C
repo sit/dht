@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.31 2003/09/26 21:00:08 sit Exp $ */
+/* $Id: sfsrodb.C,v 1.32 2005/05/14 06:35:05 strib Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -46,6 +46,7 @@
 #include "sfsro_prot_cfs.h"
 #include "sfscrypt.h"
 
+#include <route.h>
 #include <dhash_common.h>
 #include <dhashclient.h>
 #include <verify.h>
