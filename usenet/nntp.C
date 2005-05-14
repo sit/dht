@@ -14,8 +14,8 @@
  * Setting nntp_trace causes more debugging information to be emitted.
  *   0  None
  *   1  Connection open/close
- *   2  Command dispatch
  *   3  Article posting
+ *   4  Command dispatch
  *   5  Header parsing
  *   8  Command parsing
  *   9  Complete client I/O
@@ -123,14 +123,14 @@ nntp::command (void)
   
   for (i = 0; i < cmd_table.size (); i++) {
     if (!strcasecmp (cmdargs[0], cmd_table[i].cmd)) {
-      if (nntp_trace >= 2)
+      if (nntp_trace >= 4)
 	warn << s << ": dispatching " << cmdargs[0] << "\n";
       cmd_table[i].fn ((n > 1) ? cmdargs[1] : str(""));
       return;
     }
   }
 
-  if (nntp_trace >= 2)
+  if (nntp_trace >= 4)
     warn << s << ": unknown command: " << cmdargs[0] << "\n";
   aio << unknown;
 }
