@@ -13,6 +13,8 @@
 
 #include "rpclib.h"
 
+static int persecond (1);
+static int outstanding;
 void process (int64_t starttime, int seqno, chord_node dst, 
 	      chord_nodelistextres *lst, clnt_stat status);
 void doit (chord_node dst, int seqno);
@@ -25,36 +27,40 @@ process (int64_t starttime, int seqno, chord_node dst,
   if (status) {
     warn << seqno << ": RPC error\n";
   } else {
-    warn << seqno << ": from " << dst.r.hostname << ":" << dst.r.port << " " << (getusec() - starttime)/1000 << "msecs \n";
+    warn << seqno << ": from " << dst.r << " " << (getusec() - starttime)/1000 << "msecs \n";
   }
 
   delete lst;
-  if (seqno % 10 == 0)
+  outstanding--;
+  if (outstanding == 0)
     delaycb(1, wrap(&doit, dst, seqno + 1));
 }
 
 void doit (chord_node dst, int seqno) {
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < persecond; i++) {
     int64_t usec = getusec ();
     ptr<chordID> ga = New refcounted<chordID> (dst.x);
     chord_nodelistextres *lst = New chord_nodelistextres ();
     doRPC (dst, chord_program_1, CHORDPROC_GETSUCC_EXT,
 	   ga, lst,
 	   wrap(&process, usec, seqno + i, dst, lst));
+    outstanding++;
   }
 }
 
+static char *usage = "lsdping: [-n numpersecond] host port vnodenum";
 
 int
 main (int argc, char *argv[])
 {
   int ch;
-  while ((ch = getopt (argc, argv, "d")) != -1)
+  while ((ch = getopt (argc, argv, "n:")) != -1)
     switch (ch) {
-    case 'd':
-      ;
+    case 'n':
+      persecond = atoi (optarg);
+      break;
     default:
-      fatal << "lsdping: -d host port vnodenum\n";
+      fatal << usage << "\n";
       break;
     }
 
@@ -62,7 +68,7 @@ main (int argc, char *argv[])
   argv += optind;
   
   if (argc < 3) 
-    fatal << "lsdping: -d host port vnodenum\n";
+    fatal << usage << "\n";
 
   chord_node dst;
 
@@ -85,5 +91,3 @@ main (int argc, char *argv[])
 
   amain ();
 }
-  
-
