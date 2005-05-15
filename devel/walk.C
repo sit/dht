@@ -143,7 +143,15 @@ getsucc_cb (u_int64_t start, chord_node curr, chord_nodelistextres *res, clnt_st
 void 
 usage ()
 {
-  fatal << "walk [-v] -j <host>:<port>\n";
+  warnx << "Usage: " << progname << " [-v] [-t maxtotaltime] -j <host>:<port>\n";
+  exit (1);
+}
+
+void
+timedout (int t)
+{
+  fatal << "timed out after " << t << " seconds.\n";
+  exit (1);
 }
 
 int
@@ -152,10 +160,12 @@ main (int argc, char** argv)
   setprogname (argv[0]);
 
   str host = "not set";
-  unsigned short port = 0;
+  unsigned short port (0);
+
+  unsigned int maxtime (0);
 
   int ch;
-  while ((ch = getopt (argc, argv, "j:v")) != -1) {
+  while ((ch = getopt (argc, argv, "j:t:v")) != -1) {
     switch (ch) {
     case 'j': 
       {
@@ -179,6 +189,9 @@ main (int argc, char** argv)
 
 	break;
       }
+    case 't':
+      maxtime = atoi (optarg);
+      break;
     case 'v':
       verify = true;
       break;
@@ -200,6 +213,8 @@ main (int argc, char** argv)
   sequential.push_back (wellknown_node);
   getsucc (wellknown_node);
 
+  if (maxtime > 0)
+    delaycb (maxtime, wrap (&timedout, maxtime));
 
   amain ();
 }
