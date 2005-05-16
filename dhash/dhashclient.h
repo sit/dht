@@ -36,8 +36,11 @@ struct option_block
 
 class dhashclient
 {
-private:
+protected:
   ptr<aclnt> gwclnt;
+  dhashclient () {};
+
+private:
 
   // inserts under the specified chordid
   // (buf need not remain involatile after the call returns). renamed
