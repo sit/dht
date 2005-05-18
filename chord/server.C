@@ -431,75 +431,58 @@ vnode_impl::ping_cb (ptr<location> x, cbping_t cb, clnt_stat status)
 }
 
 void
-vnode_impl::check_dead_node_cb (ptr<location> l, time_t backoff, chordstat s)
+vnode_impl::check_dead_node_cb (ptr<location> l, time_t nbackoff, chordstat s)
 {
+  unsigned int i=0;
+  chordID id = l->id ();
+  for (i=0; i<dead_nodes.size (); i++)
+    if (dead_nodes[i]->id () == id)
+      break;
+
   if (s != CHORD_OK) {
-    unsigned i=0;
-    for (i=0; i<dead_nodes.size (); i++)
-      if (dead_nodes[i]->id () == l->id ())
-        break;
-    if (i == dead_nodes.size ()) {
+    if (i == dead_nodes.size ())
       dead_nodes.push_back (l);
-      check_dead_backoffs.push_back (backoff);
-    }
+    delaycb (nbackoff, wrap (this, &vnode_impl::check_dead_node, l, nbackoff));
   }
   else {
-    warn << l->id () << " back to life\n";
-    chord_node n;
-    l->fill_node (n);
-    ptr<location> nl = locations->lookup (l->id ());
-    if (nl)
-      nl->set_alive (true);
-    else
-      locations->insert (n);
-    // stabilize ();
+    /* Take it off the dead list */
+    if (i != dead_nodes.size ()) {
+      dead_nodes[i] = dead_nodes[0];
+      dead_nodes.pop_front ();
+    }
+
+    // Insertion should ensure that node is set to alive and in table
+    // (Liveness should also have been set by ping_cb)
+    ptr<location> nl = locations->insert (l);
+    if (nl != l) {
+      warn << "duplicate location  " << l << "\n";
+    }
     notify (my_succ (), myID);
   }
 }
 
 void
-vnode_impl::check_dead_nodes ()
+vnode_impl::check_dead_node (ptr<location> l, time_t backoff)
 {
-  vec<ptr<location> > sl = succs ();
-  size_t sz = sl.size ();
-  int nsucc;
-  bool ok = Configurator::only ().get_int ("chord.nsucc", nsucc);
-  assert (ok);
-  int t;
-  assert (Configurator::only ().get_int ("chord.checkdead_interval", t));
-  assert (t > 0);
   int cap;
   assert (Configurator::only ().get_int ("chord.checkdead_max", cap));
-  assert (cap > t);
 
-  while (!dead_nodes.empty ()) {
-    time_t backoff = check_dead_backoffs.pop_front ();
-    ptr<location> l = dead_nodes.pop_front ();
-    timespec ts;
-    clock_gettime (CLOCK_REALTIME, &ts);
-    if ((ts.tv_sec - l->dead_time ()) < 2592000 &&
-	(sz < (unsigned)nsucc ||
-	 (sz > 1 &&
-	  between (sl[0]->id (), sl[sz-1]->id (), l->id ())))) {
-      // not enough successors, or if the dead node could be a
-      // successor
-      if (ts.tv_sec >= (l->dead_time () + backoff)) {
-	backoff *= 2;
-	if (backoff > cap)
-	  backoff = cap;
-        ping (l, wrap (this, &vnode_impl::check_dead_node_cb, l, backoff));
-      }
-      else
-	delaycb (0,
-		 wrap (this, &vnode_impl::check_dead_node_cb,
-		       l, backoff, CHORD_ERRNOENT));
-    }
+  timespec ts;
+  clock_gettime (CLOCK_REALTIME, &ts);
+
+  if ((ts.tv_sec - l->dead_time ()) > 86400 * 30) {
+    // Throw away nodes that are really really dead,
+    // though they remain in the location table.
+    warnx << "Node " << l << " dead for 30 days\n";
+    return;
   }
 
-  delaycb (t, 0, wrap (this, &vnode_impl::check_dead_nodes));
+  backoff *= 2;
+  if (backoff > cap)
+    backoff = cap;
+  ping (l, wrap (this, &vnode_impl::check_dead_node_cb, l, backoff));
+  warnx << gettime () << " pinging dead node " << l << "\n";
 }
-
-
 
 static inline const char *
 tracetime ()
@@ -647,7 +630,7 @@ vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc,
         assert (Configurator::only ().get_int ("chord.checkdead_interval", t));
         assert (t > 0);
         dead_nodes.push_back (l);
-	check_dead_backoffs.push_back (t);
+	delaycb (t, wrap (this, &vnode_impl::check_dead_node, l, t));
       }
     }
     cb (err);

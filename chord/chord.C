@@ -108,12 +108,6 @@ vnode_impl::vnode_impl (ref<chord> _chordnode,
   ndogetsucclist = 0;
   ndogetsucc_ext = 0;
   ndogetpred_ext = 0;
-
-  int t;
-  assert (Configurator::only ().get_int ("chord.checkdead_interval", t));
-  assert (t > 0);
-  long tt = random ();
-  delaycb ((tt % t), 0, wrap (this, &vnode_impl::check_dead_nodes));
 }
 
 vnode_impl::~vnode_impl ()
@@ -300,16 +294,9 @@ vnode_impl::join_getsucc_cb (ptr<location> n,
 
   if (status != CHORD_OK) {
     warnx << myID << ": join failed, remove from vnodes?\n";
-    n->set_alive (false);
 
-    int t;
-    assert (Configurator::only ().get_int ("chord.checkdead_interval", t));
-    assert (t > 0);
-    dead_nodes.push_back (n);
-    check_dead_backoffs.push_back (t);
-    
-    // continue to run, even if join has failed... lsd will remove us
-    // if necessary
+    // continue to run, even if join has failed... maybe
+    // stabilization (with other vnodes) will fix us over time.
     stabilize ();
     v = mkref (this);
   }
