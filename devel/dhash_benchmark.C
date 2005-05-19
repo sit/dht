@@ -104,14 +104,17 @@ store_cb (dhash_stat status, ptr<insert_info> i)
 {
   out--;
 
+  strbuf s;
   if (status != DHASH_OK) {
-    warn << "store_cb: " << i->key << " " << status << "\n";
-    fprintf (outfile, "store error\n");
+    s << "store_cb: " << i->key << " " << status << "\n";
   } else {
     bps++;
-    str buf = strbuf () << "stored " << i->key << " at " << i->path.back () << "\n";
-    fprintf (outfile, "%s", buf.cstr ());
+    s << "stored " << i->key << " at " << i->path.back () << "\n";
   }
+  str buf (s);
+  fprintf (outfile, "%s", buf.cstr ());
+  if (outfile != stdout)
+    warnx << buf;
 }
 
 
@@ -144,7 +147,7 @@ fetch_cb (int i, struct timeval start, dhash_stat stat, ptr<dhash_block> blk, ve
     fprintf (outfile, str (buf).cstr ());
   }
   else if (datasize != blk->len || memcmp (data[i], blk->data, datasize) != 0)
-    fatal << "verification failed";
+    fatal << "verification failed for block " << IDs[i];
   else {
     struct timeval end;
     gettimeofday(&end, NULL);
@@ -272,6 +275,18 @@ tcp_connect_cb (int argc, char **argv, int fd)
   connected (dhash, argc, argv);
 }
 
+void
+cleanup (void)
+{
+  if (outfile) {
+    fclose (outfile);
+  }
+  if (bwfile) {
+    fclose (bwfile);
+  }
+  exit (1);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -281,6 +296,8 @@ main (int argc, char **argv)
     usage (argv[0]);
     exit (1);
   }
+  sigcb (SIGTERM, wrap (&cleanup));
+  sigcb (SIGINT, wrap (&cleanup));
 
   control_socket = argv[2];
   char *cstr = (char *)control_socket.cstr ();
