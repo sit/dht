@@ -124,8 +124,6 @@ struct dbrec {
   }
 
   ~dbrec() {  delete [] value; }
-
-  bool isFrag() { return value[0]; }
 };
 
 struct dbPair {
