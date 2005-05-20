@@ -194,10 +194,8 @@ class dhash_impl : public dhash {
   long rpc_answered;
 
  public:
-  dhash_impl (str dbname);
+  dhash_impl (ptr<vnode> v, str dbname);
   ~dhash_impl ();
-
-  void init_after_chord (ptr<vnode> node);
 
   vec<dstat> stats ();
   strbuf key_info ();

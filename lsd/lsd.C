@@ -62,7 +62,6 @@ extern "C" {
 EXITFN (cleanup);
 
 int vnodes = 1;
-u_int initialized_dhash = 0;
 
 static char *logfname;
 static char *tracefname;
@@ -184,10 +183,10 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
     {
       lsdctl_setreplicate_arg *a = sbp->template getarg<lsdctl_setreplicate_arg> ();
       if (a->enable) {
-	for (unsigned int i = 0; i < initialized_dhash; i++)
+	for (unsigned int i = 0; i < chordnode->num_vnodes (); i++)
 	  dh[i]->start (a->randomize);
       } else {
-	for (unsigned int i = 0; i < initialized_dhash; i++)
+	for (unsigned int i = 0; i < chordnode->num_vnodes (); i++)
 	  dh[i]->stop ();
       }
       sbp->replyref (a->enable);
@@ -366,24 +365,6 @@ startcontroller ()
   ctlstarted = true;
 }
 
-
-static void
-newvnode_cb (int n, ptr<vnode> my, chordstat stat)
-{  
-  if (stat != CHORD_OK) {
-    warnx << "newvnode_cb: status " << stat << "\n";
-    fatal ("unable to join\n");
-  }
-  dh[n]->init_after_chord (my);
-  vlist.push_back (my);
-
-  n += 1;
-  initialized_dhash = n;
-  if (n < vnodes)
-    chordnode->newvnode (modes[mode].producer, wrap (newvnode_cb, n));
-}
-
-
 #ifdef PROFILING
 void
 toggle_profiling ()
@@ -402,13 +383,12 @@ toggle_profiling ()
 void
 stats () 
 {
-  warn << "STATS:\n";
-  
 #ifdef PROFILING
   toggle_profiling ();
 #else
+  warn << "STATS:\n";
   chordnode->stats ();
-  for (unsigned int i = 0 ; i < initialized_dhash; i++)
+  for (unsigned int i = 0 ; i < chordnode->num_vnodes (); i++)
     dh[i]->print_stats ();
   strbuf x;
   chordnode->print (x);
@@ -420,7 +400,7 @@ void
 stop ()
 {
   chordnode->stop ();
-  for (unsigned int i = 0 ; i < initialized_dhash; i++)
+  for (unsigned int i = 0 ; i < chordnode->num_vnodes (); i++)
     dh[i]->stop ();
 }
 
@@ -701,18 +681,19 @@ main (int argc, char **argv)
     info << x;
   }
 
-  chordnode = New refcounted<chord> (wellknownhost, wellknownport,
-				     myname,
+  chordnode = New refcounted<chord> (myname,
 				     myport,
-				     max_loccache);
-
+				     modes[mode].producer,
+				     vnodes,
+                                     max_loccache);
   for (int i = 0; i < vnodes; i++) {
     str db_name_prime = strbuf () << db_name << "-" << i;
-    warn << "lsd: created new dhash\n";
-    dh.push_back( dhash::produce_dhash (db_name_prime));
+    ptr<vnode> v = chordnode->get_vnode (i);
+    dh.push_back (dhash::produce_dhash (v, db_name_prime));
   }
 
-  chordnode->newvnode (modes[mode].producer, wrap (newvnode_cb, 0));
+  chordnode->startchord ();
+  chordnode->join (wellknownhost, wellknownport);
 
   time_t now = time (NULL);
   warn << "lsd starting up at " << ctime ((const time_t *)&now);
@@ -721,6 +702,7 @@ main (int argc, char **argv)
   warn << "  vnodes: " << vnodes << "\n";
   warn << "  lookup_mode: " << mode << "\n";
   warn << "  ss_mode: " << ss_mode << "\n";
+
   if (heartbeatfn)
     delaycb (0, wrap (&do_heartbeat, heartbeatfn));
 

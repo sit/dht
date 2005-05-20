@@ -45,6 +45,8 @@
 #include "modlogger.h"
 #include "coord.h"
 
+chord_rpc_style_t chord_rpc_style (CHORD_RPC_STP);
+
 ihash<str, rpcstats, &rpcstats::key, &rpcstats::h_link> rpc_stats_tab;
 u_int64_t rpc_stats_lastclear (getusec ());
 
@@ -87,14 +89,6 @@ track_reply (const rpc_program &prog, int procno, size_t b)
   rpcstats *stats = getstats (prog.progno, procno);
   stats->reply (b);
 }
-
-
-const int CHORD_RPC_STP (0);
-const int CHORD_RPC_SFSU (1);
-const int CHORD_RPC_SFST (2);
-const int CHORD_RPC_SFSBT (3);
-
-int chord_rpc_style = CHORD_RPC_STP;
 
 
 // -----------------------------------------------------

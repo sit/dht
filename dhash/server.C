@@ -128,9 +128,9 @@ DECL_CONFIG_METHOD(dhash_disable_db_env, "dhash.disable_db_env")
 dhash::~dhash () {}
 
 ref<dhash>
-dhash::produce_dhash (str dbname)
+dhash::produce_dhash (ptr<vnode> v, str dbname)
 {
-  return New refcounted<dhash_impl> (dbname);
+  return New refcounted<dhash_impl> (v, dbname);
 }
 
 dhash_impl::~dhash_impl ()
@@ -163,13 +163,13 @@ open_worker (ptr<dbfe> mydb, str name, dbOptions opts, str desc)
   }
 }
 
-dhash_impl::dhash_impl (str dbname) :
+dhash_impl::dhash_impl (ptr<vnode> node, str dbname) :
   repair_outstanding (0),
   pk_partial_cookie (1),
   db (NULL),
   keyhash_db (NULL),
   cache_db (NULL),
-  host_node (NULL),
+  host_node (node),
   cli (NULL),
   dhc_mgr (NULL),
   bsm (NULL),
@@ -212,13 +212,6 @@ dhash_impl::dhash_impl (str dbname) :
 
   // merkle state
   mtree = New merkle_tree (db);
-}
-
-void
-dhash_impl::init_after_chord (ptr<vnode> node)
-{
-  host_node = node;
-  assert (host_node);
 
   // merkle state
   msrv = New merkle_server (mtree, 

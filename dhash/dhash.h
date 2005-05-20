@@ -72,12 +72,9 @@ class dhash {
   static u_long dhash_disable_db_env ();
   static u_long dhash_mtu ();
 
-  static ref<dhash> produce_dhash (str dbname);
+  static ref<dhash> produce_dhash (ptr<vnode> v, str dbname);
 
   virtual ~dhash () = 0;
-  
-  // XXX gross
-  virtual void init_after_chord (ptr<vnode> node) = 0;
 
   virtual vec<dstat> stats () = 0;
   virtual strbuf key_info () = 0;

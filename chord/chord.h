@@ -190,37 +190,41 @@ class chord : public virtual refcount {
   // system wide default on the maximum number of vnodes/node.
   int max_vnodes;
 
-  int nvnode;
-  ptr<location> wellknown_node;
-  int myport;
   str myname;
+  int myport;
+
+  int fd_dgram;
+  int fd_stream;
   ptr<axprt> x_dgram;
   vec<const rpc_program *> handledProgs;
 
   qhash<chordID, ref<vnode>, hashID> vnodes;
+  vec<ptr<vnode> > vlist;
 
   void dispatch (ptr<asrv> s, svccb *sbp);
+
   void tcpclient_cb (int srvfd);
-  int startchord (int myp, int type);
-  void stats_cb (const chordID &k, ptr<vnode> v);
-  void print_cb (strbuf outbuf, const chordID &k, ptr<vnode> v);
-  void stop_cb (const chordID &k, ptr<vnode> v);
-  void stabilize_cb (const chordID &k, ptr<vnode> v);
+  int initxprt (int myp, int type, int *fd);
+
+  void join_cb (bool failok, ptr<vnode> v, chordstat s);
   
   // Number of received RPCs, for locationtable comm stuff
   ptr<u_int32_t> nrcv;
   ptr<rpc_manager> rpcm;
 
  public:
-
-  ptr<vnode> active;
   ptr<locationtable> locations; 
     
-  chord (str _wellknownhost, int _wellknownport,
-	 str _myname, int port, int max_cache);
+  chord (str host, int port,
+         vnode_producer_t producer, int nvnodes,
+         int max_cache);
 
-  int startchord (int myp);
-  ptr<vnode> newvnode (vnode_producer_t p, cbjoin_t cb);
+  ptr<vnode> get_vnode (unsigned int i);
+  size_t num_vnodes (void);
+
+  void startchord ();
+  void join (str wellknownhost, int wellknownport, bool failok = true);
+
   void stats (void);
   void print (strbuf &outbuf);
   void stop (void);
@@ -232,42 +236,6 @@ class chord : public virtual refcount {
   void handleProgram (const rpc_program &prog);
   bool isHandled (int progno);
   const rpc_program *get_program (int progno);
-
-  //'wrappers' for vnode functions (to be called from higher layers)
-  void set_active (int n) { 
-    int i=0;
-    n %= nvnode;
-    qhash_slot<chordID, ref<vnode> > *s = vnodes.first ();
-    while ( (s) && (i++ < n)) s = vnodes.next (s);
-    if (!s) active = vnodes.first ()->value;
-    else  active = s->value;
-
-    warn << "Active node now " << active->my_ID () << "\n";
-  };
-
-  ptr<location> closestpred (chordID k, vec<chordID> f) { 
-    return active->closestpred (k, f); 
-  };
-  void find_succlist (chordID n, u_long m, cbroute_t cb, ptr<chordID> guess) {
-    active->find_succlist (n, m, cb, guess);
-  }
-  void find_successor (chordID n, cbroute_t cb) {
-    active->find_successor (n, cb);
-  };
-  void get_predecessor (ptr<location> n, cbchordID_t cb) {
-    active->get_predecessor (n, cb);
-  };
-  long doRPC (ptr<location> n, const rpc_program &progno, int procno,
-	      ptr<void> in, void *out, aclnt_cb cb,
-	      cbtmo_t cb_tmo = NULL) {
-    return active->doRPC (n, progno, procno, in, out, cb, cb_tmo);
-  };
-  void alert (ptr<location> n, ptr<location> x) {
-    active->alert (n, x);
-  };
-  chordID clnt_ID () {
-    return active->my_ID ();
-  };    
 };
 
 #endif /* _CHORD_H_ */
