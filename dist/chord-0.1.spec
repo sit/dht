@@ -101,9 +101,13 @@ rm -rf $RPM_BUILD_ROOT
 %{_includedir}/chord-%{version}/dhash_types.h
 %{_includedir}/chord-%{version}/dhashgateway_prot.h
 %{_includedir}/chord-%{version}/id_utils.h
+%{_includedir}/chord-%{version}/configurator.h
 %{_includedir}/chord-%{version}/verify.h
 
 %changelog
+* Sat May 14 2005 Jeremy Stribling <strib@mit.edu>
+- configurator.h
+
 * Sat May 14 2005 Jeremy Stribling <strib@mit.edu>
 - devel package, for working with dhashclient
 

@@ -1,12 +1,11 @@
 ## Process this file with automake to produce Makefile.in
-## $Id: Makefile.am,v 1.10 2005/05/14 06:35:05 strib Exp $
+## $Id: Makefile.am,v 1.11 2005/05/23 23:54:15 strib Exp $
 
 chordlib_LIBRARIES = libutil.a
-chordinclude_HEADERS = id_utils.h
+chordinclude_HEADERS = id_utils.h configurator.h
 
 noinst_HEADERS = \
 	block_status.h \
-	configurator.h \
 	coord.h \
 	ida.h \
 	id_utils.h \
