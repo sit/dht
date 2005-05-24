@@ -1,8 +1,8 @@
 ## Process this file with automake to produce Makefile.in
-## $Id: Makefile.am,v 1.11 2005/05/23 23:54:15 strib Exp $
+## $Id: Makefile.am,v 1.12 2005/05/24 00:38:15 strib Exp $
 
 chordlib_LIBRARIES = libutil.a
-chordinclude_HEADERS = id_utils.h configurator.h
+chordinclude_HEADERS = id_utils.h configurator.h skiplist.h
 
 noinst_HEADERS = \
 	block_status.h \
@@ -13,7 +13,6 @@ noinst_HEADERS = \
 	locationtable.h \
 	misc_utils.h \
 	modlogger.h \
-	skiplist.h \
 	ida-field.C
 
 libutil_a_SOURCES = \

@@ -1,3 +1,6 @@
+#ifndef __CONFIGURATOR_H__
+#define __CONFIGURATOR_H__ 1
+
 #include <refcnt.h>
 #include "skiplist.h"
 
@@ -60,3 +63,5 @@ class Configurator {
   /** Write newv to field. */
   bool set_int (const char *field, int newv);
 };
+
+#endif // __CONFIGURATOR_H_
