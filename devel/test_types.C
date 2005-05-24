@@ -27,8 +27,8 @@
 
 #include "sfsmisc.h"
 #include "dhash_common.h"
-#include "dhash.h"
 #include "dhashclient.h"
+#include <dhblock_keyhash.h>
 #include <sfscrypt.h>
 #include <sys/time.h>
 
@@ -174,7 +174,8 @@ fetch_cb_append_second (dhashclient dhash, dhash_stat stat, ptr<dhash_block> blk
   if (!blk)
     fatal << "append (second): error\n";
   
-  warn << "data (" << blk->len << " bytes) was " << str(blk->data, blk->len) << "\n";
+  warn << "data (" << blk->data.len () << " bytes) was " 
+       << blk->data << "\n";
   exit (0);
 }
 
@@ -190,7 +191,8 @@ fetch_cb (dhashclient dhash, int btype, dhash_stat stat,
   switch (btype) {
   case CONTENT_HASH:
     {
-      if (datasize != blk->len || memcmp (data, blk->data, datasize) != 0) {
+      if (datasize != blk->data.len () ||
+	  memcmp (data, blk->data.cstr (), datasize) != 0) {
 	fatal << "verification failed";
       }
     }
@@ -208,7 +210,8 @@ fetch_cb (dhashclient dhash, int btype, dhash_stat stat,
   case NOAUTH:
     {
       size_t l = strlen(data_one);
-      if (l + 1 != blk->len || memcmp (data_one, blk->data, l+1) != 0) {
+      if (l + 1 != blk->data.len () ||
+	  memcmp (data_one, blk->data.cstr (), l+1) != 0) {
 	fatal << "verification failed";
       }
     }
@@ -252,7 +255,7 @@ magic2ctype(int btype)
     if (btype == NOAUTH      ) return DHASH_NOAUTH;
 
     assert(false);
-    return DHASH_UNKNOWN;
+    return DHASH_CONTENTHASH;
 }
 
 void

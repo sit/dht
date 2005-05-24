@@ -231,6 +231,5 @@ syncer::missing (ptr<location> from,
   from->fill_node (a.n);
   a.key = key;
   a.ctype = DHASH_CONTENTHASH;
-  a.dbtype = DHASH_FRAG;
   doRPC (dhash_program_1, DHASHPROC_BSMUPDATE, &a, NULL, aclnt_cb_null);
 }

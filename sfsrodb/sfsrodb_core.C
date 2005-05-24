@@ -25,8 +25,9 @@
 #include "dhash_prot.h"
 #include "dhash_common.h"
 #include "dhashclient.h"
+#include "dhblock_keyhash.h"
 #include "arpc.h"
-#include "sys/time.h"
+#include <sys/time.h>
 
 #define mytimespecsub(vvp, uvp)						\
 	do {								\
@@ -186,7 +187,7 @@ sfsrodb_get_cb (dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path)
 
   if (blk) {
     ptr<sfsro_data> data = New refcounted<sfsro_data>;
-    xdrmem x (blk->data, blk->len, XDR_DECODE);
+    xdrmem x (blk->data.cstr (), blk->data.len (), XDR_DECODE);
     if (xdr_sfsro_data (x.xdrp (), data))
       get_result = data;
     else

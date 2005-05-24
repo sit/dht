@@ -1,7 +1,9 @@
 #include "dhash_store.h"
-#include "location.h"
-#include "misc_utils.h"
-#include "locationtable.h"
+#include "dhblock.h"
+
+#include <location.h>
+#include <locationtable.h>
+#include <misc_utils.h>
 #include <modlogger.h>
 
 #define warning modlogger ("dhash_store", modlogger::WARNING)
@@ -26,9 +28,9 @@ dhash_store::start ()
 
   unsigned int mtu;
   if (clntnode->my_location ()->id () == dest->id ())
-    mtu = block->len;
+    mtu = data.len ();
   else
-    mtu = dhash::dhash_mtu ();
+    mtu = dhblock::dhash_mtu ();
   
   if (dcb)
     timecb_remove (dcb);
@@ -37,13 +39,13 @@ dhash_store::start ()
     (STORE_TIMEOUT, wrap (mkref(this), &dhash_store::timed_out));
   
   size_t nstored = 0;
-  while (nstored < block->len) {
-    size_t chunklen = MIN (mtu, block->len - nstored);
-    char  *chunkdat = &block->data[nstored];
+  while (nstored < data.len ()) {
+    size_t chunklen = MIN (mtu, data.len () - nstored);
+    char  *chunkdat = (char *)(data.cstr () + nstored);
     size_t chunkoff = nstored;
     npending++;
     store (dest, bid, chunkdat, chunklen, chunkoff, 
-	   block->len, blockno, ctype, store_type);
+	   data.len (), blockno, ctype, store_type);
     nstored += chunklen;
     blockno++;
   }
@@ -113,13 +115,11 @@ dhash_store::store (ptr<location> dest, blockID blockID, char *data,
   ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
   arg->key     = blockID.ID;
   arg->ctype   = blockID.ctype;
-  arg->dbtype  = blockID.dbtype;
   arg->data.setsize (len);
   memcpy (arg->data.base (), data, len);
   arg->offset  = off;
   arg->type    = store_type;
   arg->attr.size     = totsz;
-  //    arg->last    = last;
     
   clntnode->doRPC
     (dest, dhash_program_1, DHASHPROC_STORE, arg, res,

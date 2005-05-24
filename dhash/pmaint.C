@@ -1,5 +1,6 @@
 #include <pmaint.h>
 #include <dhash.h>
+#include <dhblock_chash.h>
 #include <location.h>
 #include <merkle_misc.h>
 #include <dbfe.h>
@@ -54,8 +55,8 @@ pmaint::pmaint_next ()
     if (key != -1) {
       pmaint_next_key = key;
       vec<ptr<location> > preds = host_node->preds ();
-      if (preds.size () >= dhash::num_efrags () &&
-	  betweenrightincl (preds[dhash::num_efrags () - 1]->id(), 
+      if (preds.size () >= dhblock_chash::num_efrags () &&
+	  betweenrightincl (preds[dhblock_chash::num_efrags () - 1]->id(), 
 			   host_node->my_ID (),
 			   key)) {
 	active_cb = delaycb (PRTTMTINY, wrap (this, &pmaint::pmaint_next));
@@ -91,26 +92,26 @@ pmaint::pmaint_lookup (bigint key, dhash_stat err, vec<chord_node> sl, route r)
   chordID pred = r.pop_back ()->id ();
   assert (succ == sl[0].x);
 
-  if (dhash::num_efrags () > sl.size ()) {
+  if (dhblock_chash::num_efrags () > sl.size ()) {
     warning << "not enough successors: " << sl.size () 
-	 << " vs " << dhash::num_efrags () << "\n";
+	 << " vs " << dhblock_chash::num_efrags () << "\n";
     //try again later
     active_cb = delaycb (PRTTMLONG, wrap (this, &pmaint::pmaint_next));
     return;
   }
 
-  if ((sl.size () > dhash::num_efrags() &&
-      dhash::num_efrags () > 1 &&
+  if ((sl.size () > dhblock_chash::num_efrags() &&
+      dhblock_chash::num_efrags () > 1 &&
       betweenbothincl (sl[0].x, sl[sl.size () - 1].x, 
 		       host_node->my_ID ()))
       ||
-      (dhash::num_efrags () == 1 && sl[0].x == host_node->my_ID ()) 
+      (dhblock_chash::num_efrags () == 1 && sl[0].x == host_node->my_ID ()) 
       //above is a special case since between always returns true
       // when the first two arguments are equal
       ) { 
 
     trace << host_node->my_ID () << " PMAINT: we are a replica for " 
-	 << key << " " << sl[0].x << " -- " << sl[dhash::num_efrags () - 1] 
+	 << key << " " << sl[0].x << " -- " << sl[dhblock_chash::num_efrags () - 1] 
 	 << "\n";
     //case I: we are a replica of the key. 
     //i.e. in the successor list. Do nothing.
@@ -225,7 +226,7 @@ pmaint::pmaint_handoff (chord_node dst, bigint key, cbi cb)
 {
   ptr<location> dstloc = host_node->locations->lookup_or_create (dst);
   assert (dstloc);
-  blockID bid (key, DHASH_CONTENTHASH, DHASH_FRAG);
+  blockID bid (key, DHASH_CONTENTHASH);
 
   trace << host_node->my_ID () << " sending " << key << " to " << dst.x << "\n";
   cli->sendblock (dstloc, bid, db, 

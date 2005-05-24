@@ -16,12 +16,12 @@ public:
   
   static void execute (ptr<vnode> clntnode, ptr<location> dest, 
 		       blockID bid,
-		       ref<dhash_block> block, 
+		       str data, 
 		       cbclistore_t cb, 
 		       store_status store_type = DHASH_STORE)
   {
     ptr<dhash_store> d = New refcounted<dhash_store> 
-      (clntnode, dest, bid, block, store_type, cb);
+      (clntnode, dest, bid, data, store_type, cb);
   }
 
 
@@ -31,7 +31,7 @@ protected:
   dhash_stat status;
 
   ptr<location> dest;
-  ptr<dhash_block> block;
+  str data;
   blockID bid;
   cbclistore_t cb;
   dhash_ctype ctype;
@@ -44,13 +44,13 @@ protected:
   bool present;
 
   dhash_store (ptr<vnode> clntnode, ptr<location> dest, blockID bid,
-               ptr<dhash_block> _block, store_status store_type, 
+               str _block, store_status store_type, 
 	       cbclistore_t cb)
     : npending (0),
       error (false),
       status (DHASH_OK),
-      dest (dest), block (_block), bid (bid), cb (cb),
-      ctype (_block->ctype), store_type (store_type),
+      dest (dest), data (_block), bid (bid), cb (cb),
+      ctype (bid.ctype), store_type (store_type),
       clntnode (clntnode), num_retries (0),
       dcb (NULL),
       returned (false),
@@ -64,7 +64,6 @@ protected:
     if (dcb)
       timecb_remove (dcb);
     dcb = NULL;
-    block = NULL;
     dest = NULL;
   }
 

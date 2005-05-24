@@ -55,7 +55,6 @@ struct dstat {
 };
 
 typedef callback<void, int, ptr<dbrec>, dhash_stat>::ptr cbvalue;
-typedef callback<void,dhash_stat>::ptr cbstore;
 typedef callback<void,dhash_stat>::ptr cbstat_t;
 typedef callback<void, s_dhash_block_arg *>::ptr cbblockuc_t;
 typedef callback<void, dhash_stat, ptr<dhash_block>, vec<ptr<location> > >::ptr cb_ret;
@@ -63,14 +62,9 @@ typedef callback<void, dhash_stat, ptr<dhash_block>, vec<ptr<location> > >::ptr 
 class dhash {
  public:
   static u_long reptm ();
-  static u_long keyhashtm ();
   static u_long synctm ();
   
-  static u_long num_efrags ();
-  static u_long num_dfrags ();
-  static u_long num_replica ();
   static u_long dhash_disable_db_env ();
-  static u_long dhash_mtu ();
 
   static ref<dhash> produce_dhash (ptr<vnode> v, str dbname);
 

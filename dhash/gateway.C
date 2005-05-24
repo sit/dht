@@ -98,7 +98,7 @@ dhashgateway::dispatch (svccb *sbp)
 	guess = New refcounted<chordID> (arg->guess);
 
       dhcli->retrieve
-	(blockID (arg->blockID, arg->ctype, DHASH_BLOCK),
+	(blockID (arg->blockID, arg->ctype),
 	 wrap (mkref (this), &dhashgateway::retrieve_cb, sbp),
 	 arg->options, guess);
     }
@@ -135,9 +135,9 @@ dhashgateway::retrieve_cb (svccb *sbp, dhash_stat stat,
   if (!block)
     res.set_status (stat);
   else {
-    res.resok->block.setsize (block->len);
+    res.resok->block.setsize (block->data.len ());
     res.resok->ctype = block->ctype;
-    res.resok->len = block->len;
+    res.resok->len = block->data.len ();
     res.resok->hops = block->hops;
     res.resok->errors = block->errors;
     res.resok->retries = block->retries;
@@ -147,7 +147,7 @@ dhashgateway::retrieve_cb (svccb *sbp, dhash_stat stat,
     res.resok->times.setsize (block->times.size ());
     for (u_int i = 0; i < block->times.size (); i++)
       res.resok->times[i] = block->times[i];
-    memcpy (res.resok->block.base (), block->data, block->len);
+    memcpy (res.resok->block.base (), block->data.cstr (), block->data.len ());
   }
   sbp->reply (&res);
 }

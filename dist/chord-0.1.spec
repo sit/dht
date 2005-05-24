@@ -93,20 +93,26 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/chord-%{version}/libsvc.a
 %{_libdir}/chord-%{version}/libsvc.la
 %{_libdir}/chord-%{version}/libutil.a
-%{_includedir}/chord-%{version}/dhashclient.h
-%{_includedir}/chord-%{version}/config.h
 %{_includedir}/chord-%{version}/chord_types.h
-%{_includedir}/chord-%{version}/dhash.h
+%{_includedir}/chord-%{version}/config.h
+%{_includedir}/chord-%{version}/configurator.h
+%{_includedir}/chord-%{version}/dhashclient.h
 %{_includedir}/chord-%{version}/dhash_common.h
+%{_includedir}/chord-%{version}/dhashgateway_prot.h
+%{_includedir}/chord-%{version}/dhash.h
 %{_includedir}/chord-%{version}/dhash_prot.h
 %{_includedir}/chord-%{version}/dhash_types.h
-%{_includedir}/chord-%{version}/dhashgateway_prot.h
-%{_includedir}/chord-%{version}/configurator.h
+%{_includedir}/chord-%{version}/dhblock_chash.h
+%{_includedir}/chord-%{version}/dhblock.h
+%{_includedir}/chord-%{version}/dhblock_keyhash.h
+%{_includedir}/chord-%{version}/dhblock_replicated.h
 %{_includedir}/chord-%{version}/id_utils.h
 %{_includedir}/chord-%{version}/skiplist.h
-%{_includedir}/chord-%{version}/verify.h
 
 %changelog
+* Tue May 24 2005 Emil Sit <sit@mit.edu>
+- New dhblock header files
+
 * Sat May 14 2005 Jeremy Stribling <strib@mit.edu>
 - configurator.h and skiplist.h
 

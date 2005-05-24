@@ -27,8 +27,10 @@
  */
 
 #include "dhash_common.h"
+#include "dhblock.h"
+#include "dhblock_chash.h"
+#include "dhblock_keyhash.h"
 #include "dhashclient.h"
-#include "verify.h"
 #include <chord_types.h>
 #include "sfsmisc.h"
 #include "arpc.h"
@@ -36,6 +38,7 @@
 #ifdef DMALLOC
 #include "dmalloc.h"
 #endif
+#include "misc_utils.h"
 
 /*
  * dhashclient
@@ -62,7 +65,6 @@ dhashclient::dhashclient (ptr<axprt_stream> xprt)
 /* 
  * append block layout 
  *
- * long contentlen
  * char data[contentlen]
  *
  * key = whatever you say
@@ -71,28 +73,18 @@ void
 dhashclient::append (chordID to, const char *buf, size_t buflen, 
 		     cbinsertgw_t cb)
 {
-  // stick on the [type,contentlen] the server will have to strip it
-  // off before appending
-  xdrsuio x;
-  int size = buflen + 3 & ~3;
-  char *m_buf;
-  if ((m_buf = (char *)XDR_INLINE (&x, size))) {
-    memcpy (m_buf, buf, buflen);
-    
-    int m_len = x.uio ()->resid ();
-    char *m_dat = suio_flatten (x.uio ());
-    insert_togateway (to, m_dat, m_len, cb, DHASH_APPEND, buflen, NULL);
-    xfree (m_dat);
-  } else {
-    (*cb) (DHASH_ERR, NULL); // marshalling failed.
-  }
+  
+ str data (buf, buflen);
+ str marshalled_data = dhblock_chash::marshal_block (data);
+ int m_len = marshalled_data.len ();
+ char *m_dat = (char *)marshalled_data.cstr ();
+ insert_togateway (to, m_dat, m_len, cb, DHASH_APPEND, m_len, NULL);
 }
 
 
 /*
  * nopk block layout
  *
- * long contentlen
  * char data[contentlen]
  *
  * key = provided by user or hash of data depending on type of insert
@@ -104,19 +96,12 @@ dhashclient::insert (bigint key, const char *buf,
 		     dhash_ctype t)
 {
   assert (t == DHASH_CONTENTHASH || t == DHASH_NOAUTH);
-  xdrsuio x;
-  int size = buflen + 3 & ~3;
-  char *m_buf;
-  if ((m_buf = (char *)XDR_INLINE (&x, size))) {
-    memcpy (m_buf, buf, buflen);
-    
-    int m_len = x.uio ()->resid ();
-    char *m_dat = suio_flatten (x.uio ());
-    insert_togateway (key, m_dat, m_len, cb, t, buflen, options);
-    xfree (m_dat);
-  } else {
-    (*cb) (DHASH_ERR, NULL); // marshalling failed.
-  }
+
+  str data (buf, buflen);
+  str marshalled_data = dhblock_chash::marshal_block (data);
+  int m_len = marshalled_data.len ();
+  char *m_dat = (char *)marshalled_data.cstr ();
+  insert_togateway (key, m_dat, m_len, cb, t, m_len, options);
 }
 
 void
@@ -143,24 +128,13 @@ dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
                      keyhash_payload& p,
 		     cbinsertgw_t cb, ptr<option_block> options)
 {
-  xdrsuio x;
-  long plen = p.payload_len ();
-  
-  if (!xdr_sfs_pubkey2 (&x, &key) ||
-      !xdr_sfs_sig2 (&x, &sig) ||
-      !XDR_PUTLONG (&x, &plen) || 
-      p.encode(x)) {
-    vec<chordID> r;
-    ptr<insert_info> i = New refcounted<insert_info>(hash, r);
-    cb (DHASH_ERR, i); // marshalling failed.
-    return;
-  }
-
-  int m_len = x.uio ()->resid ();
-  char *m_dat = suio_flatten (x.uio ());
+  str mdata = dhblock_keyhash::marshal_block (key,
+					     sig,
+					     p);
+  int m_len = mdata.len ();
+  char *m_dat = (char *)mdata.cstr ();
   insert_togateway (hash, m_dat, m_len, cb, DHASH_KEYHASH, 
-                    x.uio()->resid(), options);
-  xfree (m_dat);
+                    m_len, options);
 }
 
 
@@ -260,31 +234,26 @@ dhashclient::retrievecb (cb_cret cb, bigint key,
   else if (res->status != DHASH_OK)
     errstr = dhasherr2str (res->status);
   else {
-    if (!verify (key, res->resok->ctype, res->resok->block.base (), 
-		      res->resok->len)) {
-      errstr = strbuf () << "data did not verify. len: " << res->resok->len
-	                 << " ctype " << res->resok->ctype;
+    str block_data (res->resok->block.base (), res->resok->block.size ());
+
+    if (!verify (key, block_data, res->resok->ctype)) {
+      errstr = strbuf () << "data did not verify. ctype " << res->resok->ctype;
       ret = DHASH_RETRIEVE_NOVERIFY;
     } else {
       // success
-      ptr<dhash_block> blk = get_block_contents (res->resok->block.base(), 
-						 res->resok->block.size(), 
-						 res->resok->ctype);
-      vec<chordID> path;
-      for (u_int i = 0; i < res->resok->path.size (); i++)
-	path.push_back (res->resok->path[i]);
-  
-      if (!blk) {
-        (*cb) (DHASH_RETRIEVE_NOVERIFY, NULL, path);
-        return;
-      }
-
+      str contents = get_block_contents (block_data, res->resok->ctype);
+      ptr<dhash_block> blk = New refcounted<dhash_block> (contents,
+							  res->resok->ctype);
       blk->hops = res->resok->hops;
       blk->errors = res->resok->errors;
       blk->retries = res->resok->retries;
       for (u_int i = 0; i < res->resok->times.size (); i++)
 	blk->times.push_back (res->resok->times[i]);
-      
+  
+      vec<chordID> path;
+      for (u_int i = 0; i < res->resok->path.size (); i++)
+	path.push_back (res->resok->path[i]);
+  
       (*cb) (DHASH_OK, blk, path);
       return;
     } 

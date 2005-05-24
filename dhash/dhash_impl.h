@@ -2,24 +2,21 @@
 #define __DHASH_IMPL_H__
 
 #include "dhash.h"
+#include <qhash.h>
 
 // Forward declarations.
 class RPC_delay_args;
 
+class dhashcli;
 struct dbrec;
 class dbfe;
-class dhc;
+class dhblock_srv;
 
 class location;
 struct hashID;
 
-class merkle_server;
-class merkle_tree;
-class pmaint;
-
-class dhashcli;
-
-class block_status_manager;
+// Callback typedefs
+typedef callback<void,bool,dhash_stat>::ptr cbstore;
 
 // Helper structs/classes
 struct store_chunk {
@@ -67,37 +64,13 @@ struct pk_partial {
 		cookie (c) {};
 };
 
-struct repair_state {
-  ihash_entry <repair_state> link;
-  bigint hashkey;
-  const blockID key;
-  const ptr<location> where;
-  repair_state (blockID key, ptr<location> w) :
-    hashkey (key.ID), key (key), where (w) {};
-};
-
 class dhash_impl : public dhash {
-  // blocks that we need fetch
-  enum { REPAIR_OUTSTANDING_MAX = 15 };
-  u_int32_t repair_outstanding;
-  ihash<bigint, repair_state, &repair_state::hashkey, &repair_state::link, hashID> repair_q;
-
   int pk_partial_cookie;
   
-  ptr<dbfe> db;
-  ptr<dbfe> keyhash_db;
-  ptr<dbfe> cache_db;
+  qhash<dhash_ctype, ref<dhblock_srv> > blocksrv;
+
   ptr<vnode> host_node;
-  dhashcli *cli;
-  str dhcs;
-  ptr<dhc> dhc_mgr;
-
-  ptr<block_status_manager> bsm;
-
-  merkle_server *msrv;
-  pmaint *pmaint_obj;
-
-  merkle_tree *mtree;
+  ptr<dhashcli> cli;
 
   ihash<chordID, store_state, &store_state::key, 
     &store_state::link, hashID> pst;
@@ -105,27 +78,6 @@ class dhash_impl : public dhash {
   ihash<int, pk_partial, &pk_partial::cookie, 
     &pk_partial::link> pk_cache;
   
-  /* Called by merkle_syncer to notify of blocks we are succ to */
-  void missing (ptr<location> from, bigint key, bool local);
-
-  timecb_t *repair_tcb;
-  void repair_timer ();
-  void repair_flush_q ();
-  void repair (blockID k, ptr<location> to);
-  void send_frag (blockID k, str block, ptr<location> to);
-  void send_frag_cb (ptr<location> to, blockID k, dhash_stat err, bool present);
-  void repair_retrieve_cb (blockID k, ptr<location> to,
-			   dhash_stat err, ptr<dhash_block> b, route r);
-
-  unsigned keyhash_mgr_rpcs;
-  void update_replica_list ();
-  vec<ptr<location> > replicas;
-  timecb_t *keyhash_mgr_tcb;
-  void keyhash_mgr_timer ();
-  void keyhash_mgr_lookup (chordID key, dhash_stat err,
-			   vec<chord_node> hostsl, route r);
-  void keyhash_sync_done (dhash_stat stat, bool present);
-
   void route_upcall (int procno, void *args, cbupcalldone_t cb);
 
   void doRPC (ptr<location> n, const rpc_program &prog, int procno,
@@ -140,7 +92,6 @@ class dhash_impl : public dhash {
   void doRPC_reply (svccb *sbp, void *res, 
 		    const rpc_program &prog, int procno);
   void dispatch (user_args *a);
-  void sync_cb ();
 
   void storesvc_cb (user_args *sbp, s_dhash_insertarg *arg, 
 		    bool already_present, dhash_stat err);
@@ -153,22 +104,11 @@ class dhash_impl : public dhash {
   void sent_block_cb (dhash_stat *s, clnt_stat err);
 
   void fetch (blockID id, int cookie, cbvalue cb);
-  void append (ref<dbrec> key, ptr<dbrec> data,
-	       s_dhash_insertarg *arg,
-	       cbstore cb);
-  void append_after_db_store (cbstore cb, chordID k, int stat);
-  void append_after_db_fetch (ref<dbrec> key, ptr<dbrec> new_data,
-			      s_dhash_insertarg *arg, cbstore cb,
-			      int cookie, ptr<dbrec> data, dhash_stat err);
-  
-  void store (s_dhash_insertarg *arg, bool exists, cbstore cb);
-  
-  dhash_stat key_status (const blockID &n);
-  char responsible(const chordID& n);
 
-  ptr<dbrec> dblookup(const blockID &i);
-  int db_insert_immutable (ref<dbrec> key, ref<dbrec> data, dhash_ctype ctype);
-  void db_delete_immutable (ref<dbrec> key);
+  void store (s_dhash_insertarg *arg, cbstore cb);
+  
+  bool key_present (const blockID &n);
+  ptr<dbrec> dblookup (const blockID &i);
 
   void dofetchrec (user_args *sbp, dhash_fetchrec_arg *arg);
   void dofetchrec_nexthop (user_args *sbp, dhash_fetchrec_arg *arg,

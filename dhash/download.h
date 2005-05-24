@@ -15,7 +15,8 @@ private:
   blockID blckID;
   cbretrieve_t cb;
   cbtmo_t cb_tmo;
-  ptr<dhash_block> block;
+  char *buffer;
+  int buf_len;
   int nextchunk;     //  fast
   int numchunks;     //   retransmit
   vec<long> seqnos;  //   parameters

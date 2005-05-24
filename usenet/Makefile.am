@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.7 2005/02/18 21:34:33 sit Exp $
+# $Id: Makefile.am,v 1.8 2005/05/24 20:58:57 sit Exp $
 
 $(PROGRAMS): $(LDEPS) 
 
@@ -23,7 +23,7 @@ bin_PROGRAMS = usenet udbctl
 usenet_SOURCES = usenetdht_storage.C \
 		 usenet.C nntp.C group.C config.C newspeer.C \
 		 usenet.h group.h newspeer.h nntp.h
-usenet_LDADD = ../dhash/libdhashclient.a ../svc/libsvc.la ${DBLIB} ${LDADD}
+usenet_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la ${DBLIB} ${LDADD}
 
 udbctl_SOURCES = udbctl.C usenetdht_storage.C group.C
 udbctl_LDADD = ${DBLIB} ${LDADD}

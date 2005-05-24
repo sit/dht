@@ -10,11 +10,6 @@ enum store_status {
   DHASH_REPLICA = 3
 };
 
-enum dhash_dbtype {
-  DHASH_BLOCK = 0,
-  DHASH_FRAG = 1
-};
-
 struct dhash_valueattr {
   unsigned size;
 };
@@ -28,7 +23,6 @@ enum dhash_offer_status {
 struct s_dhash_insertarg {
   chordID key;
   dhash_ctype ctype;
-  dhash_dbtype dbtype;
   dhash_value data;
   int offset;
   store_status type;
@@ -39,7 +33,6 @@ struct s_dhash_insertarg {
 struct s_dhash_fetch_arg {
   chordID key;
   dhash_ctype ctype;
-  dhash_dbtype dbtype;
   int32_t start;
   int32_t len;
   int32_t cookie;
@@ -116,7 +109,6 @@ default:
 struct dhash_fetchrec_arg {
   chordID key;			/* key to route towards */
   dhash_ctype ctype;
-  dhash_dbtype dbtype;
   
   chord_node_wire path<>;	/* path accumulator */
 };
@@ -146,9 +138,7 @@ struct dhash_bsmupdate_arg {
   bool local;
 
   chordID key;
-  /* Unused? */
   dhash_ctype ctype;
-  dhash_dbtype dbtype;
 };
 
 program DHASH_PROGRAM {

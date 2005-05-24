@@ -34,6 +34,10 @@
 #include "dhash_impl.h"
 #include "dhashcli.h"
 
+#include "dhblock.h"
+#include "dhblock_srv.h"
+#include "dhblock_chash.h"
+
 #include <location.h>
 #include <locationtable.h>
 
@@ -49,10 +53,93 @@
 #define info  modlogger ("dhash_fetchrec", modlogger::INFO)
 #define trace modlogger ("dhash_fetchrec", modlogger::TRACE)
 
+
+void
+dhashcli::dofetchrec_execute (blockID b, cb_ret cb)
+{
+  chordID myID = clntnode->my_ID ();
+
+  ptr<dhash_fetchrec_arg> arg = New refcounted<dhash_fetchrec_arg> ();
+  arg->key    = b.ID;
+  arg->ctype  = b.ctype;
+
+  vec<chordID> failed;
+  ptr<location> s = clntnode->closestpred (b.ID, failed);
+  trace << myID << ": dofetchrec_execute (" << b << ") -> " << s->id () << "\n";
+  
+  ptr<dhash_fetchrec_res> res = New refcounted<dhash_fetchrec_res> (DHASH_OK);
+  timespec start;
+  clock_gettime (CLOCK_REALTIME, &start);
+  clntnode->doRPC (s, dhash_program_1, DHASHPROC_FETCHREC,
+		   arg, res,
+		   wrap (this, &dhashcli::dofetchrec_cb, start, b, cb, res));
+}
+
+void
+dhashcli::dofetchrec_cb (timespec start, blockID b, cb_ret cb,
+			 ptr<dhash_fetchrec_res> res, clnt_stat s)
+{
+  strbuf prefix;
+  prefix << clntnode->my_ID () << ": dofetchrec_execute (" << b << "): ";
+  trace << prefix << "returned " << s << "\n";
+  if (s) {
+    route r;
+    (*cb) (DHASH_RPCERR, NULL, r);
+    return;
+  }
+  
+  route r;
+  rpc_vec<chord_node_wire, RPC_INFINITY> *path = (res->status == DHASH_OK) ?
+    &res->resok->path :
+    &res->resdef->path;
+  for (size_t i = 0; i < path->size (); i++) {
+    ptr<location> l = clntnode->locations->lookup_or_create
+      (make_chord_node ((*path)[i]));
+    assert (l != NULL);
+    r.push_back (l);
+  }
+  
+  if (res->status != DHASH_OK) {
+    trace << prefix << "returned " << res->status << "\n";
+    // XXX perhaps one should do something cleverer here.
+      (*cb) (res->status, NULL, r);
+    return;
+  }
+
+  // Okay, we have the block.  Massage it into a dhash_block
+
+  ptr<dhash_block> blk = New refcounted<dhash_block> (res->resok->res.base (),
+						      res->resok->res.size (),
+						      b.ctype);
+  blk->ID = b.ID;
+  blk->hops = res->resok->path.size ();
+  blk->errors = 0;  // XXX
+  blk->retries = 0; // XXX
+
+  // We can't directly measure the time it took for a lookup.
+  // However, the remote node does report back to us the amount of time
+  // it took to reconstruct the block.  Since there are only two phases,
+  // we can use this time to construct the actual time required.
+  timespec finish;
+  clock_gettime (CLOCK_REALTIME, &finish);
+  timespec total = finish - start;
+  blk->times.push_back (total.tv_sec * 1000 + int (total.tv_nsec/1000000));
+
+  u_int32_t othertimes = 0;
+  for (size_t i = 0; i < res->resok->times.size (); i++) {
+    blk->times.push_back (res->resok->times[i]);
+    othertimes += res->resok->times[i];
+  }
+  blk->times[0] -= othertimes;
+
+  (*cb) (DHASH_OK, blk, r);
+  return;
+}
+
 void
 dhash_impl::dofetchrec (user_args *sbp, dhash_fetchrec_arg *arg)
 {    
-  blockID id (arg->key, arg->ctype, arg->dbtype);
+  blockID id (arg->key, arg->ctype);
 
   strbuf header;
   header << host_node->my_ID () << ": dofetchrec (" << id << "): ";
@@ -60,7 +147,8 @@ dhash_impl::dofetchrec (user_args *sbp, dhash_fetchrec_arg *arg)
   // First attempt to directly return the block if we have it.
   // XXX Really should have a better way of knowing when we have
   //     the entire block, as opposed to a fragment of something.
-  if (id.ctype == DHASH_KEYHASH && key_status (id) != DHASH_NOTPRESENT) {
+  if (id.ctype == DHASH_KEYHASH && blocksrv[DHASH_KEYHASH] &&
+      blocksrv[DHASH_KEYHASH]->key_present (id)) {
     trace << header << "key present!\n";
     dofetchrec_local (sbp, arg);
     return;
@@ -71,7 +159,7 @@ dhash_impl::dofetchrec (user_args *sbp, dhash_fetchrec_arg *arg)
   
   chordID myID = host_node->my_ID ();
   Coord mycoords = host_node->my_location ()->coords ();
-  u_long m = dhash::num_efrags ();
+  u_long m = dhblock_chash::num_efrags ();
 
   vec<chordID> failed;
   ptr<location> p = host_node->closestpred (arg->key, failed);
@@ -147,7 +235,7 @@ void
 dhash_impl::dofetchrec_nexthop (user_args *sbp, dhash_fetchrec_arg *arg,
 				ptr<location> p)
 {
-  blockID id (arg->key, arg->ctype, arg->dbtype);
+  blockID id (arg->key, arg->ctype);
   trace << host_node->my_ID () << ": dofetchrec_nexthop (" << id << ") to "
 	<< p->id () << "\n";
   ptr<dhash_fetchrec_arg> farg = New refcounted<dhash_fetchrec_arg> ();
@@ -155,7 +243,6 @@ dhash_impl::dofetchrec_nexthop (user_args *sbp, dhash_fetchrec_arg *arg,
 
   farg->key    = arg->key;
   farg->ctype  = arg->ctype;
-  farg->dbtype = arg->dbtype;
   farg->path.setsize (arg->path.size () + 1);
   for (size_t i = 0; i < arg->path.size (); i++)
     farg->path[i] = arg->path[i];
@@ -175,7 +262,7 @@ dhash_impl::dofetchrec_nexthop_cb (user_args *sbp, dhash_fetchrec_arg *arg,
 				   timespec start,
 				   clnt_stat err)
 {
-  blockID id (arg->key, arg->ctype, arg->dbtype);
+  blockID id (arg->key, arg->ctype);
   trace << host_node->my_ID () << ": dofetchrec_nexthop (" << id
 	<< ") returned " << err << ".\n";
   
@@ -230,8 +317,8 @@ dhash_impl::dofetchrec_nexthop_cb (user_args *sbp, dhash_fetchrec_arg *arg,
 void
 dhash_impl::dofetchrec_local (user_args *sbp, dhash_fetchrec_arg *arg)
 {
-  blockID id (arg->key, arg->ctype, arg->dbtype);
-  ptr<dbrec> b = dblookup (id); assert (b != NULL);
+  ptr<dhblock_srv> s = blocksrv[arg->ctype];
+  ptr<dbrec> b = s->fetch (arg->key); assert (b != NULL);
   dhash_fetchrec_res res (DHASH_OK);
   
   res.resok->res.setsize (b->len);
@@ -253,7 +340,7 @@ void
 dhash_impl::dofetchrec_assembler (user_args *sbp, dhash_fetchrec_arg *arg,
 				  vec<ptr<location> > succs)
 {
-  blockID id (arg->key, arg->ctype, arg->dbtype);
+  blockID id (arg->key, arg->ctype);
   trace << host_node->my_ID () << ": dofetchrec_assembler (" << id << ")\n";
 
   vec<chord_node> sl;
@@ -288,8 +375,8 @@ dhash_impl::dofetchrec_assembler_cb (user_args *sbp, dhash_fetchrec_arg *arg,
   switch (s) {
   case DHASH_OK:
     {
-      res.resok->res.setsize (b->len);
-      memcpy (res.resok->res.base (), b->data, b->len);
+      res.resok->res.setsize (b->data.len ());
+      memcpy (res.resok->res.base (), b->data.cstr (), b->data.len ());
       
       res.resok->times.setsize (1);
       res.resok->times[0] = b->times.pop_back ();

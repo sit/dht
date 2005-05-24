@@ -1,6 +1,6 @@
 #include "dhash_common.h"
-#include "dhash.h"
 #include "dhashclient.h"
+#include "dhblock_keyhash.h"
 #include <sfscrypt.h>
 #include <sys/time.h>
 

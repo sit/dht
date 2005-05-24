@@ -1,66 +1,56 @@
+#include "dhash_common.h"
+#include "dhblock_keyhash.h"
+#include "sfscrypt.h"
 
-#include "dhash_common.h" // keyhash_payload
-#include "dhash.h"
-#include "verify.h"
-#include <dbfe.h>
-#include <sfscrypt.h>
-#include <dhash_prot.h>
-#include <chord.h>
-#include <chord_types.h>
-#include <id_utils.h>
-
-bigint
-compute_hash (const void *buf, size_t buflen)
+str
+dhblock_keyhash::marshal_block (sfs_pubkey2 key,
+			       sfs_sig2 sig,
+			       keyhash_payload& p)
 {
-  char h[sha1::hashsize];
-  bzero(h, sha1::hashsize);
-  sha1_hash (h, buf, buflen);
+  xdrsuio x;
+  long plen = p.payload_len ();
   
-  bigint n;
-  mpz_set_rawmag_be(&n, h, sha1::hashsize);  // For big endian
-  return n;
+  if (!xdr_sfs_pubkey2 (&x, &key) ||
+      !xdr_sfs_sig2 (&x, &sig) ||
+      !XDR_PUTLONG (&x, &plen) || 
+      p.encode(x))
+  {
+    fatal << "keyhash: marshal failed\n";
+  } 
+  
+  int m_len = x.uio ()->resid ();
+  char *m_dat = suio_flatten (x.uio ());
+  return str (m_dat, m_len);
 }
 
-bool
-verify (chordID key, dhash_ctype t, const char *buf, int len) 
+str
+dhblock_keyhash::get_payload (str data)
 {
-  switch (t) {
-  case DHASH_CONTENTHASH:
-    return verify_content_hash (key, buf, len);
-    break;
-  case DHASH_KEYHASH:
-    return verify_keyhash (key, buf, len);
-    break;
-  case DHASH_NOAUTH:
-  case DHASH_APPEND:
-    return true;
-    break;
-  default:
-    warn << "bad type " << t << "\n";
-    return false;
-  }
-  return false;
+  char *content = NULL;
+  long contentlen = data.len ();
+
+  xdrmem x (data.cstr (), data.len (), XDR_DECODE);
+  
+  sfs_pubkey2 k;
+  sfs_sig2 s;
+  if (!xdr_sfs_pubkey2 (&x, &k) ||
+      !xdr_sfs_sig2 (&x, &s) ||
+      !XDR_GETLONG (&x, &contentlen))
+    fatal << "unmarshal failed\n";
+  if (contentlen >= 0 && !(content = (char *)XDR_INLINE (&x, contentlen)))
+    fatal << "unmarshal failed\n";
+
+  return str (content, contentlen);
 }
 
-bool
-verify_content_hash (chordID key, const char *buf, int len) 
+bool 
+dhblock_keyhash::verify (chordID key, str data)
 {
-  char hashbytes[sha1::hashsize];
-  sha1_hash (hashbytes, buf, len);
-  chordID ID;
-  mpz_set_rawmag_be (&ID, hashbytes, sizeof (hashbytes));  // For big endian
-  return (ID == key);
-}
-
-bool
-verify_keyhash (chordID key, const char *buf, int len)
-{
-  // extract the public key from the message
   sfs_pubkey2 pubkey;
   sfs_sig2 sig;
   long plen;
 
-  xdrmem x (buf, (unsigned)len, XDR_DECODE);
+  xdrmem x (data.cstr (), data.len (), XDR_DECODE);
   if (!xdr_sfs_pubkey2 (&x, &pubkey))
     return false;
   if (!xdr_sfs_sig2 (&x, &sig))
@@ -83,108 +73,26 @@ verify_keyhash (chordID key, const char *buf, int len)
   return ok;
 }
 
-ptr<dhash_block>
-get_block_contents (ptr<dbrec> d, dhash_ctype t)
-{
-  return get_block_contents (d->value, d->len, t);
-}
-
-ptr<dhash_block>
-get_block_contents (ref<dbrec> d, dhash_ctype t)
-{
-  return get_block_contents (d->value, d->len, t);
-}
-
-
-ptr<dhash_block> 
-get_block_contents (ptr<dhash_block> block, dhash_ctype t) 
-{
-  return get_block_contents (block->data, block->len, t);
-}
-
-
-ptr<dhash_block> 
-get_block_contents (const char *data, unsigned int len, dhash_ctype t)
-{
-  char *content;
-  long contentlen = len;
-
-  xdrmem x (data, len, XDR_DECODE);
-  switch (t) {
-  case DHASH_KEYHASH:
-    {
-      sfs_pubkey2 k;
-      sfs_sig2 s;
-      if (!xdr_sfs_pubkey2 (&x, &k) ||
-	  !xdr_sfs_sig2 (&x, &s) ||
-	  !XDR_GETLONG (&x, &contentlen))
-	return NULL;
-    }
-    /* FALL THROUGH */
-
-  case DHASH_CONTENTHASH:
-  case DHASH_NOAUTH:
-  case DHASH_APPEND:
-    {
-      if (contentlen >= 0 && !(content = (char *)XDR_INLINE (&x, contentlen)))
-	return NULL;
-    }
-    break;
-
-  default:
-    return NULL;
-  }
-
-  ptr<dhash_block> d = New refcounted<dhash_block> (content, contentlen, t);
-  return d;
-}
-
-
 long
-keyhash_version (ptr<dhash_block> data)
-{
-  return keyhash_version (data->data, data->len);
-}
-
-long
-keyhash_version (ref<dhash_block> data)
-{
-  return keyhash_version (data->data, data->len);
-}
-
-long
-keyhash_version (ref<dbrec> data)
-{
-  return keyhash_version (data->value, data->len);
-}
-
-long
-keyhash_version (ptr<dbrec> data)
-{
-  return keyhash_version (data->value, data->len);
-}
-
-long
-keyhash_version (const char *value, unsigned int len)
+dhblock_keyhash::version (const char *value, unsigned int len)
 {
   xdrmem x (value, len, XDR_DECODE);
   sfs_pubkey2 k;
   sfs_sig2 s;
   long plen;
-
+  
   if (!xdr_sfs_pubkey2 (&x, &k) ||
       !xdr_sfs_sig2 (&x, &s) ||
       !XDR_GETLONG (&x, &plen))
     return -1;
   if (plen <= 0)
     return -1;
-
+  
   ptr<keyhash_payload> p = keyhash_payload::decode (x, plen);
   if (!p)
     return -1;
   return p->version ();
 }
-
 
 /*
  * keyhash_payload
@@ -329,7 +237,7 @@ keyhash_payload::decode (xdrmem &x, long plen)
 ptr<keyhash_payload>
 keyhash_payload::decode (ptr<dhash_block> b)
 {
-  xdrmem x (b->data, b->len, XDR_DECODE);
-  return decode (x, b->len);
+  xdrmem x (b->data.cstr (), b->data.len (), XDR_DECODE);
+  return decode (x, b->data.len ());
 }
 

@@ -7,10 +7,9 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <stdio.h>
-#include <dhash.h>
 #include <dhash_common.h>
 #include <dhashclient.h>
-#include <verify.h>
+#include <dhblock.h>
 
 dhashclient *dhash;
 int inflight = 0, maxinflight;
@@ -126,13 +125,14 @@ struct inode : indirect {
 
   inode(ptr<dhash_block> blk) : indirect(NULL) {
     extralen = sizeof(filename) + sizeof(filelen);
-    if(blk->len < extralen)
+    if (blk->data.len () < extralen)
       fatal("incorrect format of inode block\n");
 
     strncpy(filename, blk->data, sizeof(filename));
     memcpy(&filelen, blk->data + sizeof(filename), sizeof(filelen));
-    buf = blk->data + extralen;
-    blen = blk->len - extralen;
+    // Beware! blk may be freed despite our illegal pointer to its mem
+    buf = (char *) blk->data.cstr () + extralen;
+    blen = blk->data.len () - extralen;
   }
 
   int len(void) {
@@ -184,7 +184,7 @@ void gotblock_cb(int len, dhash_stat st, ptr<dhash_block> bl,
 
   if(fseek(outfile, len, SEEK_SET) != 0)
     fatal("fseek failure\n");
-  if(fwrite(bl->data, 1, bl->len, outfile) != bl->len)
+  if(fwrite(bl->data.cstr (), 1, bl->data.len (), outfile) != bl->data.len ())
     fatal("write failure\n");
 
   inflight--;
@@ -205,9 +205,9 @@ void gotindirect_step(int len, unsigned int step,
     fatal(" lost indirect\n");
   }
 
-  char *buf = bl->data;
+  const char *buf = bl->data.cstr ();
   chordID ID;
-  for(unsigned int i=step; i<bl->len; i+=sha1::hashsize) {
+  for(unsigned int i=step; i<bl->data.len (); i+=sha1::hashsize) {
     if(inflight >= maxinflight) {
       // throttling
       todo = wrap(&gotindirect_step, len, i, st, bl);

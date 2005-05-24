@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.43 2005/02/25 00:49:36 fdabek Exp $
+# $Id: Makefile.am,v 1.44 2005/05/24 20:58:55 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -35,10 +35,10 @@ builddb_SOURCES = builddb.C
 builddb_LDADD = ../sfsrodb/libsfsrodb.a ../dhash/libdhash.a ../dhc/libdhc.a ../merkle/libmerkle.a ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la $(DBLIB) $(LDADD)
 
 dbm_SOURCES = dhash_benchmark.C
-dbm_LDADD = ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
+dbm_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)
 
 test_types_SOURCES = test_types.C
-test_types_LDADD = ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
+test_types_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)
 
 dbdump_SOURCES = dbdump.C
 dbdump_LDADD = $(DBLIB) $(LDADD)
@@ -50,7 +50,7 @@ nodeq_SOURCES = nodeq.C rpclib.C
 nodeq_LDADD = ../svc/libsvc.la ../utils/libutil.a ../merkle/libmerkle.a $(LDADD)
 
 dhc_test_SOURCES = dhc_test.C
-dhc_test_LDADD = ../dhash/libdhashclient.a ../svc/libsvc.la $(LDADD)
+dhc_test_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)
 
 pkc_SOURCES = pk_consistency.C
 pkc_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)

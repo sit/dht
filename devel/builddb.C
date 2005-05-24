@@ -3,10 +3,9 @@
 #include "dhash_prot.h"
 #include "merkle_misc.h"
 #include "dbfe.h"
-#include "dhash.h"
-#include "verify.h"
+#include <dhash_common.h>
+#include <dhblock_chash.h>
 #include <ida.h>
-
 
 #include "rxx.h"
 #include "async.h"
@@ -80,9 +79,9 @@ gen_frag (ptr<dbrec> block)
 {
   // see: dhashcli::insert2_succs_cb ()
   str blk (block->value, block->len);
-  u_long m = Ida::optimal_dfrag (block->len, dhash::dhash_mtu ());
-  if (m > dhash::num_dfrags ())
-      m = dhash::num_dfrags ();
+  u_long m = Ida::optimal_dfrag (block->len, dhblock::dhash_mtu ());
+  if (m > dhblock_chash::num_dfrags ())
+      m = dhblock_chash::num_dfrags ();
   str frag = Ida::gen_frag (m, blk);
   // prepend type of block onto fragment
   //str res (strbuf (block->value, 4) << frag);

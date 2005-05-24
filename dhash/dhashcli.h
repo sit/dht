@@ -4,7 +4,6 @@
 #include <sys/types.h>
 
 // SFS includes
-#include <refcnt.h>
 #include <vec.h>
 
 typedef callback<void, dhash_stat, chordID>::ref cbinsert_t;
@@ -14,7 +13,6 @@ typedef callback<void, dhash_stat, vec<chord_node>, route>::ref
 typedef	callback<void, dhash_stat, bool>::ref sendblockcb_t;
 
 #include "download.h" // for cbretrieve_t
-#include <dhc_prot.h>
 
 // Forward declarations
 class dbfe;
@@ -22,11 +20,10 @@ class vnode;
 class dhash;
 class dhash_block;
 class route_iterator;
+struct dhblock;
 
 class dhashcli {
-  ptr<vnode> clntnode;
-  bool ordersucc_;
-
+public:
   struct rcv_state {
     blockID key;
     route r;
@@ -39,18 +36,9 @@ class dhashcli {
     vec<chord_node> succs;
     size_t nextsucc;
     
-    vec<str> frags;
     cb_ret callback;
 
     bool completed;
-    
-    struct dhc_state {
-      ptr<dhc_get_res> res;
-      dhash_stat status;
-      int options;
-      int retries;
-      ptr<chordID> guess;
-    } ds;
 
     void timemark () {
       timespec x;
@@ -89,7 +77,12 @@ class dhashcli {
       block (b), cb (x), out (0), good (0) {}
   };
 
-  void doassemble (ptr<rcv_state> rs, vec<chord_node> succs);
+private:
+  ptr<vnode> clntnode;
+  bool ordersucc_;
+
+  void doassemble (ptr<rcv_state> rs, ptr<dhblock> block,
+		   vec<chord_node> succs);
   void dofetchrec_execute (blockID b, cb_ret cb);
   void dofetchrec_cb (timespec s, blockID b, cb_ret cb,
 		      ptr<dhash_fetchrec_res> res, clnt_stat s);
@@ -102,14 +95,13 @@ class dhashcli {
   void insert_store_cb (ref<sto_state> ss, route r, u_int i, 
 			u_int nstores, u_int min_needed,
 			dhash_stat err, chordID id, bool present);
-  void insert_dhc_cb (ptr<location> dest, route r, cbinsert_path_t cb, 
-		      ptr<dhc_put_res> res, clnt_stat cerr);
   
-  void fetch_frag (ptr<rcv_state> rs);
+  void fetch_frag (ptr<rcv_state> rs, ptr<dhblock> block);
 
-  void retrieve_lookup_cb (ptr<rcv_state> rs, vec<chord_node> succs, route r,
+  void retrieve_lookup_cb (ptr<rcv_state> rs, ptr<dhblock> block,
+			   vec<chord_node> succs, route r,
 			   chordstat status);
-  void retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
+  void retrieve_fetch_cb (ptr<rcv_state> rs, u_int i, ptr<dhblock> b,
 			  ptr<dhash_block> block);
 
   void insert_succlist_cb (ref<dhash_block> block, cbinsert_path_t cb,
@@ -118,9 +110,7 @@ class dhashcli {
   void retrieve_block_hop_cb (ptr<rcv_state> rs, route_iterator *ci,
 			     int options, int retries, ptr<chordID> guess,
 			     bool done);
-  void retrieve_dhc_lookup_cb (ptr<rcv_state> rs, vec<chord_node> succs, 
-			       route path, chordstat err);
-  void retrieve_dhc_cb (ptr<rcv_state> rs, clnt_stat err);
+
   void retrieve_dl_or_walk_cb (ptr<rcv_state> rs, dhash_stat status,
                                int options, int retries, ptr<chordID> guess,
 			       ptr<dhash_block> blk);
@@ -130,6 +120,7 @@ class dhashcli {
   void on_timeout (ptr<rcv_state> rs, 
 		   chord_node dest,
 		   int retry_num);
+
 public:
   dhashcli (ptr<vnode> node);
 

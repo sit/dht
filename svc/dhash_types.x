@@ -4,11 +4,8 @@ typedef opaque dhash_value<>;
 enum dhash_stat {
   DHASH_OK = 0,
   DHASH_NOENT = 1,
-  DHASH_NOTPRESENT = 2,
   DHASH_RETRY = 3,
-  DHASH_STORED = 4,
   RPC_NOHANDLER = 5,
-  DHASH_REPLICATED = 6,
   DHASH_ERR = 7,
   DHASH_CHORDERR = 8,
   DHASH_RPCERR = 9,
@@ -30,8 +27,6 @@ enum dhash_stat {
 enum dhash_ctype {
   DHASH_CONTENTHASH = 0,
   DHASH_KEYHASH = 1,
-  /* ctype 2 not assigned */
-  DHASH_NOAUTH = 3,
-  DHASH_APPEND = 4,
-  DHASH_UNKNOWN = 5
+  DHASH_NOAUTH = 2,
+  DHASH_APPEND = 3
 };

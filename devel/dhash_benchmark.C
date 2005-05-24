@@ -30,7 +30,7 @@
 #include <dhash_common.h>
 #include <dhash_prot.h>
 #include <dhashclient.h>
-#include <verify.h>
+#include <dhblock.h>
 #include <dbfe.h>
 #include <crypt.h>
 #include <sys/time.h>
@@ -146,7 +146,7 @@ fetch_cb (int i, struct timeval start, dhash_stat stat, ptr<dhash_block> blk, ve
     buf << "Error: " << IDs[i] << "\n";
     fprintf (outfile, str (buf).cstr ());
   }
-  else if (datasize != blk->len || memcmp (data[i], blk->data, datasize) != 0)
+  else if (datasize != blk->data.len () || memcmp (data[i], blk->data.cstr (), datasize) != 0)
     fatal << "verification failed for block " << IDs[i];
   else {
     struct timeval end;

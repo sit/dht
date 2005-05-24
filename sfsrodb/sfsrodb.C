@@ -1,4 +1,4 @@
-/* $Id: sfsrodb.C,v 1.32 2005/05/14 06:35:05 strib Exp $ */
+/* $Id: sfsrodb.C,v 1.33 2005/05/24 20:58:57 sit Exp $ */
 
 /*
  * Copyright (C) 1999 Kevin Fu (fubob@mit.edu)
@@ -49,8 +49,8 @@
 #include <route.h>
 #include <dhash_common.h>
 #include <dhashclient.h>
-#include <verify.h>
 #include "dbfe.h"
+#include <dhblock.h>
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 str lsd_socket;

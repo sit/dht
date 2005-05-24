@@ -3,7 +3,7 @@
 #include <rxx.h>
 #include <dhash_common.h>
 #include <dhashclient.h>
-#include <verify.h>
+#include <dhblock.h>
 #include <dbfe.h>
 
 #include "usenet.h"
@@ -321,7 +321,7 @@ nntp::cmd_article_cb (ptr<bool> deleted, bool head, chordID msgkey,
   if (head) {
     aio << articleb << cur_group->cur_art << " " << msgkey << articlee;
   }
-  aio << str (blk->data, blk->len) << period;
+  aio << blk->data << period;
 }
 
 // --- post article

@@ -29,31 +29,23 @@
 #include <rpctypes.h>
 
 #include <chord.h>
-
 #include "dhash_common.h"
 #include "dhash_impl.h"
 #include "dhashcli.h"
-#include "verify.h"
-#include "pmaint.h"
 
-#include <merkle.h>
-#include <merkle_server.h>
-#include <merkle_misc.h>
-
-#include <dhc.h>
+#include <dbfe.h>
 
 #include <dhash_prot.h>
-#include <dhash_store.h>
-#include <chord.h>
 #include <chord_types.h>
-#include <comm.h>
-#include <block_status.h>
-#include <dbfe.h>
-#include <ida.h>
 #include <id_utils.h>
 #include <location.h>
 #include <locationtable.h>
 #include <misc_utils.h>
+
+#include "dhblock_srv.h"
+#include "dhblock_chash_srv.h"
+#include "dhblock_keyhash_srv.h"
+#include "dhblock_noauth_srv.h"
 
 #ifdef DMALLOC
 #include <dmalloc.h>
@@ -63,8 +55,6 @@
 #define warning modlogger ("dhash", modlogger::WARNING)
 #define info  modlogger ("dhash", modlogger::INFO)
 #define trace modlogger ("dhash", modlogger::TRACE)
-
-int DHC_SERVER = getenv("DHC") ? atoi(getenv("DHC")) : 0;
 
 #include <configurator.h>
 
@@ -77,21 +67,12 @@ dhash_config_init::dhash_config_init ()
   bool ok = true;
 
 #define set_int Configurator::only ().set_int
-  /** MTU **/
-  ok = ok && set_int ("dhash.mtu", 1210);
-  /** Number of fragments to encode each block into */
-  ok = ok && set_int ("dhash.efrags", 14);
-  /** Number of fragments needed to reconstruct a given block */
-  ok = ok && set_int ("dhash.dfrags", 7);
-  /** Number of replica for each mutable block **/
-  ok = ok && set_int ("dhash.replica", 5);
   /** How frequently to sync database to disk */
   ok = ok && set_int ("dhash.sync_timer", 45);
   /** Should replication run initially? */
   ok = ok && set_int ("dhash.start_maintenance", 1);
   
   ok = ok && set_int ("dhash.repair_timer",  300);
-  ok = ok && set_int ("dhash.keyhash_timer", 300);
 
   //plab hacks
   ok = ok && set_int ("dhash.disable_db_env", 0);
@@ -115,12 +96,7 @@ dhash::name ()						\
 }
 
 DECL_CONFIG_METHOD(reptm, "dhash.repair_timer")
-DECL_CONFIG_METHOD(keyhashtm, "dhash.keyhash_timer")
 DECL_CONFIG_METHOD(synctm, "dhash.sync_timer")
-DECL_CONFIG_METHOD(num_efrags, "dhash.efrags")
-DECL_CONFIG_METHOD(num_dfrags, "dhash.dfrags")
-DECL_CONFIG_METHOD(num_replica, "dhash.replica")
-DECL_CONFIG_METHOD(dhash_mtu, "dhash.mtu")
 DECL_CONFIG_METHOD(dhash_disable_db_env, "dhash.disable_db_env")
 #undef DECL_CONFIG_METHOD
 
@@ -135,50 +111,12 @@ dhash::produce_dhash (ptr<vnode> v, str dbname)
 
 dhash_impl::~dhash_impl ()
 {
-  if (pmaint_obj) {
-    delete pmaint_obj;
-    pmaint_obj = NULL;
-  }
-  if (mtree) {
-    delete mtree;
-    mtree = NULL;
-  }
-  if (msrv) {
-    delete msrv;
-    msrv = NULL;
-  }
-  if (cli) {
-    delete cli;
-    cli = NULL;
-  }
-}
-
-static void
-open_worker (ptr<dbfe> mydb, str name, dbOptions opts, str desc)
-{
-  if (int err = mydb->opendb (const_cast <char *> (name.cstr ()), opts)) {
-    warn << desc << ": " << name <<"\n";
-    warn << "open returned: " << strerror (err) << "\n";
-    exit (-1);
-  }
 }
 
 dhash_impl::dhash_impl (ptr<vnode> node, str dbname) :
-  repair_outstanding (0),
   pk_partial_cookie (1),
-  db (NULL),
-  keyhash_db (NULL),
-  cache_db (NULL),
   host_node (node),
   cli (NULL),
-  dhc_mgr (NULL),
-  bsm (NULL),
-  msrv (NULL),
-  pmaint_obj (NULL),
-  mtree (NULL),
-  repair_tcb (NULL),
-  keyhash_mgr_rpcs (0),
-  keyhash_mgr_tcb (NULL),
   bytes_stored (0),
   keys_stored (0),
   keys_replicated (0),
@@ -188,6 +126,12 @@ dhash_impl::dhash_impl (ptr<vnode> node, str dbname) :
   keys_served (0),
   rpc_answered (0)
 {
+  // RPC demux
+  trace << host_node->my_ID () << " registered dhash_program_1\n";
+  host_node->addHandler (dhash_program_1, wrap(this, &dhash_impl::dispatch));
+
+  cli = New refcounted<dhashcli> (host_node);
+
   //set up the options we want
   dbOptions opts;
   opts.addOption ("opt_async", 1);
@@ -198,47 +142,20 @@ dhash_impl::dhash_impl (ptr<vnode> node, str dbname) :
   else
     opts.addOption ("opt_dbenv", 1);
 
-  db = New refcounted<dbfe>();
-  keyhash_db = New refcounted<dbfe> ();
-  cache_db = New refcounted<dbfe> ();
+  ptr<dhblock_srv> srv;
+  srv = New refcounted<dhblock_chash_srv> (node, "db file",
+      dbname, opts);
+  blocksrv.insert (DHASH_CONTENTHASH, srv);
 
   str kdbs = strbuf () << dbname << ".k";
-  open_worker (db, dbname, opts, "db file");
-  open_worker (keyhash_db, kdbs, opts, "keyhash db file");
-  str cdbs = strbuf () << dbname << ".c";
-  open_worker (cache_db, cdbs, opts, "whole block cache");
+  srv = New refcounted<dhblock_keyhash_srv> (node, "keyhash db file",
+      kdbs,  opts);
+  blocksrv.insert (DHASH_KEYHASH, srv);
 
-  dhcs = strbuf () << dbname;
-
-  // merkle state
-  mtree = New merkle_tree (db);
-
-  // merkle state
-  msrv = New merkle_server (mtree, 
-			    wrap (node, &vnode::addHandler));
-
-  bsm = New refcounted<block_status_manager> (host_node->my_ID ());
-
-
-  // RPC demux
-  trace << host_node->my_ID () << " registered dhash_program_1\n";
-  host_node->addHandler (dhash_program_1, wrap(this, &dhash_impl::dispatch));
-
-  // helper class for PK block consistency
-  if (DHC_SERVER) {
-    dhc_mgr = New refcounted<dhc> (host_node, dhcs, dhash::num_replica ());
-    dhc_mgr->init ();
-  } 
-
-  // the client helper class (will use for get_key etc)
-  cli = New dhashcli (node);
-
-  update_replica_list ();
-  delaycb (synctm (), wrap (this, &dhash_impl::sync_cb));
-
-  pmaint_obj = NULL;
-  pmaint_obj = New pmaint (cli, host_node, db, 
-			   wrap (this, &dhash_impl::db_delete_immutable));
+  str ndbs = strbuf () << dbname << ".n";
+  srv = New refcounted<dhblock_noauth_srv> (node, "noauth db file",
+      ndbs,  opts);
+  blocksrv.insert (DHASH_NOAUTH, srv);
 
   int v;
   bool ok = Configurator::only ().get_int ("dhash.start_maintenance", v);
@@ -246,239 +163,14 @@ dhash_impl::dhash_impl (ptr<vnode> node, str dbname) :
     start ();
 }
 
-
-void
-dhash_impl::missing (ptr<location> from, bigint key, bool missingLocal)
+bool
+dhash_impl::key_present (const blockID &n)
 {
-  if (missingLocal) {
-    //XXX check the DB to make sure we really are missing this block
-    trace << host_node->my_ID () << " syncer says we should have block " << key << "\n";
-    
-    //XXX just note that we should have the block. 
-    bsm->missing (host_node->my_location (), key);
-
-    //the other guy must have this key if he told me I am missing it
-    bsm->unmissing (from, key);
-  } else {
-    trace << host_node->my_ID () << ": " << key
-	  << " needed on " << from->id () << "\n";
-    bsm->missing (from, key);
-  }
+  ptr<dhblock_srv> srv = blocksrv[n.ctype];
+  if (srv == NULL)
+    return false;
+  return srv->key_present (n);
 }
-
-void
-dhash_impl::repair_timer ()
-{
-  // Re-register to be called again in the future.
-  repair_tcb = delaycb (reptm (), wrap (this, &dhash_impl::repair_timer));
-
-  if (repair_q.size () > 0) {
-    repair_flush_q ();
-    return;
-  }
-
-  vec<ptr<location> > nmsuccs = host_node->succs ();
-  //don't assume we are holding the block
-  // i.e. -> put ourselves on this of nodes to check for the block
-  vec<ptr<location> > succs;
-  succs.push_back (host_node->my_location ());
-  for (unsigned int j = 0; j < nmsuccs.size (); j++)
-    succs.push_back(nmsuccs[j]);
-
-  chordID first = bsm->first_block ();
-  chordID b = first;
-  do {
-    u_int count = bsm->pcount (b, succs);
-    if (count < num_efrags ()) {
-      trace << host_node->my_ID () << ": adding " << b 
-	    << " to outgoing queue "
-	    << "count = " << count << "\n";
-
-      //decide where to send it
-      ptr<location> to = bsm->best_missing (b, succs);
-      repair (blockID (b, DHASH_CONTENTHASH, DHASH_FRAG), to);
-    } 
-    b = bsm->next_block (b);
-  } while (b != first && b != 0);
-}
-
-void
-dhash_impl::repair_flush_q ()
-{
-  while ((repair_outstanding <= REPAIR_OUTSTANDING_MAX)
-	 && (repair_q.size () > 0)) {
-    repair_state *s = repair_q.first ();
-    assert (s);
-    repair_q.remove (s);
-    repair (s->key, s->where);
-    delete s;
-  }
-}
-
-void
-dhash_impl::repair (blockID k, ptr<location> to)
-{
-  assert (repair_outstanding >= 0);
-  // throttle the block downloads
-  if (repair_outstanding > REPAIR_OUTSTANDING_MAX) {
-    if (repair_q[k.ID] == NULL) {
-      repair_state *s = New repair_state (k, to);
-      repair_q.insert (s);
-    }
-    return;
-  }
-
-  // Be very careful about maintaining this counter.
-  // There are many branches and hence many possible termination
-  // cases for a repair; the end of each branch must decrement!
-  repair_outstanding++;
-
-  ref<dbrec> dbk = id2dbrec (k.ID);
-  ptr<dbrec> hit = cache_db->lookup (dbk);
-  if (hit) {
-    str blk (hit->value, hit->len);
-    send_frag (k, blk, to);
-  } else {
-    cli->retrieve (k, wrap (this, &dhash_impl::repair_retrieve_cb, k, to));
-  }
-}
-
-void
-dhash_impl::send_frag (blockID key, str block, ptr<location> to)
-{
-  u_long m = Ida::optimal_dfrag (block.len (), dhash::dhash_mtu ());
-  if (m > num_dfrags ())
-    m = num_dfrags ();
-  str frag = Ida::gen_frag (m, block);
-  if (to == host_node->my_location ()) {
-    ref<dbrec> d = New refcounted<dbrec> (frag.cstr (), frag.len ());
-    ref<dbrec> k = id2dbrec (key.ID);
-    int ret = db_insert_immutable (k, d, DHASH_CONTENTHASH);
-    if (ret != 0) {
-      warning << "merkle db_insert_immutable failure: "
-	      << db_strerror (ret) << "\n";
-    } else {
-      info << "repair: " << host_node->my_ID ()
-	   << " sent " << key << " to " << to->id () <<  ".\n";
-      bsm->unmissing (host_node->my_location (), key.ID);
-    }
-    repair_outstanding--;
-  } else {
-    cli->sendblock (to, key, frag, 
-		    wrap (this, &dhash_impl::send_frag_cb, to, key));
-  }
-}
-
-void
-dhash_impl::send_frag_cb (ptr<location> to, blockID k,
-                          dhash_stat err, bool present)
-{
-  repair_outstanding--;
-  if (!err) {
-    bsm->unmissing (to, k.ID);
-    info << "repair: " << host_node->my_ID ()
-         << " sent " << k << " to " << to->id () <<  ".\n";
-  } else
-    info << "repair: " << host_node->my_ID ()
-         << " error sending " << k << " to " << to->id ()
-         << " (" << err << ").\n";
-}
-
-void
-dhash_impl::repair_retrieve_cb (blockID k, ptr<location> to,
-                                dhash_stat err, ptr<dhash_block> b, route r)
-{
-  if (err) {
-    trace << "retrieve missing block " << k << " failed: " << err << "\n";
-    /* XXX need to do something here? */
-    repair_outstanding--;
-  } else {
-    assert (b);
-    // Oh, the memory copies.
-    // Cache this for future reference.
-    ref<dbrec> key = id2dbrec (k.ID);
-    ref<dbrec> data = New refcounted<dbrec> (b->data, b->len);
-    cache_db->insert (key, data);
-
-    str blk (b->data, b->len);
-    send_frag (k, blk, to);
-  }
-  repair_flush_q ();
-}
-
-// ------------------------------------------------------------------
-// keyhash maintenance
-
-void
-dhash_impl::keyhash_sync_done (dhash_stat err, bool present)
-{
-  keyhash_mgr_rpcs --;
-}
-
-void
-dhash_impl::keyhash_mgr_timer ()
-{
-  keyhash_mgr_tcb = NULL;
-  update_replica_list ();
-
-  if (keyhash_mgr_rpcs == 0) {
-    ptr<dbEnumeration> iter = keyhash_db->enumerate ();
-    ptr<dbPair> entry = iter->nextElement (id2dbrec(0));
-    while (entry) {
-      chordID n = dbrec2id (entry->key);
-      if (responsible (n)) {
-        // replicate a block if we are responsible for it
-	for (unsigned j=0; j<replicas.size(); j++) {
-	  // trace << "keyhash: " << n << " to " << replicas[j]->id () << "\n";
-	  keyhash_mgr_rpcs ++;
-	  cli->sendblock (replicas[j], blockID(n, DHASH_KEYHASH, DHASH_BLOCK),
-			  keyhash_db,
-			  wrap (this, &dhash_impl::keyhash_sync_done));
-	}
-      }
-      else {
-        keyhash_mgr_rpcs ++;
-        // otherwise, try to sync with the master node
-        cli->lookup
-	  (n, wrap (this, &dhash_impl::keyhash_mgr_lookup, n));
-      }
-      entry = iter->nextElement ();
-    }
-  }
-  keyhash_mgr_tcb =
-    delaycb (keyhashtm (), wrap (this, &dhash_impl::keyhash_mgr_timer));
-}
-
-void
-dhash_impl::keyhash_mgr_lookup (chordID key, dhash_stat err,
-				vec<chord_node> hostsl, route r)
-{
-  keyhash_mgr_rpcs --;
-  if (!err) {
-      keyhash_mgr_rpcs ++;
-      // trace << "keyhash: sync " << key << " to " << r.back()->id () << "\n";
-      cli->sendblock (r.back (), blockID(key, DHASH_KEYHASH, DHASH_BLOCK),
-		      keyhash_db,
-		      wrap (this, &dhash_impl::keyhash_sync_done));
-  }
-}
-
-// ----------------------------------------------------------------------
-
-void 
-dhash_impl::sync_cb () 
-{
-  // Probably only one of sync or checkpoint is needed.
-  db->sync ();
-  db->checkpoint ();
-  keyhash_db->sync ();
-  keyhash_db->checkpoint ();
-  cache_db->sync ();
-  cache_db->checkpoint ();
-
-  delaycb (synctm (), wrap (this, &dhash_impl::sync_cb));
-}
-
 
 dhash_fetchiter_res *
 dhash_impl::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
@@ -535,50 +227,6 @@ dhash_impl::dispatch (user_args *sbp)
 {
   rpc_answered++;
   switch (sbp->procno) {
-  case DHASHPROC_OFFER:
-    {
-      dhash_offer_arg *arg = sbp->template getarg<dhash_offer_arg> ();
-      dhash_offer_res res (DHASH_OK);
-      res.resok->accepted.setsize (arg->keys.size ());
-      res.resok->dest.setsize (arg->keys.size ());
-
-      //XXX copied code
-      vec<ptr<location> > nmsuccs = host_node->succs ();
-      //don't assume we are holding the block
-      // i.e. -> put ourselves on this of nodes to check for the block
-      vec<ptr<location> > succs;
-      succs.push_back (host_node->my_location ());
-      for (unsigned int j = 0; j < nmsuccs.size (); j++)
-	succs.push_back(nmsuccs[j]);
-      //XXX end copied
-
-      for (u_int i = 0; i < arg->keys.size (); i++) {
-	chordID key = arg->keys[i];
-	u_int count = bsm->pcount (key, succs);
-	chordID pred = host_node->my_pred ()->id ();
-	bool mine = between (pred, host_node->my_ID (), key);
-
-	// now that we are in succ list don't need to special case for ourselves
-	//	ref<dbrec> kkk = id2dbrec (key);
-	//	ptr<dbrec> hit = db->lookup (kkk);
-
-	// belongs to me and isn't replicated well
-	if (mine && count < dhash::num_efrags ()) {
-	  res.resok->accepted[i] = DHASH_SENDTO;
-	  // best missing might be me (RPC to myself is OK)
-	  ptr<location> l = bsm->best_missing (key, host_node->succs ());
-	  trace << "server: sending " << key << ": count=" << count << " to=" << l->id () << "\n";
-	  l->fill_node (res.resok->dest[i]);
-	  bsm->unmissing (l, key);
-	} else {
-	  trace << "server: holding " << key << ": count=" << count << "\n";
-	  res.resok->accepted[i] = DHASH_HOLD;
-	} 
-      }
-
-      sbp->reply (&res);
-    }
-    break;
   case DHASHPROC_FETCHREC:
     {
       // This RPC may take a long time to respond.
@@ -588,11 +236,10 @@ dhash_impl::dispatch (user_args *sbp)
     break;
   case DHASHPROC_FETCHITER:
     {
-      //the only reason to get here is to fetch the 2-n chunks
       s_dhash_fetch_arg *farg = sbp->template getarg<s_dhash_fetch_arg> ();
-      blockID id (farg->key, farg->ctype, farg->dbtype);
+      blockID id (farg->key, farg->ctype);
 
-      if ((key_status (id) != DHASH_NOTPRESENT) && (farg->len > 0)) {
+      if (key_present (id) && (farg->len > 0)) {
         //fetch the key and return it, end of story
         fetch (id, farg->cookie,
                wrap (this, &dhash_impl::fetchiter_sbp_gotdata_cb, sbp, farg));
@@ -605,44 +252,34 @@ dhash_impl::dispatch (user_args *sbp)
   case DHASHPROC_STORE:
     {
       s_dhash_insertarg *sarg = sbp->template getarg<s_dhash_insertarg> ();
+      // What to do about retries??
+      // e.g. checking if we're responsible (or continuing a partial)
+      store (sarg, 
+	     wrap (this, &dhash_impl::storesvc_cb, sbp, sarg));
+    }
+    break;
+  case DHASHPROC_OFFER:
+    {
+      dhash_offer_arg *arg = sbp->template getarg<dhash_offer_arg> ();
+      dhash_ctype ctype = DHASH_CONTENTHASH; // XXX
 
-      if ((sarg->type == DHASH_STORE) && 
-	  (!responsible (sarg->key)) && 
-	  (!pst[sarg->key])) {
-	dhash_storeres res (DHASH_RETRY);
-	ptr<location> pred = host_node->my_pred ();
-	pred->fill_node (res.pred->p);
+      ptr<dhblock_srv> srv = blocksrv[ctype];
+      if (!srv) {
+	dhash_offer_res res (DHASH_ERR);
 	sbp->reply (&res);
-      } 
-      else if (sarg->type == DHASH_CACHE && 
-	       ((sarg->ctype != DHASH_CONTENTHASH &&
-		 sarg->ctype != DHASH_KEYHASH) ||
-		sarg->dbtype != DHASH_BLOCK)) {
-	dhash_storeres res (DHASH_ERR);
-	ptr<location> pred = host_node->my_pred ();
-	pred->fill_node (res.pred->p);
-	sbp->reply (&res);
-      } 
-      else {
-        ref<dbrec> k = id2dbrec(sarg->key);
-	bool exists =
-	  dblookup (blockID (sarg->key, sarg->ctype, sarg->dbtype));
-	store (sarg, exists,
-	       wrap(this, &dhash_impl::storesvc_cb, sbp, sarg, exists));	
       }
+      srv->offer (sbp, arg);
     }
     break;
   case DHASHPROC_BSMUPDATE:
     {
-      /** XXX Should make sure that only called from localhost! */
       dhash_bsmupdate_arg *arg = sbp->template getarg<dhash_bsmupdate_arg> ();
-      chord_node n = make_chord_node (arg->n);
-      ptr<location> from = host_node->locations->lookup (n.x);
-      if (from) {
-	// Only care if we still know about this node.
-	missing (from, arg->key, arg->local);
+      ptr<dhblock_srv> srv = blocksrv[arg->ctype];
+      if (!srv) {
+	sbp->reply (NULL);
+	break;
       }
-      sbp->reply (NULL);
+      srv->bsmupdate (sbp, arg);
     }
     break;
   default:
@@ -670,24 +307,11 @@ dhash_impl::storesvc_cb (user_args *sbp,
 
 
 //---------------- no sbp's below this line --------------
- 
-// -------- reliability stuff
-
-void
-dhash_impl::update_replica_list () 
-{
-  replicas = host_node->succs ();
-  // trim down successors to just the replicas
-  while (replicas.size () > dhash::num_replica ())
-    replicas.pop_back ();
-}
-
-
 
 // --- node to database transfers --- 
 
 void
-dhash_impl::fetch(blockID id, int cookie, cbvalue cb) 
+dhash_impl::fetch (blockID id, int cookie, cbvalue cb) 
 {
   //if the cookie is in the hash, return that value
   pk_partial *part = pk_cache[cookie];
@@ -718,106 +342,16 @@ dhash_impl::fetch(blockID id, int cookie, cbvalue cb)
   }
 }
 
-void
-dhash_impl::append (ref<dbrec> key, ptr<dbrec> data,
-		    s_dhash_insertarg *arg,
-		    cbstore cb)
-{
-  blockID id(arg->key, arg->ctype, arg->dbtype);
-
-  if (key_status (id) == DHASH_NOTPRESENT) {
-    // create a new record in the database
-    xdrsuio x;
-    char *m_buf;
-    if ((m_buf = (char *)XDR_INLINE (&x, data->len + 3 & ~3))) {
-      memcpy (m_buf, data->value, data->len);
-      int m_len = x.uio ()->resid ();
-      char *m_dat = suio_flatten (x.uio ());
-      ref<dbrec> marshalled_data = New refcounted<dbrec> (m_dat, m_len);
-
-      keys_others += 1;
-
-      int ret = db_insert_immutable (key, marshalled_data, DHASH_APPEND);
-      assert (!ret);
-      append_after_db_store (cb, arg->key, 0);
-      xfree (m_dat);
-    }
-    else
-      cb (DHASH_STOREERR);
-  }
-  else
-    fetch (id, -1, wrap (this, &dhash_impl::append_after_db_fetch,
-			 key, data, arg, cb));
-}
-
-void
-dhash_impl::append_after_db_fetch (ref<dbrec> key, ptr<dbrec> new_data,
-			           s_dhash_insertarg *arg, cbstore cb,
-			           int cookie, ptr<dbrec> data, dhash_stat err)
-{
-  if (arg->ctype != DHASH_APPEND)
-    cb (DHASH_STORE_NOVERIFY);
-  
-  else {
-    ptr<dhash_block> b = get_block_contents (data, DHASH_APPEND);
-    xdrsuio x;
-    char *m_buf;
-    if ((data->len+b->len <= 64000) &&
-	(m_buf = (char *)XDR_INLINE (&x, data->len+b->len))) {
-      memcpy (m_buf, b->data, b->len);
-      memcpy (m_buf + b->len, new_data->value, new_data->len);
-      int m_len = x.uio ()->resid ();
-      char *m_dat = suio_flatten (x.uio ());
-      ptr<dbrec> marshalled_data =
-        New refcounted<dbrec> (m_dat, m_len);
-
-      int ret = db_insert_immutable (key, marshalled_data, DHASH_APPEND);
-      assert (!ret);
-      append_after_db_store (cb, arg->key, 0);
-      xfree (m_dat);
-    }
-    else
-      cb (DHASH_STOREERR);
-  }
-
-}
-
-void
-dhash_impl::append_after_db_store (cbstore cb, chordID k, int stat)
-{
-  if (stat)
-    cb (DHASH_STOREERR);
-  else
-    cb (DHASH_OK);
-
-  store_state *ss = pst[k];
-  if (ss) {
-    pst.remove (ss);
-    delete ss;
-  }
-  //replicate?
-}
-
-static bool
-is_keyhash_stale (ref<dbrec> prev, ref<dbrec> d)
-{
-  long v0 = keyhash_version (prev);
-  long v1 = keyhash_version (d);
-  if (v0 >= v1)
-    return true;
-  return false;
-}
-
 void 
-dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
+dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
 {
-  if (arg->ctype == DHASH_CONTENTHASH && exists) {
-    cb (DHASH_OK);
+  ptr<dhblock_srv> srv = blocksrv[arg->ctype];
+  if (!srv) {
+    cb (false, DHASH_ERR);
     return;
   }
 
   store_state *ss = pst[arg->key];
- 
   if (ss == NULL) {
     ss = New store_state (arg->key, arg->attr.size);
     pst.insert(ss);
@@ -825,118 +359,26 @@ dhash_impl::store (s_dhash_insertarg *arg, bool exists, cbstore cb)
 
   if (!ss->addchunk(arg->offset, arg->offset+arg->data.size (), 
 		    arg->data.base ())) {
-    cb (DHASH_ERR);
+    cb (false, DHASH_ERR);
     return;
   }
 
   if (ss->iscomplete()) {
-
-    dhash_stat stat = DHASH_OK;
-    ref<dbrec> k = id2dbrec(arg->key);
     ref<dbrec> d = New refcounted<dbrec> (ss->buf, ss->size);
-
-    //Verify removed by cates. noted by fdabek
-
-    switch (arg->ctype) {
-    case DHASH_KEYHASH:
-      {
-#if 0
-	if (!verify_keyhash (arg->key, ss->buf, ss->size)) {
-	  warning << "keyhash: cannot verify " << ss->size << " bytes\n";
-	  stat = DHASH_STORE_NOVERIFY;
-	  break;
-	}
-#endif
-	ptr<dbrec> prev = keyhash_db->lookup (k);
-	if (prev) {
-	  if (is_keyhash_stale (prev, d)) {
-	    if (arg->type == DHASH_STORE)
-	      stat = DHASH_STALE;
-	    break;
-	  }
-	  else {
-	    warnx << "storing new copy of " << arg->key << "\n";
-	    keyhash_db->del (k);
-	  }
-	}
-	keyhash_db->insert (k, d);
-	info << "db write: " << host_node->my_ID ()
-	     << " U " << arg->key << " " << ss->size << "\n";
-	break;
-      }
-
-    case DHASH_APPEND:
-      pst.remove (ss);
-      delete ss;
-      append (k, d, arg, cb);
-      return;
-
-    case DHASH_CONTENTHASH:
-    case DHASH_NOAUTH:
-    case DHASH_UNKNOWN:
-      {
-	int ret = db_insert_immutable (k, d, arg->ctype);
-	if (ret != 0) {
-	  warning << "db write failure: " << db_strerror (ret) << "\n";
-	  stat = DHASH_STOREERR;
-	}
-      }
-      break;
-
-    default:
-      stat = DHASH_ERR;
-      break;
-    }
-
-    if (stat == DHASH_OK) {
-      if (arg->type == DHASH_STORE ||
-	  arg->type == DHASH_FRAGMENT)
-        keys_stored ++;
-      else if (arg->type == DHASH_REPLICA)
-        keys_replicated ++;
-      else if (arg->type == DHASH_CACHE)
-        keys_cached ++;
-      else
-        keys_others ++;
-
-      /* statistics */
-      bytes_stored += ss->size;
-    }
-
+    dhash_stat stat = srv->store (arg->key, d);
+    // XXX keep other stats?
+    bytes_stored += ss->size;
     pst.remove (ss);
     delete ss;
-
-    cb (stat);
+    cb (false, stat);
+  } else {
+    cb (false, DHASH_STORE_PARTIAL);
   }
-  else
-    cb (DHASH_STORE_PARTIAL);
+  // XXX should throw out very old store states.
 }
 
 // --------- utility
 
-dhash_stat
-dhash_impl::key_status(const blockID &n)
-{
-  ptr<dbrec> val = dblookup(n);
-  if (!val)
-    return DHASH_NOTPRESENT;
-
-  // XXX we dont distinguish replicated vs cached
-  if (responsible (n.ID))
-    return DHASH_STORED;
-  else
-    return DHASH_REPLICATED;
-}
-
-char
-dhash_impl::responsible(const chordID& n) 
-{
-  store_state *ss = pst[n];
-  if (ss) return true; //finish any store we start
-  chordID p = host_node->my_pred ()->id ();
-  chordID m = host_node->my_ID ();
-  return (between (p, m, n)); // XXX leftinc? rightinc?
-}
 
 void
 dhash_impl::doRPC (const chord_node &n, const rpc_program &prog, int procno,
@@ -964,15 +406,6 @@ dhash_impl::doRPC (ptr<location> ID, const rpc_program &prog, int procno,
 
 
 // ---------- debug ----
-#if 0
-/* Hrm. This should remind someone to print cached blocks, once we
- * figure out what to cache and when... */
-void
-dhash_impl::printcached_walk (const chordID &k) 
-{
-  warn << host_node->my_ID () << " " << k << " CACHED\n";
-}
-#endif /* 0 */
 
 void
 dhash_impl::print_stats () 
@@ -986,19 +419,24 @@ dhash_impl::print_stats ()
   warnx << key_info ();
 }
 
+static void
+statscb (vec<dstat> *s, const dhash_ctype &c, ptr<dhblock_srv> srv)
+{
+  srv->stats (*s);
+}
+
 vec<dstat>
 dhash_impl::stats ()
 {
   vec<dstat> s;
-  s.push_back(dstat ("frags on disk", mtree->root.count));
-  s.push_back(dstat ("new keys cached", keys_cached));
   s.push_back(dstat ("new blocks stored", keys_stored));
-  s.push_back(dstat ("new blocks replicated", keys_replicated));
-  s.push_back(dstat ("new non-blocks?", keys_others));
   s.push_back(dstat ("new bytes stored", bytes_stored));
   s.push_back(dstat ("keys served", keys_served));
   s.push_back(dstat ("bytes served", bytes_served));
   s.push_back(dstat ("RPCs answered", rpc_answered));
+
+  blocksrv.traverse (wrap (&statscb, &s));
+
   return s;
 }
 
@@ -1007,102 +445,42 @@ dhash_impl::key_info ()
 {
   // XXX only prints DHASH_CONTENTHASH records
   // XXX probably a terrible idea to enumerate the database!!!
-  ptr<dbEnumeration> it = db->enumerate();
-  ptr<dbPair> d = it->nextElement();
   strbuf out;
-  while (d) {
-    chordID k = dbrec2id (d->key);
-    const vec<ptr<location> > w = bsm->where_missing (k);
-    out << (responsible (k) ? "RESPONSIBLE " : "REPLICA ") << k;
-    if (w.size ()) {
-      chord_node n;
-      out << " missing on ";
-      for (size_t i = 0; i < w.size (); i++) {
-	w[i]->fill_node (n);
-	out << n << " ";
-      }
-    } 
-    out << "\n";
-    d = it->nextElement();
-  }
+  ptr<dhblock_srv> s = blocksrv[DHASH_CONTENTHASH];
+  if (s)
+    s->key_info (out);
   return out;
 }
 
-void
-dhash_impl::stop ()
+static void
+startcb (bool randomize, const dhash_ctype &c, ptr<dhblock_srv> srv)
 {
-  if (keyhash_mgr_tcb) {
-    warning << "stop replica timer\n";
-    timecb_remove (keyhash_mgr_tcb);
-    keyhash_mgr_tcb = NULL;
-  }
-  if (repair_tcb) {
-    timecb_remove (repair_tcb);
-    repair_tcb = NULL;
-  }
-  if (pmaint_obj)
-    pmaint_obj->stop ();
+  srv->start (randomize);
 }
-
 void
 dhash_impl::start (bool randomize)
 {
-  u_long delay = 0;
-  if (!keyhash_mgr_tcb) {
-    if (randomize)
-      delay = random_getword () % keyhashtm (); 
-    keyhash_mgr_tcb =
-      delaycb (keyhashtm () + delay, wrap (this, &dhash_impl::keyhash_mgr_timer));
-  }
-  if (!repair_tcb) {
-    if (randomize)
-      delay = random_getword () % reptm ();
-    repair_tcb = delaycb (reptm () + delay, wrap (this, &dhash_impl::repair_timer));
-  }
-  if (pmaint_obj)
-    pmaint_obj->start ();
+  blocksrv.traverse (wrap (&startcb, randomize));
+}
+
+static void
+stopcb (const dhash_ctype &c, ptr<dhblock_srv> srv)
+{
+  srv->stop ();
+}
+void
+dhash_impl::stop ()
+{
+  blocksrv.traverse (wrap (&stopcb));
 }
 
 ptr<dbrec>
-dhash_impl::dblookup (const blockID &i) {
-  if(i.ctype == DHASH_KEYHASH)
-    return keyhash_db->lookup (id2dbrec (i.ID));
-  else
-    return db->lookup (id2dbrec (i.ID));
-}
-
-int
-dhash_impl::db_insert_immutable (ref<dbrec> key, ref<dbrec> data,
-                                 dhash_ctype ctype)
+dhash_impl::dblookup (const blockID &i)
 {
-  char *action;
-  block blk (to_merkle_hash (key), data);
-  bool exists = (database_lookup (mtree->db, blk.key) != 0L);
-  int ret = 0;
-  if (!exists) {
-    action = "N"; // New
-    ret = mtree->insert (&blk);
-  } else {
-    action = "R"; // Re-write
-  }
-  bigint h = compute_hash (data->value, data->len);
-  info << "db write: " << host_node->my_ID () << " " << action
-       << " " << dbrec2id(key) << " " << data->len 
-       << " " << h
-       << "\n";
-  return ret;
-}
-
-void
-dhash_impl::db_delete_immutable (ref<dbrec> key)
-{
-  merkle_hash hkey = to_merkle_hash (key);
-  bool exists = database_lookup (mtree->db, hkey);
-  assert (exists);
-  block blk (hkey, NULL);
-  mtree->remove (&blk);
-  info << "db delete: " << host_node->my_ID ()
-       << " " << dbrec2id(key) << "\n";
+  ptr<dhblock_srv> srv = blocksrv[i.ctype];
+  if (srv)
+    return srv->fetch (i.ID);
+  return NULL;
 }
 
 
