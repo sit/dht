@@ -91,6 +91,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_includedir}/chord
 %{_libdir}/chord-%{version}/libdhashclient.a
 %{_libdir}/chord-%{version}/libsvc.a
+%{_libdir}/chord-%{version}/libsvc.la
 %{_libdir}/chord-%{version}/libutil.a
 %{_includedir}/chord-%{version}/dhashclient.h
 %{_includedir}/chord-%{version}/config.h
