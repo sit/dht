@@ -74,7 +74,6 @@ static str ctlsocket;
 static str heartbeatfn;
 
 ptr<chord> chordnode;
-vec<ptr<vnode> > vlist;
 vec<ref<dhash> > dh;
 int myport;
  
@@ -249,9 +248,11 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
   case LSDCTL_GETMYIDS:
     {
       ptr<lsdctl_nodeinfolist> nl = New refcounted<lsdctl_nodeinfolist> ();
-      nl->nlist.setsize (vlist.size ());
-      for (unsigned int i = 0; i < vlist.size (); i++) {
-	lsdctl_fillnodeinfo (nl->nlist[i], vlist[i]->my_location ());
+      size_t nv = chordnode->num_vnodes ();
+      nl->nlist.setsize (nv);
+      for (unsigned int i = 0; i < nv; i++) {
+	ptr<vnode> v = chordnode->get_vnode (i);
+	lsdctl_fillnodeinfo (nl->nlist[i], v->my_location ());
       }
       sbp->reply (nl);
     }
