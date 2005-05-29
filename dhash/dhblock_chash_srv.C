@@ -65,21 +65,17 @@ dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
 dhblock_chash_srv::~dhblock_chash_srv ()
 {
   stop ();
-  if (pmaint_obj) {
-    delete pmaint_obj;
-    pmaint_obj = NULL;
+  if (msrv) {
+    delete msrv;
+    msrv = NULL;
   }
   if (mtree) {
     delete mtree;
     mtree = NULL;
   }
-  if (msrv) {
-    delete msrv;
-    msrv = NULL;
-  }
-  if (cli) {
-    delete cli;
-    cli = NULL;
+  if (pmaint_obj) {
+    delete pmaint_obj;
+    pmaint_obj = NULL;
   }
 }
 
