@@ -32,6 +32,14 @@ dhash_download::dhash_download (ptr<vnode> clntnode, chord_node source,
   }
 }
 
+dhash_download::~dhash_download ()
+{
+  if (buffer) {
+    free (buffer);
+    buffer = NULL;
+  }
+}
+
 void
 dhash_download::getchunk (u_int start, u_int len, int cookie, gotchunkcb_t cb)
 {
