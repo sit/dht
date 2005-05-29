@@ -11,21 +11,32 @@
 #define TIMEOUT 10
 
 chordID wellknown_ID = -1;
+int succproc (CHORDPROC_GETSUCC_EXT);
 
 bool verify = false;
+// Sequential is what we believe is the correct sequencing of nodes
 vec<chord_node> sequential;
 
 void getsucc_cb (u_int64_t start, chord_node curr, chord_nodelistextres *res, clnt_stat err);
 
+inline const strbuf &
+format (const strbuf &sb, const chord_node &node)
+{
+  str x = strbuf () << node.x;
+  sb << strbuf ("%40s", x.cstr ()) << " " << node.r.hostname << " "
+     << node.r.port << " " << node.vnode_num;
+  return sb;
+}
+
 void
 verify_succlist (const vec<chord_node> &zs)
 {
+  // This code assumes that the nodes in zs are ordered
+  strbuf s;
   size_t sz = zs.size ();
-  chord_node x = sequential.pop_front ();
-  // ensure we talked to who we think we should be talking to.
-  assert (x.x == zs[0].x);
+  size_t ssz = sequential.size ();
 
-  if (sequential.size () == 0) {
+  if (ssz == 0) {
     for (size_t i = 1; i < sz; i++) {
       sequential.push_back (zs[i]);
     }
@@ -33,41 +44,51 @@ verify_succlist (const vec<chord_node> &zs)
     bool bad = false;
     vec<chord_node> newseq;
     size_t i = 1, j = 0;
-    while (i < sz && j < sequential.size ()) {
+    while (i < sz && j < ssz) {
       if (sequential[j].x == zs[i].x) {
 	newseq.push_back (sequential[j]);
+	format (s << "|   ", sequential[j]) << "\n";
 	j++; i++;
       } else {
 	bad = true;
-	strbuf s;
-	s << "  sequential[" << j << "] = " << sequential[j] << "\n";
-	s << "  nlist[" << i << "] = " << zs[i] << "\n";
-	if (sequential[j].x < zs[i].x) {
-	  aout << "nlist missing a successor!\n";
+	chordID prev (0);
+	chordID a, b;
+	if (newseq.size ()) prev = newseq.back ().x;
+        if (succproc == CHORDPROC_GETSUCC_EXT) {
+	  a = sequential[j].x;
+	  b = zs[i].x;
+	} else {
+	  b = sequential[j].x;
+	  a = zs[i].x;
+	}
+	if (between (prev, b, a)) {
+	  // incoming list is missing a node!
+	  format (s << "| R ", sequential[j]) << "\n";
 	  newseq.push_back (sequential[j]);
 	  j++;
 	} else {
-	  aout << "sequential missing a successor!\n";
+	  // we didn't know about a successor!
+	  format (s << "| L ", zs[i]) << "\n";
 	  newseq.push_back (zs[i]);
 	  i++;
 	}
-	aout << s;
       }
     }
+    // Ideally now there are still some nodes in zs but none
+    // left in sequential.  Sometimes, it is the other way.
+    // But not both.
+    assert (!(i < sz && j < ssz));
     while (i < sz) {
       newseq.push_back (zs[i++]);
     }
-    if (j < sequential.size ()) {
+    while (j < ssz) {
       bad = true;
+      // incoming list is missing a node!
+      format (s << "|'R ", sequential[j]) << "\n";
       newseq.push_back (sequential[j++]);
     }
-    if (bad) {
-      for (size_t k = 0; k < zs.size (); k++)
-	aout << "nlist[" << k << "]: " << zs[k] << "\n";
-      for (size_t k = 0; k < sequential.size (); k++)
-	aout << "sequential[" << k << "]: " << sequential[k] << "\n";
-      aout << "\n";
-    }
+    if (bad)
+      aout << s;
     sequential.clear ();
     sequential = newseq;
   }
@@ -77,7 +98,7 @@ void
 getsucc (const chord_node &n)
 {
   chord_nodelistextres *res = New chord_nodelistextres ();
-  doRPC (n, chord_program_1, CHORDPROC_GETSUCC_EXT, &n.x, res,
+  doRPC (n, chord_program_1, succproc, &n.x, res,
 	 wrap (&getsucc_cb, getusec (), n, res));
 }
 
@@ -108,42 +129,40 @@ getsucc_cb (u_int64_t start, chord_node curr, chord_nodelistextres *res, clnt_st
   }
   delete res;
 
-  if (verify) {
-    curr = zs[0];
-    verify_succlist (zs);
-    next = sequential[0];
-  } else {
-    next = zs[1];
-    sequential = zs;
-    curr = sequential.pop_front ();
-  }
+  curr = zs[0];
+  // ensure we talked to who we think we should be talking to.
+  assert (curr.x == sequential[0].x);
 
   // Print full information for the node we just talked to
-  chordID n    = curr.x;
-  str host     = curr.r.hostname;
-  u_short port = curr.r.port;
-  int index    = curr.vnode_num;
+  int index = curr.vnode_num;
   assert (index >= 0);
   char s[128];
   sprintf (s, "e=%f", curr.e / PRED_ERR_MULT);
-  aout  << n << " " << host << " " << port << " " << index << " "
+  aout  << format (strbuf (), curr) << " "
         << curr.coords[0] << " " << curr.coords[1] << " " << curr.coords[2] << " "
 	<< s << " "
 	<< (getusec () - start) << "\n";
+
+  if (verify) {
+    sequential.pop_front ();
+    verify_succlist (zs);
+  } else {
+    sequential = zs;
+    sequential.pop_front ();
+  }
+  next = sequential[0];
 
   // wrapped around ring. done.
   if (next.x == wellknown_ID)
     exit (0);
   
-  if (next.x != zs[1].x)
-    aout << "XXX succlist had wrong successor!!!\n";
   getsucc (next);
 }
 
 void 
 usage ()
 {
-  warnx << "Usage: " << progname << " [-v] [-t maxtotaltime] -j <host>:<port>\n";
+  warnx << "Usage: " << progname << " [-r] [-v] [-t maxtotaltime] -j <host>:<port>\n";
   exit (1);
 }
 
@@ -165,7 +184,7 @@ main (int argc, char** argv)
   unsigned int maxtime (0);
 
   int ch;
-  while ((ch = getopt (argc, argv, "j:t:v")) != -1) {
+  while ((ch = getopt (argc, argv, "j:rt:v")) != -1) {
     switch (ch) {
     case 'j': 
       {
@@ -194,6 +213,9 @@ main (int argc, char** argv)
       break;
     case 'v':
       verify = true;
+      break;
+    case 'r':
+      succproc = CHORDPROC_GETPRED_EXT;
       break;
     default:
       usage ();
