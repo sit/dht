@@ -123,11 +123,11 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
   
   ptr<dhblock> block = allocate_dhblock (blockID.ctype);
 
-  // Optimal number of successors to fetch is the number of
-  // extant fragments.  This ensures the maximal amount of choice
-  // for the expensive fetch phase.  As long as proximity routing
-  // is in use, the last few hops of the routing phase are cheap.
-  // Unfortunately, it's hard to know if we are proximity routing.
+  // We would like to obtain enough successors to provide maximal
+  // choice to the client when doing the expensive fetch phase.
+  // Unfortunately, we are currently hurt by the fact that there
+  // are holes in our successor list: nodes without the block
+  // that Chord can't tell us about.  Maybe we need up-calls.
   clntnode->find_succlist (blockID.ID,
 			   block->num_fetch (),
 			   wrap (this, &dhashcli::retrieve_lookup_cb,rs,block),
@@ -196,9 +196,9 @@ dhashcli::doassemble (ptr<rcv_state> rs, ptr<dhblock> block,
     rs->succs = succs;
   }
 
-  // Dispatch num_fetch parallel requests, even though we don't know
+  // Dispatch min_fetch parallel requests, even though we don't know
   // how many fragments will truly be needed.
-  u_int tofetch = block->num_fetch () + 0;
+  u_int tofetch = block->min_fetch () + 0;
   if (tofetch > rs->succs.size ()) tofetch = rs->succs.size ();
   for (u_int i = 0; i < tofetch; i++)
     fetch_frag (rs, block);

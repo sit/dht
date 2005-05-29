@@ -34,6 +34,18 @@ dhblock_chash::num_efrags ()
   return v;
 }
 
+u_int
+dhblock_chash::num_fetch ()
+{
+  static bool initialized = false;
+  static int v = 0;
+  if (!initialized) {
+    initialized = Configurator::only ().get_int ("chord.nsucc", v);
+    assert (initialized);
+  }
+  return v;
+}
+
 int
 dhblock_chash::process_download (blockID key, str frag) 
 {

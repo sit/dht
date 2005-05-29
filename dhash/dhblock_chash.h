@@ -19,7 +19,7 @@ struct dhblock_chash : public dhblock {
 
   u_int min_put () { return num_dfrags (); };
   u_int num_put () { return num_efrags (); };
-  u_int num_fetch () { return num_dfrags (); };
+  u_int num_fetch ();
   u_int min_fetch () { return num_dfrags (); };
 
   static bool verify (chordID key, str data);

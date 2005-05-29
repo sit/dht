@@ -19,7 +19,7 @@ struct dhblock_replicated : public dhblock {
 
   u_int min_put () { return 1; };
   u_int num_put () { return num_replica (); };
-  u_int num_fetch () { return 1; };
+  u_int num_fetch () { return num_replica (); };
   u_int min_fetch () { return 1; };
 };
 
