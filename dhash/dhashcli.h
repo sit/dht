@@ -12,8 +12,6 @@ typedef callback<void, dhash_stat, vec<chord_node>, route>::ref
   dhashcli_lookupcb_t;
 typedef	callback<void, dhash_stat, bool>::ref sendblockcb_t;
 
-#include "download.h" // for cbretrieve_t
-
 // Forward declarations
 class dbfe;
 class vnode;
