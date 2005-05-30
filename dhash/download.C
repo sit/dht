@@ -14,13 +14,21 @@
 dhash_download::dhash_download (ptr<vnode> clntnode, chord_node source,
 				blockID blockID, char *data, u_int len,
 				u_int totsz, int cookie, cbretrieve_t cb,
-				cbtmo_t cb_tmo)
-  : clntnode (clntnode),  npending (0), error (false), source (source), 
-				  blckID (blockID), cb (cb), cb_tmo (cb_tmo),
-				  nextchunk (0), numchunks (0), 
-				  didrexmit (false)
+				cbtmo_t cb_tmo) :
+  clntnode (clntnode),
+  npending (0),
+  error (false),
+  source (source),
+  blckID (blockID),
+  cb (cb),
+  cb_tmo (cb_tmo),
+  buffer (NULL),
+  buf_len (0),
+  nextchunk (0),
+  numchunks (0),
+  didrexmit (false),
+  start (getusec ())
 {
-  start = getusec ();
   // the first chunk of data may be passed in
   if (data) {
     process_first_chunk (data, len, totsz, cookie);
