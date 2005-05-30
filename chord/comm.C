@@ -114,6 +114,7 @@ rpc_manager::rpc_manager (ptr<u_int32_t> _nrcv)
   : a_lat (0.0),
     a_var (0.0),
     c_err (0.0),
+    c_err_rel (0.0),
     c_var (0.0),
     nrpc (0), nrpcfailed (0), nsent (0), npending (0), nrcv (_nrcv)
 {
