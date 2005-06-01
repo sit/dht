@@ -92,20 +92,28 @@ merkle_tree::merkle_tree (ptr<dbfe> realdb,
   for (unsigned int i = 0; i < mis.size (); i++)
     {
       block b (to_merkle_hash (id2dbrec(mis[i])), FAKE_DATA);
-      // only fake having a key if: we really don't have it, and
-      //  we've confirmed other node has block
-      if (!database_lookup (fakedb, b.key) && 
-	  bsm->confirmed_on (mis[i], remoteID)) {
-	int ret = insert (0, &b, &root);
-	warn << "added extra key " << mis[i] << " to merkle tree for " 
-	     << remoteID << "\n";
-	assert (!ret);
-      } else {
+      bool indb = database_lookup (fakedb, b.key);
+      // only fake having a key if: 
+      // 1) we really don't have it, and
+      //  2) we've confirmed other node has block
+      // or: 
+      // 3) other node might have it and we need to learn which it is
+      if (!indb && 
+	  (bsm->confirmed_on (mis[i], remoteID)
+	   || !bsm->missing_on (mis[i], remoteID))) 
+	{
+	  int ret = insert (0, &b, &root);
+	  //	warn << "added extra key " << mis[i] << " to merkle tree for " 
+	  // << remoteID << "\n";
+	  assert (!ret);
+	} 
+      
+      if (indb) {
 	bsm->unmissing (succs[0], tobigint(b.key));
 	warn << "had " << tobigint(b.key) << " even though bsm thought I didn't\n";
       }
     }
-
+  
   // Put the realdb under the merkle tree.  This works since it has
   // the same keys as the in-mem db.
   //db = realdb;

@@ -242,7 +242,7 @@ merkle_syncer::sendnode_cb (ref<sendnode_arg> arg, ref<sendnode_res> res,
 void
 merkle_getkeyrange::go ()
 {
-  if (between (rngmax, incID (current), current)) {
+  if (!betweenbothincl (rngmin, rngmax, current)) {
 #ifdef MERKLE_SYNC_TRACE
     warn << "merkle_getkeyrange::go () ==> DONE\n";
 #endif
@@ -275,23 +275,16 @@ merkle_getkeyrange::getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res,
     return;
   }
 
+  // Assuming keys are sent back in increasing clockwise order
   vec<merkle_hash> rkeys;
-  chordID round_max = current;
-  chordID next_cur = current;
   for (u_int i = 0; i < res->resok->keys.size (); i++) {
     const merkle_hash &key = res->resok->keys[i];
     rkeys.push_back (key);
-
-    bigint bkey = tobigint(key);
-    if (round_max < bkey) round_max = bkey;
-    if (betweenbothincl (next_cur, incID (bkey), bkey))
-      next_cur = incID (bkey);
   }
+  chordID sentmax = tobigint (res->resok->keys.back ());
+  compare_keylists (lkeys, rkeys, current, sentmax, missing);
 
-  compare_keylists (lkeys, rkeys, current, round_max, missing);
-
-  current = next_cur;
-  
+  current = incID (sentmax);
   if (!res->resok->morekeys)
     current = incID (rngmax);  // set done
   
@@ -375,7 +368,6 @@ compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax,
     bigint tmpmin = tobigint (rnode->prefix);
     bigint node_width = bigint (1) << (160 - rnode->depth);
     bigint tmpmax = tmpmin + node_width - 1;
-
 
     // further constrain to be within the host's range of interest
     if (between (tmpmin, tmpmax, rngmin))
