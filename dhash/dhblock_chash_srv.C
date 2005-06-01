@@ -385,23 +385,25 @@ dhblock_chash_srv::key_info (const strbuf &out)
 {
   chordID p = node->my_pred ()->id ();
   chordID m = node->my_ID ();
-  ptr<dbEnumeration> it = db->enumerate();
-  ptr<dbPair> d = it->nextElement();
-  while (d) {
-    chordID k = dbrec2id (d->key);
-    const vec<ptr<location> > w = bsm->where_missing (k);
-    out << (betweenrightincl (p, m, k) ? "RESPONSIBLE " : "REPLICA ") << k;
-    if (w.size ()) {
-      chord_node n;
-      out << " missing on ";
-      for (size_t i = 0; i < w.size (); i++) {
-	w[i]->fill_node (n);
-	out << n << " ";
-      }
-    } 
-    out << "\n";
-    d = it->nextElement();
-  }
+
+  chordID f = bsm->first_block ();
+  chordID k = f;
+  if (f == chordID (0)) out << "BSM empty.";
+  else
+    do {
+      const vec<ptr<location> > w = bsm->where_missing (k);
+      out << (betweenrightincl (p, m, k) ? "RESPONSIBLE " : "REPLICA ") << k;
+      if (w.size ()) {
+	chord_node n;
+	out << " missing on ";
+	for (size_t i = 0; i < w.size (); i++) {
+	  w[i]->fill_node (n);
+	  out << n << " ";
+	}
+      } 
+      out << "\n";
+      k = bsm->next_block (k);
+    } while (k != f);
   return out;
 }
 
