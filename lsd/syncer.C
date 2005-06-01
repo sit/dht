@@ -138,7 +138,7 @@ syncer::sync_replicas_predupdated (ptr<location> pred)
     delaycb (replica_timer, wrap (this, &syncer::sync_replicas)); 
     return;
   }
-  warn << "sync_replicas: my pred is " << pred->id () << "\n";
+  warn << "sync_replicas: my pred is " << pred << "\n";
   get_succlist (wrap (this, &syncer::sync_replicas_gotsucclist, pred));
 }
 
@@ -176,7 +176,7 @@ syncer::sync_replicas_gotsucclist (ptr<location> pred,
   warn << host_loc->id () << " tree build: " 
 	<< getusec () - start << " usecs\n";
 
-  warn << host_loc->id () << " syncing with " << succs[cur_succ]->id () 
+  warn << host_loc->id () << " syncing with " << succs[cur_succ] 
        << " for range [ " << rngmin << ", " << rngmax << " ]\n";
 
   replica_syncer = New refcounted<merkle_syncer> 
