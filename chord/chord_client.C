@@ -232,6 +232,7 @@ chord::join (str wellknownhost, int wellknownport, bool failok)
   // Make up some random initial information for this other node.
   for (int i = 0; i < NCOORD + USING_HT; i++)
     wkn.coords[i] = (int) 0.0;
+  wkn.e = -1;
 
   ptr<location> wellknown_node = vlist[0]->my_location ();
   if (myname != wellknownhost || myport != wellknownport) {
