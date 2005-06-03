@@ -461,6 +461,13 @@ recroute<T>::dopenult (user_args *sbp, recroute_penult_arg *ra)
   ptr<recroute_complete_arg> ca = New refcounted<recroute_complete_arg> ();
 
   ca->routeid = ra->routeid;
+  ca->path.setsize (ra->path.size () + 1);
+  for (size_t i = 0; i < ra->path.size (); i++) {
+    ca->path[i] = ra->path[i];
+  }
+  ca->path[ra->path.size ()] = me;
+  ca->retries = ra->retries;
+
   u_long m = ra->succs_desired;
   vec<ptr<location> > cs = succs ();
 
@@ -471,15 +478,7 @@ recroute<T>::dopenult (user_args *sbp, recroute_penult_arg *ra)
     my_location ()->fill_node(ca->body.rfbody->failed_hop);
   } else {
     ca->body.set_status (RECROUTE_ROUTE_OK);
-    
-    ca->path.setsize (ra->path.size () + 1);
-    for (size_t i = 0; i < ra->path.size (); i++) {
-      ca->path[i] = ra->path[i];
-    }
-    ca->path[ra->path.size ()] = me;
-    
-  
-  
+
     ca->body.robody->successors.setsize (m);
   
     size_t lastind = 0;
