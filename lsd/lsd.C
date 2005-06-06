@@ -81,8 +81,6 @@ enum routing_mode_t {
   MODE_SUCC,
   MODE_CHORD,
   MODE_DEBRUIJN,
-  MODE_PROX,
-  MODE_PROXREC,
   MODE_PNS,
   MODE_PNSREC,
   MODE_CHORDREC,
@@ -598,7 +596,7 @@ main (int argc, char **argv)
       cffile = optarg;
       break;
     case 'P':
-      mode = MODE_PROX;
+      fatal << "mode PROX no longer supported\n";
       break;
     case 'p':
       myport = atoi (optarg);
@@ -681,6 +679,8 @@ main (int argc, char **argv)
     x << "\n";
     info << x;
   }
+
+  assert (mode == modes[mode].m);
 
   chordnode = New refcounted<chord> (myname,
 				     myport,
