@@ -85,9 +85,9 @@ ChordFingerPNS::oracle_node_died(IDMap n)
 	  if (t->latency(me.ip,ids[i].ip) < min_l) {
 	    min_f = ids[i];
 	    min_l = t->latency(me.ip, ids[i].ip);
-	    k++;
 	    if (_samples > 0 && k>= _samples) break;
 	  }
+	  k++;
 	}
 	loctable->add_node(min_f);//add replacement pns finger
 	CDEBUG(3) << "oracle_node_died del " << n.ip << "," << printID(n.id)
@@ -126,7 +126,7 @@ ChordFingerPNS::oracle_node_joined(IDMap n)
 	tmpf.id = lap * j + me.id;
 	uint s_pos = upper_bound(ids.begin(), ids.end(), tmpf, Chord::IDMap::cmp) - ids.begin();
 	uint n_pos = find(ids.begin(),ids.end(),n) - ids.begin();
-	n_pos = n_pos + sz;
+	n_pos = (n_pos < s_pos)? (n_pos+sz):n_pos;
 	if (_samples < 0 || (int)(n_pos - s_pos) <= _samples) {
 	  //choose the closer one
 	  Topology *t = Network::Instance()->gettopology();
@@ -303,6 +303,7 @@ ChordFingerPNS::initstate()
       min_f.ip = 0;
       uint min_l = 1000000;
       hash_map<IPAddress, bool> inserted;
+      tmpf.id = lap * j + me.id;
 
       for (uint x = 0; x < _fingerlets; x++) {
 	int k = 0;

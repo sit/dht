@@ -231,6 +231,7 @@ Chord::check_correctness(CHID k, vector<IDMap> v)
     iter++;
   }
 
+  /*
   for (uint i = 0; i < v.size(); i++) {
     if (ids[pos].ip == v[i].ip) {
       pos = (pos+1) % idsz;
@@ -246,7 +247,12 @@ Chord::check_correctness(CHID k, vector<IDMap> v)
       return false;
     }
   }
-  return true;
+  */
+  //only check the successor of the successor list
+  if (v.size() && ids[pos].ip == v[0].ip)
+    return true;
+  else
+    return false;
 }
 
 //XXX Currently, it does not handle losses
@@ -1418,8 +1424,6 @@ Chord::join(Args *args)
   fa.m = _nsucc;
 
   bool ok = failure_detect(_wkn, &Chord::find_successors_handler, &fa, &fr, TYPE_JOIN_LOOKUP,1,0);
-  assert(_wkn.ip == fr.dst.ip);
-  _wkn = fr.dst;
   joins++;
   if (ok) record_stat(_wkn.ip,me.ip,TYPE_JOIN_LOOKUP, fr.v.size());
 
@@ -1939,7 +1943,6 @@ Chord::leave(Args *args)
   assert(!static_sim);
   crash (args);
   loctable->del_all();
-  ChordObserver::Instance(NULL)->delnode(me);
 }
 
 void
