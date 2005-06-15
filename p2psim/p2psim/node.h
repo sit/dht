@@ -52,7 +52,7 @@ public:
   string header();
   IPAddress set_alive(bool a);
   bool alive () { return _alive; }
-  static bool init_state() { return (_args.nget<unsigned>("initstate",0,10) != 0); }
+  static bool init_state() { return (_args.nget<unsigned>("initstate",1,10) != 0); }
   static bool collect_stat();
   uint total_outbytes() { return node_live_outbytes; }
   static void set_collect_stat_time(Time u) { _collect_stat_time = u;}
