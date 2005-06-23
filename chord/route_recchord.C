@@ -171,6 +171,7 @@ route_recchord::timeout_cb (ptr<bool> del,
 	      wrap (this, &route_recchord::first_hop_cb, deleted, ra, res, np),
 	      wrap (this, &route_recchord::timeout_cb, deleted, ra, np));  
   } 
+  // XXX are we leaking res here on timeouts?
 }
 
 void
@@ -180,19 +181,19 @@ route_recchord::first_hop_cb (ptr<bool> del,
 			      ptr<location> p,
 			      clnt_stat status)
 {
-
   // XXX what a pain; this is rather similar to recroute::recroute_hop_cb
   //     should figure out if there is a clean way to abstract code.
   if (*del || ((status == RPC_SUCCESS) && (*res == RECROUTE_ACCEPTED))) {
     delete res;
     return;
   }
-  delete res;
 
   chordID myID = v->my_ID ();
   trace << myID << ": first_hop (" << routeid_ << ", " << x
 	<< ") forwarding to "
 	<< p->id () << " failed (" << status << ", " << *res << ").\n";
+  delete res;
+
   // XXX need to alert? probably not in recursive mode.
   if (failed_nodes.size () > 3) {    // XXX hardcoded constant
     trace << myID << ": first_hop (" << routeid_ << ", " << x
@@ -217,7 +218,7 @@ route_recchord::first_hop_cb (ptr<bool> del,
   p = v->closestpred (x, failed_nodes);
   recroute_route_stat *nres = New recroute_route_stat (RECROUTE_ACCEPTED);
   v->doRPC (p, recroute_program_1, RECROUTEPROC_ROUTE,
-	    ra, res,
+	    ra, nres,
 	    wrap (this, &route_recchord::first_hop_cb, del, ra, nres, p),
 	    wrap (this, &route_recchord::timeout_cb, deleted, ra, p));  
 }
