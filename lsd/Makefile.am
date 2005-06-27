@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.25 2005/06/27 02:11:49 fdabek Exp $
+# $Id: Makefile.am,v 1.26 2005/06/27 19:22:33 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -12,8 +12,7 @@ lsd_LDADD = ../dhash/libdhash.a ../dhc/libdhc.a ../merkle/libmerkle.a \
 	    $(DBLIB) ${LDADD} 
 
 syncd_SOURCES = syncd.C syncer.C syncer.h
-
-syncd_LDADD =  ../merkle/libmerkle.a  ../dhash/libdhash.a  ../merkle/libmerkle.a \
+syncd_LDADD =  ../dhash/libdhash.a  ../merkle/libmerkle.a \
 	     ../chord/libchord.a ../utils/libutil.a ../devel/rpclib.o \
 		../svc/libsvc.la  \
 	    $(DBLIB) ${LDADD} 
