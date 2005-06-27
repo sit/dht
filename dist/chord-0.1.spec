@@ -106,6 +106,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_includedir}/chord-%{version}/dhblock.h
 %{_includedir}/chord-%{version}/dhblock_keyhash.h
 %{_includedir}/chord-%{version}/dhblock_replicated.h
+%{_includedir}/chord-%{version}/dhblock_noauth.h
 %{_includedir}/chord-%{version}/id_utils.h
 %{_includedir}/chord-%{version}/lsdctl_prot.h
 %{_includedir}/chord-%{version}/skiplist.h
