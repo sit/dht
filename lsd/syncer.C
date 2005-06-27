@@ -17,10 +17,11 @@ static int sync_trace (getenv ("SYNC_TRACE") ? atoi (getenv ("SYNC_TRACE")) : 0)
 syncer::syncer (ptr<locationtable> locations,
 		ptr<location> h,
 		str dbname,
-		int efrags, int dfrags)
+		dhash_ctype ctype,
+		u_int dfrags, u_int efrags)
   : bsm (New refcounted<block_status_manager> (h->id ()) ), 
-    locations (locations), tmptree (NULL),  host_loc (h), cur_succ (0),
-    efrags (efrags), dfrags (dfrags)
+    locations (locations), ctype (ctype), dfrags (dfrags), efrags (efrags),
+    tmptree (NULL),  host_loc (h), cur_succ (0)
 { 
   
   locations->insert (h);
@@ -162,16 +163,19 @@ syncer::sync_replicas_gotsucclist (ptr<location> pred,
   bigint rngmax = succs[0]->id ();
   
   cur_succ++; // start at 1 (0 is me)
-  if (cur_succ >= succs.size ()) cur_succ = 1;
+  if (efrags > 0 && cur_succ >= efrags) cur_succ = 1;
+  else if (cur_succ >= succs.size ()) cur_succ = 1;
 
   assert(succs[cur_succ]);
 
   //sync with the next node
   if (tmptree) delete tmptree;
   int64_t start = getusec ();
+
+  // XXX need to twiddle the keys as they come out...
   tmptree = New merkle_tree(db, bsm, 
 			    succs[cur_succ]->id (), 
-			    succs);
+			    succs, ctype);
 
   warn << host_loc->id () << " tree build: " 
 	<< getusec () - start << " usecs\n";
@@ -180,7 +184,7 @@ syncer::sync_replicas_gotsucclist (ptr<location> pred,
        << " for range [ " << rngmin << ", " << rngmax << " ]\n";
 
   replica_syncer = New refcounted<merkle_syncer> 
-    (tmptree, 
+    (ctype, tmptree, 
      wrap (this, &syncer::doRPC_unbundler, succs[cur_succ]),
      wrap (this, &syncer::missing, succs[cur_succ],  succs));
 
@@ -201,13 +205,24 @@ syncer::doRPC_unbundler (ptr<location> dst, RPC_delay_args *args)
 void
 syncer::missing (ptr<location> from,
 		 vec<ptr<location> > succs,
-		 bigint key, bool missingLocal)
+		 bigint key, bool missingLocal,
+		 bool round_over)
 {
-  if (missingLocal) {
+  dhash_bsmupdate_arg a;
+  a.local = missingLocal;
+  from->fill_node (a.n);
+  a.key = key;
+  a.ctype = ctype;
+  a.round_over = round_over;
+  doRPC (dhash_program_1, DHASHPROC_BSMUPDATE, &a, NULL, aclnt_cb_null);
+  
+  if (round_over) return;
 
+  if (missingLocal) {
+    
     //the other guy must have this key if he told me I am missing it
     bsm->unmissing (from, key);
-
+    
     //XXX check the DB to make sure we really are missing this block
     // might have gotten this because I tweaked the tree
     ptr<dbrec> kr = id2dbrec(key);
@@ -219,17 +234,11 @@ syncer::missing (ptr<location> from,
       bsm->missing (host_loc, key);
     } else 
       return; //don't update in this case: we aren't actually missing a block
-
-  } else {
+    
+  } else  {
     if (sync_trace) 
       warnx << host_loc->id () << ": " << key << " missing on " << from << "\n";
     bsm->missing (from, key);
   }
-
-  dhash_bsmupdate_arg a;
-  a.local = missingLocal;
-  from->fill_node (a.n);
-  a.key = key;
-  a.ctype = DHASH_CONTENTHASH;
-  doRPC (dhash_program_1, DHASHPROC_BSMUPDATE, &a, NULL, aclnt_cb_null);
+  
 }

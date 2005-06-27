@@ -1,3 +1,5 @@
+#include "dhash_types.h"
+
 class locationtable;
 class location;
 class block_status_manager;
@@ -13,13 +15,17 @@ class syncer {
   ref<block_status_manager> bsm;
   ptr<locationtable> locations;
 
+  dhash_ctype ctype;
+
+  u_int dfrags;
+  u_int efrags;
+
   merkle_tree *tmptree;
   ptr<merkle_syncer> replica_syncer;
   ptr<location> host_loc;
   ptr<dbfe> db;
 
   u_int cur_succ;
-  u_int efrags, dfrags;
 
   int replica_timer;
 
@@ -28,7 +34,9 @@ public:
   syncer::syncer (ptr<locationtable> locations,
 		  ptr<location> h,
 		  str dbname,
-		  int efrags, int dfrags);
+		  dhash_ctype ctype,
+		  u_int dfrags = 0,
+		  u_int efrags = 0);
   
 protected:
   void doRPC (const rpc_program &prog,
@@ -51,5 +59,5 @@ protected:
   void doRPC_unbundler (ptr<location> dst, RPC_delay_args *args);
   void missing (ptr<location> from,
 		vec<ptr<location> > succs,
-		bigint key, bool missingLocal);
+		bigint key, bool missingLocal, bool round_over);
 };

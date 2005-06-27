@@ -6,6 +6,7 @@
 #include <location.h>
 #include <locationtable.h>
 #include <modlogger.h>
+#include "dhash_types.h"
 
 static char *logfname;
 
@@ -41,8 +42,8 @@ usage ()
         << "\t[-L logfilename]\n"
         << "\t[-v <number of vnodes>]\n"
         << "\t[-d <dbprefix>]\n"
-        << "\t[-e <efrags>]\n"
-        << "\t[-c <dfrags>]\n";
+	<< "\t[-e <efrags>]\n"
+	<< "\t[-c <dfrags>]\n";
   exit (1);
 }
 
@@ -51,7 +52,7 @@ main (int argc, char **argv)
 {
   str db_name = "/var/tmp/db";
   int vnodes = 1;
-  int efrags = 14, dfrags = 7;
+  int efrags = 0, dfrags = 0;
   char ch;
 
   chord_node host;
@@ -60,16 +61,16 @@ main (int argc, char **argv)
   setprogname (argv[0]);
   random_init ();
   
-  while ((ch = getopt (argc, argv, "c:d:e:j:L:v:t"))!=-1)
+  while ((ch = getopt (argc, argv, "d:j:L:v:tc:e:"))!=-1)
     switch (ch) {
     case 'c':
       dfrags = atoi  (optarg);
       break;
-    case 'd':
-      db_name = optarg;
-      break;
     case 'e':
       efrags = atoi (optarg);
+      break;
+    case 'd':
+      db_name = optarg;
       break;
     case 'j':
       {
@@ -110,13 +111,11 @@ main (int argc, char **argv)
       break;
     }
 
-  if (! (dfrags > 0 && efrags > 0 && host.r.port > 0))
+  if (! (host.r.port > 0))
     usage ();
 
   start_logs ();
 
-  Configurator::only ().set_int ("dhash.dfrags", dfrags);
-  Configurator::only ().set_int ("dhash.efrags", efrags);
 
   sigcb(SIGHUP, wrap (&start_logs));
   sigcb(SIGINT, wrap (&halt));
@@ -133,8 +132,15 @@ main (int argc, char **argv)
     ret.vnode_num = i;
     ret.x = make_chordID (ret.r.hostname, ret.r.port, i);
     ptr<location> n = New refcounted<location> (ret);
+
     str dbname = strbuf () << db_name << "-" << i;
-    vNew syncer (locations, n, dbname, efrags, dfrags);
+    // XXX don't hard-code this
+    vNew syncer (locations, n, dbname, DHASH_CONTENTHASH);
+    
+    int v;
+    Configurator::only ().get_int ("dhash.replica", v);
+    dbname = strbuf () << db_name << "-" << i << ".n";
+    vNew syncer (locations, n, dbname, DHASH_NOAUTH, v, v);
   }
 
   // XXX check if lsd is running
