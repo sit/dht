@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.44 2005/05/24 20:58:55 sit Exp $
+# $Id: Makefile.am,v 1.45 2005/06/27 02:08:07 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -16,7 +16,7 @@ CLEANFILES = core *.core *~ *.rpo
 MAINTAINERCLEANFILES = Makefile.in
 
 
-noinst_PROGRAMS = test_types coords dhc_test pkc builddb
+noinst_PROGRAMS = coords dhc_test pkc builddb
 noinst_HEADERS = rpclib.h
 
 lsdping_SOURCES = lsdping.C rpclib.C
@@ -36,9 +36,6 @@ builddb_LDADD = ../sfsrodb/libsfsrodb.a ../dhash/libdhash.a ../dhc/libdhc.a ../m
 
 dbm_SOURCES = dhash_benchmark.C
 dbm_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)
-
-test_types_SOURCES = test_types.C
-test_types_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)
 
 dbdump_SOURCES = dbdump.C
 dbdump_LDADD = $(DBLIB) $(LDADD)
