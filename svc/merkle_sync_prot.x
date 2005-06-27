@@ -1,4 +1,5 @@
 %#include <chord_types.h>
+%#include <dhash_types.h>
 %#include <merkle_hash.h>
 
 enum merkle_stat {
@@ -22,6 +23,7 @@ struct merkle_rpc_node {
 /* GETKEYS */
 
 struct getkeys_arg {
+  dhash_ctype ctype;
   bigint rngmin;
   bigint rngmax;
 };
@@ -43,6 +45,7 @@ union getkeys_res switch (merkle_stat status) {
 /* SENDNODE */
 
 struct sendnode_arg {
+  dhash_ctype ctype;
   bigint rngmin;
   bigint rngmax;
   merkle_rpc_node node;

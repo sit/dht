@@ -139,6 +139,7 @@ struct dhash_bsmupdate_arg {
 
   chordID key;
   dhash_ctype ctype;
+  bool round_over;
 };
 
 program DHASH_PROGRAM {
