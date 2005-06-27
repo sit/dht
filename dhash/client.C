@@ -99,8 +99,6 @@ dhashcli::dhashcli (ptr<vnode> node)
   int ordersucc = 1;
   Configurator::only ().get_int ("dhashcli.order_successors", ordersucc);
   ordersucc_ = (ordersucc > 0);
-  warn << "will order successors " << ordersucc_ << "\n";
-
 }
 
 
@@ -481,7 +479,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
 				  ss, r, i,
 				  blk->num_put (), 
 				  blk->min_put ()), 
-			    DHASH_FRAGMENT); 
+			    get_store_status(block->ctype)); 
       // XXX reactivate retry later
   }
   return;
@@ -578,7 +576,7 @@ dhashcli::sendblock (ptr<location> dst, blockID bid_to_send, ptr<dbfe> from_db,
   dhash_store::execute 
     (clntnode, dst, bid_to_send, data,
      wrap (this, &dhashcli::sendblock_cb, cb),
-     DHASH_FRAGMENT); //XXX store_status broken
+     get_store_status(bid_to_send.ctype)); //XXX store_status broken
 }
 
 void

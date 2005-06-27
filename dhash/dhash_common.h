@@ -49,6 +49,7 @@ struct dhash_block
   chordID ID;
   dhash_ctype ctype;
   str data;
+  vec<str> vData;
   int hops;
   int errors;
   int retries;

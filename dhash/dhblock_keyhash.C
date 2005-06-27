@@ -23,7 +23,7 @@ dhblock_keyhash::marshal_block (sfs_pubkey2 key,
   return str (m_dat, m_len);
 }
 
-str
+vec<str>
 dhblock_keyhash::get_payload (str data)
 {
   char *content = NULL;
@@ -40,7 +40,9 @@ dhblock_keyhash::get_payload (str data)
   if (contentlen >= 0 && !(content = (char *)XDR_INLINE (&x, contentlen)))
     fatal << "unmarshal failed\n";
 
-  return str (content, contentlen);
+  vec<str> ret;
+  ret.push_back (str (content, contentlen));
+  return ret;
 }
 
 bool 

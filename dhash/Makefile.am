@@ -1,7 +1,21 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.18 2005/05/24 20:58:55 sit Exp $
+# $Id: Makefile.am,v 1.19 2005/06/27 02:11:21 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS)
+
+SUFFIXES = .x .C .h
+.x.h:
+	-$(RPCC) -h $< || rm -f $@
+.x.C:
+	-$(RPCC) -c $< || rm -f $@
+$(RPCC):
+	@:
+
+dhblock_storage.h: dhblock_storage.x
+dhblock_storage.C: dhblock_storage.x
+dhblock_storage.o: dhblock_storage.h
+
+$(DEP_FILES): dhblock_storage.h
 
 noinst_LIBRARIES = libdhash.a
 
@@ -13,14 +27,17 @@ chordinclude_HEADERS = \
 		       dhblock.h \
 		       dhblock_chash.h \
 		       dhblock_keyhash.h \
-		       dhblock_replicated.h
+		       dhblock_replicated.h \
+		       dhblock_noauth.h
 
 libdhashclient_a_SOURCES = \
 			   dhashclient.C \
 			   dhblock.C \
 			   dhblock_chash.C \
 			   dhblock_keyhash.C \
-			   dhblock_replicated.C
+			   dhblock_replicated.C \
+			   dhblock_noauth.C \
+			   dhblock_storage.C
 
 noinst_HEADERS = \
 		 dhashcli.h \
@@ -39,7 +56,8 @@ noinst_HEADERS = \
 		 dhblock_chash_srv.h \
 		 dhblock_keyhash_srv.h \
 		 dhblock_replicated_srv.h \
-		 dhblock_noauth_srv.h
+		 dhblock_noauth_srv.h \
+		 dhblock_storage.x
 
 
 libdhash_a_SOURCES = \
@@ -54,10 +72,13 @@ libdhash_a_SOURCES = \
 		     dhblock_chash.C \
 		     dhblock_keyhash.C \
 		     dhblock_replicated.C \
+		     dhblock_noauth.C \
 		     dhblock_srv.C \
 		     dhblock_chash_srv.C \
 		     dhblock_replicated_srv.C \
-		     dhblock_keyhash_srv.C
+		     dhblock_keyhash_srv.C \
+		     dhblock_noauth_srv.C \
+		     dhblock_storage.C
 
 EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo

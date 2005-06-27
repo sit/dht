@@ -41,6 +41,8 @@
 #include <location.h>
 #include <locationtable.h>
 #include <misc_utils.h>
+#include <merkle_server.h>
+#include <merkle_sync_prot.h>
 
 #include "dhblock_srv.h"
 #include "dhblock_chash_srv.h"
@@ -129,6 +131,10 @@ dhash_impl::dhash_impl (ptr<vnode> node, str dbname) :
   // RPC demux
   trace << host_node->my_ID () << " registered dhash_program_1\n";
   host_node->addHandler (dhash_program_1, wrap(this, &dhash_impl::dispatch));
+
+  trace << host_node->my_ID () << " registered merklesync_program_1\n";
+  host_node->addHandler (merklesync_program_1, 
+			 wrap(this, &dhash_impl::merkle_dispatch));
 
   cli = New refcounted<dhashcli> (host_node);
 
@@ -220,6 +226,21 @@ dhash_impl::fetchiter_sbp_gotdata_cb (user_args *sbp, s_dhash_fetch_arg *arg,
   dhash_fetchiter_res *res = block_to_res (err, arg, cookie, val);
   sbp->reply (res);
   delete res;
+}
+
+void
+dhash_impl::merkle_dispatch (user_args *sbp)
+{
+  dhash_ctype *ctype = sbp->template getarg<dhash_ctype> ();
+  ptr<dhblock_srv> srv = blocksrv[*ctype];
+  if (srv) {
+    merkle_server *msrv = srv->mserv ();
+    if (msrv)
+      msrv->dispatch (sbp);
+    else
+      sbp->reply (NULL);
+  } else 
+    sbp->reply (NULL); //XXX replyref(MERKLE_ERR) instead?
 }
 
 void

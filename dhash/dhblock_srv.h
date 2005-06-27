@@ -1,7 +1,9 @@
 #ifndef _DHBLOCK_SRV_H_
 #define _DHBLOCK_SRV_H_
 
-class dbfe;
+#include "dbfe.h"
+#include "dhash.h"
+
 class dbrec;
 struct dbOptions;
 
@@ -11,6 +13,7 @@ class dhashcli;
 struct user_args;
 struct dhash_offer_arg;
 struct dhash_bsmupdate_arg;
+struct merkle_server;
 
 /** This class serves as the parent for new block storage types */
 class dhblock_srv {
@@ -42,6 +45,8 @@ class dhblock_srv {
 
   virtual void offer (user_args *sbp, dhash_offer_arg *arg);
   virtual void bsmupdate (user_args *sbp, dhash_bsmupdate_arg *arg);
+
+  virtual merkle_server *mserv () { return NULL; };
 };
 
 #endif /* _DHBLOCK_SRV_H_ */

@@ -2,6 +2,8 @@
 #define __DHBLOCK__
 
 class dhash_block;
+class dbfe;
+class dbrec;
 
 struct dhblock {
   static u_long dhash_mtu ();
@@ -20,10 +22,10 @@ struct dhblock {
   virtual u_int min_fetch () = 0;
 };
 
-
+ptr<dbrec> get_merkle_key (ptr<dbfe> db, ptr<dbrec> key, dhash_ctype c);
 ptr<dhblock> allocate_dhblock (dhash_ctype c);
-str get_block_contents (str data, dhash_ctype c);
+vec<str> get_block_contents (str data, dhash_ctype c);
 bool verify (chordID key, str data, dhash_ctype c);
 bigint compute_hash (const void *buf, size_t buflen);
-
+store_status get_store_status (dhash_ctype ctype);
 #endif

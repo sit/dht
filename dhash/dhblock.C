@@ -3,8 +3,10 @@
 #include <dhblock_chash.h>
 #include <dhblock_keyhash.h>
 #include <dhblock_replicated.h>
+#include <dhblock_noauth.h>
 
 #include <configurator.h>
+
 
 static struct dhblock_config_init {
   dhblock_config_init ();
@@ -73,16 +75,16 @@ allocate_dhblock (dhash_ctype c)
 
 dhblock::~dhblock () {}
 
-str
+vec<str>
 get_block_contents (str data, dhash_ctype c) 
 {
-  str ret;
+  vec<str> ret;
   switch (c) {
   case DHASH_CONTENTHASH:
     ret = dhblock_chash::get_payload (data);
     break;
   case DHASH_NOAUTH:
-    ret = data;
+    ret = dhblock_noauth::get_payload (data);
     break;
   case DHASH_KEYHASH:
     ret = dhblock_keyhash::get_payload (data);
@@ -113,3 +115,19 @@ verify (chordID key, str data, dhash_ctype c)
   return ret;
 }
 
+store_status
+get_store_status (dhash_ctype c)
+{
+  switch (c) {
+  case DHASH_CONTENTHASH:
+    return DHASH_FRAGMENT;
+    break;
+  case DHASH_KEYHASH:
+  case DHASH_NOAUTH:
+    return DHASH_REPLICA;
+    break;
+  default:
+    fatal << "unknown ctype " << c << "\n";
+  }
+
+}

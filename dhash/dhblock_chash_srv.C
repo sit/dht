@@ -40,11 +40,11 @@ dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
   repair_outstanding (0),
   repair_tcb (NULL)
 {
+  // create merkle tree and populate it from DB
+  mtree = New merkle_tree (db, true);
+
   // merkle state
-  mtree = New merkle_tree (db);
-  // merkle state
-  msrv = New merkle_server (mtree, 
-			    wrap (node, &vnode::addHandler));
+  msrv = New merkle_server (mtree);
 
   bsm = New refcounted<block_status_manager> (node->my_ID ());
 
@@ -135,12 +135,16 @@ int
 dhblock_chash_srv::db_insert_immutable (ref<dbrec> key, ref<dbrec> data)
 {
   char *action;
-  block blk (to_merkle_hash (key), data);
-  bool exists = (database_lookup (mtree->db, blk.key) != 0L);
+  merkle_hash mkey = to_merkle_hash (key);
+  bool exists = (database_lookup (db, mkey) != NULL);
   int ret = 0;
   if (!exists) {
     action = "N"; // New
-    ret = mtree->insert (&blk);
+    // insert the key into the merkle tree 
+    // for conent hash, key is not bit-hacked
+    ret = mtree->insert (mkey);
+    //also insert the data into our DB
+    db->insert (key, data);
   } else {
     action = "R"; // Re-write
   }
@@ -156,10 +160,9 @@ void
 dhblock_chash_srv::db_delete_immutable (ref<dbrec> key)
 {
   merkle_hash hkey = to_merkle_hash (key);
-  bool exists = database_lookup (mtree->db, hkey);
+  bool exists = database_lookup (db, hkey);
   assert (exists);
-  block blk (hkey, NULL);
-  mtree->remove (&blk);
+  mtree->remove (hkey);
   info << "db delete: " << node->my_ID ()
        << " " << dbrec2id(key) << "\n";
 }
@@ -370,13 +373,16 @@ dhblock_chash_srv::offer (user_args *sbp, dhash_offer_arg *arg)
 void
 dhblock_chash_srv::bsmupdate (user_args *sbp, dhash_bsmupdate_arg *arg)
 {
-  /** XXX Should make sure that only called from localhost! */
-  chord_node n = make_chord_node (arg->n);
-  ptr<location> from = node->locations->lookup (n.x);
-  if (from) {
-    // Only care if we still know about this node.
-    missing (from, arg->key, arg->local);
+  if (!arg->round_over) {
+    /** XXX Should make sure that only called from localhost! */
+    chord_node n = make_chord_node (arg->n);
+    ptr<location> from = node->locations->lookup (n.x);
+    if (from) {
+      // Only care if we still know about this node.
+      missing (from, arg->key, arg->local);
+    }
   }
+
   sbp->reply (NULL);
 }
 

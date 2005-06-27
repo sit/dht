@@ -23,6 +23,6 @@ struct dhblock_chash : public dhblock {
   u_int min_fetch () { return num_dfrags (); };
 
   static bool verify (chordID key, str data);
-  static str get_payload (str data);
+  static vec<str> get_payload (str data);
   static str marshal_block (str data);
 };

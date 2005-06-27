@@ -1,12 +1,21 @@
+#ifndef __DHBLOCK_REPLICATED_SRV__
+#define __DHBLOCK_REPLICATED_SRV__
+
 #include <dhblock_srv.h>
+#include <chord.h>
 
 class location;
+class merkle_tree;
+class merkle_server;
 
 class dhblock_replicated_srv : public dhblock_srv
 {
 protected:
   const dhash_ctype ctype;
   unsigned nrpcsout;
+
+  merkle_server *msrv;
+  merkle_tree *mtree;
 
   vec<ptr<location> > replicas;
   void update_replica_list ();
@@ -21,13 +30,17 @@ protected:
 
   virtual bool is_block_stale (ref<dbrec> prev, ref<dbrec> d) = 0;
 
+  merkle_server * mserv () { return msrv; };
+
 public:
   dhblock_replicated_srv (ptr<vnode> node, str dbname, str desc,
                           dbOptions opts, dhash_ctype ctype);
   ~dhblock_replicated_srv ();
 
-  void start (bool randomize); 
-  void stop  ();
+  void start (bool randomize) {};
+  void stop  () {};
 
   dhash_stat store (chordID k, ptr<dbrec> d);
 };
+
+#endif

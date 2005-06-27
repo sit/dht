@@ -29,6 +29,7 @@
 #include "dhash_common.h"
 #include "dhblock.h"
 #include "dhblock_chash.h"
+#include "dhblock_noauth.h"
 #include "dhblock_keyhash.h"
 #include "dhashclient.h"
 #include <chord_types.h>
@@ -62,25 +63,6 @@ dhashclient::dhashclient (ptr<axprt_stream> xprt)
 }
 
 
-/* 
- * append block layout 
- *
- * char data[contentlen]
- *
- * key = whatever you say
- */
-void
-dhashclient::append (chordID to, const char *buf, size_t buflen, 
-		     cbinsertgw_t cb)
-{
-  
- str data (buf, buflen);
- str marshalled_data = dhblock_chash::marshal_block (data);
- int m_len = marshalled_data.len ();
- char *m_dat = (char *)marshalled_data.cstr ();
- insert_togateway (to, m_dat, m_len, cb, DHASH_APPEND, m_len, NULL);
-}
-
 
 /*
  * nopk block layout
@@ -98,7 +80,12 @@ dhashclient::insert (bigint key, const char *buf,
   assert (t == DHASH_CONTENTHASH || t == DHASH_NOAUTH);
 
   str data (buf, buflen);
-  str marshalled_data = dhblock_chash::marshal_block (data);
+  str marshalled_data;
+  if (t == DHASH_CONTENTHASH)
+    marshalled_data = dhblock_chash::marshal_block (data);
+  else
+    marshalled_data = dhblock_noauth::marshal_block (data);
+
   int m_len = marshalled_data.len ();
   char *m_dat = (char *)marshalled_data.cstr ();
   insert_togateway (key, m_dat, m_len, cb, t, m_len, options);
@@ -241,9 +228,19 @@ dhashclient::retrievecb (cb_cret cb, bigint key,
       ret = DHASH_RETRIEVE_NOVERIFY;
     } else {
       // success
-      str contents = get_block_contents (block_data, res->resok->ctype);
-      ptr<dhash_block> blk = New refcounted<dhash_block> (contents,
-							  res->resok->ctype);
+      vec<str> contents = get_block_contents (block_data, res->resok->ctype);
+
+      ptr<dhash_block> blk;
+      if (contents.size () == 1)
+	blk = New refcounted<dhash_block> (contents[0],
+					   res->resok->ctype);
+      else {
+	assert (contents.size () > 0);
+	blk = New refcounted<dhash_block> (str (""),
+					   res->resok->ctype);
+	blk->vData = contents;
+      }
+	
       blk->hops = res->resok->hops;
       blk->errors = res->resok->errors;
       blk->retries = res->resok->retries;

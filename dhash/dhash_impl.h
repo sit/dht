@@ -123,6 +123,7 @@ class dhash_impl : public dhash {
   void dofetchrec_assembler_cb (user_args *sbp, dhash_fetchrec_arg *arg,
 				dhash_stat s, ptr<dhash_block> b, route r);
 
+  void merkle_dispatch (user_args *sbp);
   /* statistics */
   long bytes_stored;
   long keys_stored;

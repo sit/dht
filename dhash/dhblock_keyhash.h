@@ -54,7 +54,7 @@ struct dhblock_keyhash : public dhblock_replicated {
 
   static bool verify (chordID key, str data);
   static long version (const char *value, unsigned int len);
-  static str get_payload (str data);
+  static vec<str> get_payload (str data);
   static str marshal_block (sfs_pubkey2 key, sfs_sig2 sig,
 			    keyhash_payload &p);
 };

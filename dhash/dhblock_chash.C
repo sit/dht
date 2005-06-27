@@ -113,31 +113,16 @@ dhblock_chash::verify (chordID key, str data)
 }
 
 // identify function for content hash: marshalling is a nop
-str
+vec<str>
 dhblock_chash::get_payload (str data)
 {
-  return data;
+  vec<str> ret;
+  ret.push_back (data);
+  return ret;
 }
 
 str
 dhblock_chash::marshal_block (str data)
 {
   return data;
-
-  //below is a NOP now that contentlen is gone
-#if 0
-  xdrsuio x;
-  int size = data.len () + 3 & ~3;
-  char *m_buf;
-  if ((m_buf = (char *)XDR_INLINE (&x, size))) {
-    memcpy (m_buf, data.cstr (), data.len ());
-    int m_len = x.uio ()->resid ();
-    char *m_dat = suio_flatten (x.uio ());
-    str ret (m_dat, m_len);
-    return ret;
-  } else {
-    fatal << "chash: marshalling failed\n";
-    return str ();
-  }
-#endif
 }

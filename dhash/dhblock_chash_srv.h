@@ -65,5 +65,7 @@ public:
   void bsmupdate (user_args *sbp, dhash_bsmupdate_arg *arg);
 
   void stats (vec<dstat> &s);
+
+  merkle_server *mserv () { return msrv; };
 };
 
