@@ -29,11 +29,11 @@ private:
   void count_blocks (u_int depth, const merkle_hash &key,
 		     array<u_int64_t, 64> &nblocks);
   void leaf2internal (u_int depth, const merkle_hash &key, merkle_node *n);
-  void remove (u_int depth, block *b, merkle_node *n);
-  int insert (u_int depth, block *b, merkle_node *n);
+  void remove (u_int depth, merkle_hash &key, merkle_node *n);
+  int insert (u_int depth, merkle_hash &key, merkle_node *n);
   merkle_node *lookup (u_int *depth, u_int max_depth, 
 		       const merkle_hash &key, merkle_node *n);
-  
+
 public:
   enum { max_depth = merkle_hash::NUM_SLOTS }; // XXX off by one? or two?
   ptr<dbfe> db;     // public for testing only
@@ -41,13 +41,14 @@ public:
   merkle_tree_stats stats;
 
 
-  merkle_tree (ptr<dbfe> db); 
+  merkle_tree (ptr<dbfe> db, bool populate); 
   merkle_tree::merkle_tree (ptr<dbfe> realdb,
 			    block_status_manager *bsm,
 			    chordID remoteID,
-			    vec<ptr<location> > succs);
-  void remove (block *b);
-  int insert (block *b);
+			    vec<ptr<location> > succs,
+			    dhash_ctype ctype);
+  void remove (merkle_hash &key);
+  int insert (merkle_hash &key);
   merkle_node *lookup_exact (u_int depth, const merkle_hash &key);
   merkle_node *lookup (u_int depth, const merkle_hash &key);
   merkle_node *lookup (u_int *depth, u_int max_depth, const merkle_hash &key);

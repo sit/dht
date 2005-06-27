@@ -12,10 +12,8 @@
 // ---------------------------------------------------------------------------
 // merkle_server
 
-merkle_server::merkle_server (merkle_tree *ltree, addHandler_t addHandler)
-  : ltree (ltree)
+merkle_server::merkle_server (merkle_tree *ltree) : ltree (ltree)
 {
-  (*addHandler) (merklesync_program_1, wrap(this, &merkle_server::dispatch));
 }
 
 void
@@ -23,6 +21,9 @@ merkle_server::dispatch (user_args *sbp)
 {
   if (!sbp)
     return;
+
+
+  //NNN choose the right merkle_server object based on a field of the RPC?
 
   switch (sbp->procno) {
   case MERKLESYNC_SENDNODE:

@@ -10,7 +10,7 @@
 // see comment in merkle_syncer::doRPC for this work around.
 struct RPC_delay_args;
 typedef callback<void, RPC_delay_args *>::ref rpcfnc_t;
-typedef callback<void, bigint, bool>::ref missingfnc_t;
+typedef callback<void, bigint, bool, bool>::ref missingfnc_t;
 
 class merkle_syncer {
  private:
@@ -21,6 +21,7 @@ class merkle_syncer {
   void missing (const merkle_hash &key);
 
  public:
+  dhash_ctype ctype;
   merkle_tree *ltree; // local tree
   rpcfnc_t rpcfnc;
   missingfnc_t missingfnc;
@@ -36,7 +37,8 @@ class merkle_syncer {
 
   vec<pair<merkle_rpc_node, int> > st;
 
-  merkle_syncer (merkle_tree *ltree, rpcfnc_t rpcfnc, missingfnc_t missingfnc);
+  merkle_syncer (dhash_ctype ctype,
+		 merkle_tree *ltree, rpcfnc_t rpcfnc, missingfnc_t missingfnc);
   ~merkle_syncer () {}
   void dump ();
   str getsummary ();
@@ -56,6 +58,7 @@ class merkle_syncer {
 
 class merkle_getkeyrange {
 private:
+  dhash_ctype ctype;
   dbfe *db;
   bigint rngmin;
   bigint rngmax;
@@ -64,16 +67,19 @@ private:
   rpcfnc_t rpcfnc;
   vec<merkle_hash> lkeys;
 
+
   void go ();
   void getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res, clnt_stat err);
   void doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb);
 
 public:
   ~merkle_getkeyrange () {}
-  merkle_getkeyrange (dbfe *db, bigint rngmin, bigint rngmax, 
+  merkle_getkeyrange (dhash_ctype ctype, dbfe *db, 
+		      bigint rngmin, bigint rngmax, 
 		      vec<merkle_hash> plkeys,
 		      missingfnc_t missing, rpcfnc_t rpcfnc)
-    : db (db), rngmin (rngmin), rngmax (rngmax), current (rngmin), 
+    : ctype (ctype), db (db), rngmin (rngmin), 
+      rngmax (rngmax), current (rngmin), 
       missing (missing), rpcfnc (rpcfnc), lkeys (plkeys)
     { go (); }
 };
@@ -88,7 +94,7 @@ format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
 void
 compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax, 
 	       merkle_node *lnode, merkle_rpc_node *rnode,
-	       missingfnc_t missingfnc, rpcfnc_t rpcfnc);
+	       dhash_ctype ctype, missingfnc_t missingfnc, rpcfnc_t rpcfnc);
 
 void
 compare_keylists (vec<merkle_hash> lkeys, vec<merkle_hash> rkeys,

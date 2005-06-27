@@ -27,8 +27,9 @@ overlap (const bigint &l1, const bigint &r1, const bigint &l2, const bigint &r2)
 // merkle_syncer
 
 
-merkle_syncer::merkle_syncer (merkle_tree *ltree, rpcfnc_t rpcfnc, missingfnc_t missingfnc)
-  : ltree (ltree), rpcfnc (rpcfnc), missingfnc (missingfnc)
+merkle_syncer::merkle_syncer (dhash_ctype ctype, merkle_tree *ltree, 
+			      rpcfnc_t rpcfnc, missingfnc_t missingfnc)
+  : ctype (ctype), ltree (ltree), rpcfnc (rpcfnc), missingfnc (missingfnc)
 {
   fatal_err = NULL;
   sync_done = false;
@@ -67,6 +68,7 @@ merkle_syncer::doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb)
 void
 merkle_syncer::setdone ()
 {
+  (*missingfnc) (0, false, true);
   sync_done = true;
 }
 
@@ -194,6 +196,7 @@ merkle_syncer::sendnode (u_int depth, const merkle_hash &prefix)
   assert (lnode_depth == depth);
 
   format_rpcnode (ltree, depth, prefix, lnode, &arg->node);
+  arg->ctype = ctype;
   arg->rngmin = local_rngmin;
   arg->rngmax = local_rngmax;
   doRPC (MERKLESYNC_SENDNODE, arg, res,
@@ -222,7 +225,7 @@ merkle_syncer::sendnode_cb (ref<sendnode_arg> arg, ref<sendnode_res> res,
   }
   
   compare_nodes (ltree, local_rngmin, local_rngmax, lnode, rnode, 
-		 missingfnc, rpcfnc);
+		 ctype, missingfnc, rpcfnc);
 
   if (!lnode->isleaf () && !rnode->isleaf) {
 #ifdef MERKLE_SYNC_TRACE
@@ -251,6 +254,7 @@ merkle_getkeyrange::go ()
   }
 
   ref<getkeys_arg> arg = New refcounted<getkeys_arg> ();
+  arg->ctype = ctype;
   arg->rngmin = current;
   arg->rngmax = rngmax;
   ref<getkeys_res> res = New refcounted<getkeys_res> ();
@@ -281,6 +285,7 @@ merkle_getkeyrange::getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res,
     const merkle_hash &key = res->resok->keys[i];
     rkeys.push_back (key);
   }
+  assert (res->resok->keys.size () > 0);
   chordID sentmax = tobigint (res->resok->keys.back ());
   compare_keylists (lkeys, rkeys, current, sentmax, missing);
 
@@ -325,7 +330,7 @@ compare_keylists (vec<merkle_hash> lkeys,
 #ifdef MERKLE_SYNC_DETAILED_TRACE
     warn << "remote missing [" << rngmin << ", " << rngmax << "] key=" << lkeys[i] << "\n";
 #endif 
-      (*missingfnc) (tobigint(lkeys[i]), false);
+      (*missingfnc) (tobigint(lkeys[i]), false, false);
     } else {
       rkeys.remove (lkeys[i]);
     }
@@ -337,7 +342,7 @@ compare_keylists (vec<merkle_hash> lkeys,
 #ifdef MERKLE_SYNC_DETAILED_TRACE
     warn << "local missing [" << rngmin << ", " << rngmax << "] key=" << slot->key << "\n";
 #endif 
-    (*missingfnc) (tobigint(slot->key), true);
+    (*missingfnc) (tobigint(slot->key), true, false);
     slot = rkeys.next (slot);
   }
    
@@ -346,6 +351,7 @@ compare_keylists (vec<merkle_hash> lkeys,
 void
 compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax, 
 	       merkle_node *lnode, merkle_rpc_node *rnode,
+	       dhash_ctype ctype,
 	       missingfnc_t missingfnc, rpcfnc_t rpcfnc)
 {
 #ifdef MERKLE_SYNC_TRACE
@@ -376,7 +382,8 @@ compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax,
       tmpmax = rngmax;
 
     vec<merkle_hash> lkeys = database_get_keys (ltree->db, rnode->depth, rnode->prefix);
-    vNew merkle_getkeyrange (ltree->db, tmpmin, tmpmax, lkeys, missingfnc, rpcfnc);
+    vNew merkle_getkeyrange (ctype, ltree->db, tmpmin, tmpmax, lkeys, 
+			     missingfnc, rpcfnc);
   }
 }
 

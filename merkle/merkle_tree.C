@@ -3,6 +3,9 @@
 #include <block_status.h>
 #include <location.h>
 #include "merkle_tree.h"
+#include "dhash_common.h"
+#include "dhblock.h"
+#include "dhblock_noauth.h"
 
 void
 dump_db  (dbfe *db)
@@ -18,68 +21,62 @@ dump_db  (dbfe *db)
   it = NULL;
 }
 
-merkle_tree::merkle_tree (ptr<dbfe> realdb)
+merkle_tree::merkle_tree (ptr<dbfe> realdb, bool populate)
 {
-  // create a temporary in-memory database
-  ptr<dbfe> fakedb = New refcounted<dbfe> ();
-  // put the memory db "under" the merkle tree
-  db = fakedb;
-
+  // create an in-memory database to hold keys
+  db = New refcounted<dbfe> ();
   dbOptions opts;
   opts.addOption("opt_cachesize", 1000);
   opts.addOption("opt_nodesize", 4096);
-  if (int err = fakedb->opendb(NULL, opts))
+  if (int err = db->opendb(NULL, opts))
     fatal << "merkle_tree::merkle_tree opendb failed: " << strerror(err);
 
-  // populate merkle tree/mem db from realdb
-  ptr<dbEnumeration> it = realdb->enumerate ();
-  ptr<dbPair> d = it->firstElement();
-  ptr<dbrec> FAKE_DATA = New refcounted<dbrec> ("", 1);
-  for (int i = 0; d; i++, d = it->nextElement()) {
-    if (i == 0)
-      warn << "Database is not empty.  Loading into merkle tree\n";
-    //    warn << "key[" << i << "] " << dbrec2id (d->key) << "\n";
-    block b (to_merkle_hash (d->key), FAKE_DATA);
-    int ret = insert (0, &b, &root);
-    assert (!ret);
+  if (populate) {
+    // populate merkle tree with keys
+    ptr<dbEnumeration> it = realdb->enumerate ();
+    ptr<dbPair> d = it->firstElement();
+    for (int i = 0; d; i++, d = it->nextElement()) {
+      if (i == 0)
+	warn << "Database is not empty.  Loading into merkle tree\n";
+      warn << "[" << i << "] " << dbrec2id (d->key) << "\n";
+      merkle_hash key = to_merkle_hash (d->key);
+      int ret = insert (0, key, &root);
+      assert (!ret);
+    }
   }
 
-  // Put the realdb under the merkle tree.  This works since it has
-  // the same keys as the in-mem db.
-  db = realdb;
-  //check_invariants ();
+  //leave the merkle tree under the fakedb. We'll only use this to hold keys
+  // higher layers are responsible for managing their own data in the db
 }
 
 //build a merkle tree custom-tailored for remoteID
 merkle_tree::merkle_tree (ptr<dbfe> realdb,
 			  block_status_manager *bsm,
 			  chordID remoteID,
-			  vec<ptr<location> > succs)
+			  vec<ptr<location> > succs,
+			  dhash_ctype ctype)
 {
   chordID localID = succs[0]->id ();
-  // create a temporary in-memory database
-  ptr<dbfe> fakedb = New refcounted<dbfe> ();
-  // put the memory db "under" the merkle tree
-  db = fakedb;
-
+  // create an in-memory database to hold the keys
+  db = New refcounted<dbfe> ();
   dbOptions opts;
   opts.addOption("opt_cachesize", 1000);
   opts.addOption("opt_nodesize", 4096);
-  if (int err = fakedb->opendb(NULL, opts))
+  if (int err = db->opendb(NULL, opts))
     fatal << "merkle_tree::merkle_tree opendb failed: " << strerror(err);
 
   // populate merkle tree/mem db from realdb
   ptr<dbEnumeration> it = realdb->enumerate ();
   ptr<dbPair> d = it->firstElement();
-  ptr<dbrec> FAKE_DATA = New refcounted<dbrec> ("", 1);
   for (int i = 0; d; i++, d = it->nextElement()) {
-    //    warn << "key[" << i << "] " << dbrec2id (d->key) << "\n";
-    chordID k = dbrec2id(d->key);
-
+    ptr<dbrec> mkey = to_merkle_key (realdb, d->key, ctype);
+    
+    warn << "[" << i << "] " << dbrec2id(mkey) << "\n";
     //leave out keys that we know the other side doesn't have
+    chordID k = dbrec2id(mkey);
     if (!bsm->missing_on (k, remoteID)) {
-      block b (to_merkle_hash (d->key), FAKE_DATA);
-      int ret = insert (0, &b, &root);
+      merkle_hash key = to_merkle_hash (mkey);
+      int ret = insert (0, key, &root);
       assert (!ret);
     } else {
       warn << "leaving " << k << " out of merkle tree for " << remoteID <<"\n";
@@ -91,33 +88,30 @@ merkle_tree::merkle_tree (ptr<dbfe> realdb,
   vec<chordID> mis = bsm->missing_what (localID);
   for (unsigned int i = 0; i < mis.size (); i++)
     {
-      block b (to_merkle_hash (id2dbrec(mis[i])), FAKE_DATA);
-      bool indb = database_lookup (fakedb, b.key);
-      // only fake having a key if: 
-      // 1) we really don't have it, and
-      //  2) we've confirmed other node has block
-      // or: 
-      // 3) other node might have it and we need to learn which it is
+      merkle_hash key = to_merkle_hash (id2dbrec(mis[i]));
+      bool indb = database_lookup (db, key);
+
+      /* only fake having a key if: 
+       1) we really don't have it, and
+       2) we've confirmed other node has block
+         or: 
+       3) other node might have it and we need to learn which it is
+      */
+
       if (!indb && 
 	  (bsm->confirmed_on (mis[i], remoteID)
 	   || !bsm->missing_on (mis[i], remoteID))) 
 	{
-	  int ret = insert (0, &b, &root);
-	  //	warn << "added extra key " << mis[i] << " to merkle tree for " 
-	  // << remoteID << "\n";
+	  int ret = insert (0, key, &root);
 	  assert (!ret);
 	} 
       
       if (indb) {
-	bsm->unmissing (succs[0], tobigint(b.key));
-	warn << "had " << tobigint(b.key) << " even though bsm thought I didn't\n";
+	bsm->unmissing (succs[0], tobigint(key));
+	warn << "had " << tobigint(key) << " even though bsm thought I didn't\n";
       }
     }
   
-  // Put the realdb under the merkle tree.  This works since it has
-  // the same keys as the in-mem db.
-  //db = realdb;
-  check_invariants ();
 }
 
 
@@ -128,8 +122,6 @@ merkle_tree::rehash (u_int depth, const merkle_hash &key, merkle_node *n)
   n->hash = 0;
   if (n->count == 0)
     return;
-  
-  ///warn << "rehash: depth " << depth << ", key " << key << "\n";
   
   sha1ctx sc;
   if (n->isleaf ()) {
@@ -197,68 +189,68 @@ merkle_tree::leaf2internal (u_int depth, const merkle_hash &key,
 
 
 void
-merkle_tree::remove (u_int depth, block *b, merkle_node *n)
+merkle_tree::remove (u_int depth, merkle_hash& key, merkle_node *n)
 {
   if (n->isleaf ()) {
-    assert (database_lookup (db, b->key));
-    database_remove (db, b);
-    assert (!database_lookup (db, b->key));
+    assert (database_lookup (db, key));
+    database_remove (db, key);
+    assert (!database_lookup (db, key));
   } else {
-    u_int32_t branch = b->key.read_slot (depth);
-    remove (depth+1, b, n->child (branch));
+    u_int32_t branch = key.read_slot (depth);
+    remove (depth+1, key, n->child (branch));
   }
   
   assert (n->count != 0);
   n->count -= 1;
   if (!n->isleaf () && n->count <= 64)
     n->internal2leaf ();
-  rehash (depth, b->key, n);
+  rehash (depth, key, n);
 }
 
 
 int
-merkle_tree::insert (u_int depth, block *b, merkle_node *n)
+merkle_tree::insert (u_int depth, merkle_hash& key, merkle_node *n)
 {
   int ret = 0;
     
   if (n->isleaf () && n->leaf_is_full ())
-    leaf2internal (depth, b->key, n);
+    leaf2internal (depth, key, n);
   
   if (n->isleaf ()) {
-    ret = database_insert (db, b);
+    ret = database_insert (db, key);
     if (ret != 0)
       n->count -= 1;
   } else {
-    u_int32_t branch = b->key.read_slot (depth);
-    ret = insert (depth+1, b, n->child (branch));
+    u_int32_t branch = key.read_slot (depth);
+    ret = insert (depth+1, key, n->child (branch));
   }
   
   n->count += 1;
-  rehash (depth, b->key, n);
+  rehash (depth, key, n);
   return ret;
 }
 
 
 
 void
-merkle_tree::remove (block *b)
+merkle_tree::remove (merkle_hash &key)
 {
   // assert block must exist..
-  if (!database_lookup (db, b->key)) {
-    fatal << "merkle_tree::remove: key does not exist " << b->key << "\n";
+  if (!database_lookup (db, key)) {
+    fatal << "merkle_tree::remove: key does not exist " << key << "\n";
     return;
   }
 
-  remove (0, b, &root);
+  remove (0, key, &root);
 }
 
 int
-merkle_tree::insert (block *b)
+merkle_tree::insert (merkle_hash &key)
 {
-  if (database_lookup (db, b->key))
-    fatal << "merkle_tree::insert: key already exists " << b->key << "\n";
+  if (database_lookup (db, key))
+    fatal << "merkle_tree::insert: key already exists " << key << "\n";
 
-  return insert (0, b, &root);
+  return insert (0, key, &root);
 }
 
 

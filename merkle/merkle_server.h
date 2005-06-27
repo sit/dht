@@ -4,7 +4,6 @@
 class merkle_tree;
 class user_args;
 
-typedef callback<void, const rpc_program &, cbdispatch_t>::ref addHandler_t;
 
 // One merkle_server runs for each node of the Chord ring.
 //  - i.e., one merkle_server per virtual node
@@ -15,7 +14,7 @@ class merkle_server {
   merkle_tree *ltree; // local tree
 
   void dispatch (user_args *a);
-  merkle_server (merkle_tree *ltree, addHandler_t addHandler);
+  merkle_server (merkle_tree *ltree);
 };
 
 

@@ -8,6 +8,8 @@
 vec<merkle_hash> database_get_keys     (dbfe *db, u_int depth, 
 				        const merkle_hash &prefix);
 
+ptr<dbrec> to_merkle_key (ptr<dbfe> db, ptr<dbrec> key, dhash_ctype c);
+
 static inline str err2str (merkle_stat status)
 {
   return rpc_print (strbuf (), status, 0, NULL, NULL);
@@ -18,13 +20,6 @@ struct pair {
   T1 first;
   T2 second;
   pair (T1 f, T2 s) : first (f), second (s) {}
-};
-
-
-struct block {
-  merkle_hash key;
-  ptr<dbrec> data;
-  block (merkle_hash key, ptr<dbrec> data) : key (key), data (data) {}
 };
 
 
@@ -96,16 +91,17 @@ dbrec2id (ptr<dbrec> r)
 
 
 static inline int
-database_remove (dbfe *db, block *b)
+database_remove (dbfe *db, merkle_hash& key)
 {
-  return db->del (todbrec(b->key));
+  return db->del (todbrec(key));
 }
 
 
 static inline int
-database_insert (dbfe *db, block *b)
+database_insert (dbfe *db, merkle_hash& key)
 {
-  int ret = db->insert (todbrec (b->key), b->data);
+  ptr<dbrec> FAKE_DATA = New refcounted<dbrec> ("", 1);
+  int ret = db->insert (todbrec (key), FAKE_DATA);
   return ret;
 }
 
