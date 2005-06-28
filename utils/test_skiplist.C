@@ -73,6 +73,7 @@ int main (int argc, char *argv[])
     assert (!b);
     assert (test.repok ());
     assert (test.size () == 4);
+    delete z;
   }
 
   // walking the list manually
@@ -222,36 +223,58 @@ int main (int argc, char *argv[])
     assert (c->key == (int) z);
     delete c; c = NULL;
     assert (test.repok ());
-    test.insert (New item (y, "baz"));
+    item *d = New item (y, "baz");
+    if (!test.insert (d))
+      delete d;
+
     assert (test.repok ());
   }
 
+  vec<item *> tmp;
   for (int i = 0; i < 257; i++) {
     unsigned int y = (i * 3) % 513;
     item *c = test.remove (y);
-    delete c;
+    if (c)
+      tmp.push_back (c);
     assert (test.repok ());
   }
+  warnx << "Testing re-insert of removed items.\n";
+  for (unsigned int i = 0; i < tmp.size (); i++) {
+    test.insert (tmp[i]);
+    test.repok ();
+  }
+  for (unsigned int i = 0; i < tmp.size (); i++) {
+    item *u = test.remove (tmp[i]->key);
+    assert (u == tmp[i]);
+    delete u;
+  }
+  tmp.clear ();
 
   assert (test.first () == NULL);
+  test.repok ();
+
   warnx << "Testing random inserts and removes.\n";
   // Some random stuff
   for (int i = 200; i < 305; i += random() % 13) {
-    test.insert (New item (i, "qux"));
+    item *c = New item (i, "qux");
+    if (!test.insert (c))
+      delete c;
     assert (test.repok ());
   }
   for (int i = 0; i < 230; i += random () % 11) {
-    test.insert (New item (i, "quz"));
+    item *c = New item (i, "quz");
+    if (!test.insert (c))
+      delete c;
     assert (test.repok ());
   }
   while (test.first () != NULL) {
     int i = random () % 305;
     item *c = test.closestsucc (i);
     item *d = test.remove (c->key);
+    delete d;
     assert (c == d);
     assert (test.repok ());
   }
-
 
   assert (test.repok ());
 
