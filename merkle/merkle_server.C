@@ -36,11 +36,13 @@ merkle_server::dispatch (user_args *sbp)
       merkle_hash lnode_prefix;
       lnode = ltree->lookup (&lnode_depth, rnode->depth, rnode->prefix);
       if (lnode_depth != rnode->depth) {
-	// FED: used to be an assert, now a warning. Think code handles
-	// this case.
 	warn << "local depth ( " << lnode_depth 
 	     << ") is not equal to remote depth (" << rnode->depth << ")\n";
 	warn << "prefix is " << rnode->prefix << "\n";
+	//a remote node will only ask us for children if we previously returned
+	// an index node at depth - 1. If local depth < remote depth, that
+	// implies that we don't have an index node at depth - 1: assert!
+	assert (lnode_depth == rnode->depth);
       }
       lnode_prefix = rnode->prefix;
       // XXX isn't this a NOP, given the previous assertion about equal depths 

@@ -6,8 +6,11 @@
 #include <id_utils.h>
 #include <comm.h>
 
-//#define MERKLE_SYNC_TRACE
-//#define MERKLE_SYNC_DETAILED_TRACE
+#include <modlogger.h>
+#define warning modlogger ("merkle", modlogger::WARNING)
+#define info  modlogger ("merkle", modlogger::INFO)
+#define trace modlogger ("merkle", modlogger::TRACE)
+
 
 // ---------------------------------------------------------------------------
 // util junk
@@ -101,9 +104,7 @@ merkle_syncer::getsummary ()
 void
 merkle_syncer::next (void)
 {
-#ifdef MERKLE_SYNC_DETAILED_TRACE
-  warn << "local range [" <<  local_rngmin << "," << local_rngmax << "]\n";
-#endif
+  trace << "local range [" <<  local_rngmin << "," << local_rngmax << "]\n";
   assert (!sync_done);
   assert (!fatal_err);
 
@@ -120,17 +121,12 @@ merkle_syncer::next (void)
     }
     
 
-#ifdef MERKLE_SYNC_DETAILED_TRACE
-    warn << "starting from slot " << p.second << "\n";
-#endif
+    trace << "starting from slot " << p.second << "\n";
 
-    // XXX not clear p.second will ever enter > 0
     while (p.second < 64) {
       u_int i = p.second;
       p.second += 1;
-#ifdef MERKLE_SYNC_DETAILED_TRACE
-      warn << "CHECKING: " << i;
-#endif
+      trace << "CHECKING: " << i;
 
       bigint remote = tobigint (rnode->child_hash[i]);
       bigint local = tobigint (lnode->child (i)->hash);
@@ -147,39 +143,31 @@ merkle_syncer::next (void)
 
       bool overlaps = overlap (local_rngmin, local_rngmax, slot_rngmin, slot_rngmax);
 
+      strbuf tr;
       if (remote != local) {
-#ifdef MERKLE_SYNC_DETAILED_TRACE
-	warnx << " differ. local " << local << " != remote " << remote;
-#endif
+	tr << " differ. local " << local << " != remote " << remote;
+
 	if (overlaps) {
-#ifdef MERKLE_SYNC_DETAILED_TRACE
-	  warnx << " .. sending\n";
-#endif
+	  tr << " .. sending\n";
 	  sendnode (depth, prefix);
+	  trace << tr;
 	  return;
 	} else {
-#ifdef MERKLE_SYNC_DETAILED_TRACE
-	  warnx << " .. not sending\n";
-#endif
+	  tr << " .. not sending\n";
 	}
       } else {
-#ifdef MERKLE_SYNC_DETAILED_TRACE
-	warnx << " same. local " << local << " == remote " << remote << "\n";
-#endif
+	tr << " same. local " << local << " == remote " << remote << "\n";
       }
+      trace << tr;
     }
     
     assert (p.second == 64);
     st.pop_back ();
   }
 
-#ifdef MERKLE_SYNC_DETAILED_TRACE
-  warn << "DONE .. in NEXT\n";
-#endif
+  trace << "DONE .. in NEXT\n";
   setdone ();
-#ifdef MERKLE_SYNC_DETAILED_TRACE
-  warn << "OK!\n";
-#endif
+  trace << "OK!\n";
 }
 
 
@@ -192,6 +180,9 @@ merkle_syncer::sendnode (u_int depth, const merkle_hash &prefix)
 
   u_int lnode_depth;
   merkle_node *lnode = ltree->lookup (&lnode_depth, depth, prefix);
+  // OK to assert this: since depth-1 is an index node, we know that
+  //                    it created all of its depth children when
+  //                    it split. --FED
   assert (lnode);
   assert (lnode_depth == depth);
 
@@ -228,9 +219,7 @@ merkle_syncer::sendnode_cb (ref<sendnode_arg> arg, ref<sendnode_res> res,
 		 ctype, missingfnc, rpcfnc);
 
   if (!lnode->isleaf () && !rnode->isleaf) {
-#ifdef MERKLE_SYNC_TRACE
-    warn << "I vs I\n";
-#endif
+    trace << "I vs I\n";
     st.push_back (pair<merkle_rpc_node, int> (*rnode, 0));
   }
 
@@ -246,9 +235,7 @@ void
 merkle_getkeyrange::go ()
 {
   if (!betweenbothincl (rngmin, rngmax, current)) {
-#ifdef MERKLE_SYNC_TRACE
-    warn << "merkle_getkeyrange::go () ==> DONE\n";
-#endif
+    trace << "merkle_getkeyrange::go () ==> DONE\n";
     delete this;
     return;
   }
@@ -327,9 +314,7 @@ compare_keylists (vec<merkle_hash> lkeys,
   for (unsigned int i = 0; i < lkeys.size (); i++) {
     if (!rkeys[lkeys[i]] && 
 	betweenbothincl (rngmin, rngmax, tobigint(lkeys[i]))) {
-#ifdef MERKLE_SYNC_DETAILED_TRACE
-    warn << "remote missing [" << rngmin << ", " << rngmax << "] key=" << lkeys[i] << "\n";
-#endif 
+      trace << "remote missing [" << rngmin << ", " << rngmax << "] key=" << lkeys[i] << "\n";
       (*missingfnc) (tobigint(lkeys[i]), false, false);
     } else {
       rkeys.remove (lkeys[i]);
@@ -339,9 +324,7 @@ compare_keylists (vec<merkle_hash> lkeys,
   //anything left: he has and I don't
   qhash_slot<merkle_hash, int> *slot = rkeys.first ();
   while (slot) {
-#ifdef MERKLE_SYNC_DETAILED_TRACE
-    warn << "local missing [" << rngmin << ", " << rngmax << "] key=" << slot->key << "\n";
-#endif 
+    trace << "local missing [" << rngmin << ", " << rngmax << "] key=" << slot->key << "\n";
     (*missingfnc) (tobigint(slot->key), true, false);
     slot = rkeys.next (slot);
   }
@@ -354,12 +337,10 @@ compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax,
 	       dhash_ctype ctype,
 	       missingfnc_t missingfnc, rpcfnc_t rpcfnc)
 {
-#ifdef MERKLE_SYNC_TRACE
-  warn << (lnode->isleaf ()  ? "L" : "I")
+  trace << (lnode->isleaf ()  ? "L" : "I")
        << " vs "
        << (rnode->isleaf ? "L" : "I")
        << "\n";
-#endif
 
   if (rnode->isleaf) {
     vec<merkle_hash> lkeys = database_get_keys (ltree->db, rnode->depth, rnode->prefix);
