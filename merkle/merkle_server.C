@@ -69,7 +69,8 @@ merkle_server::dispatch (user_args *sbp)
 	else
 	  d = enumer->nextElement ();
 
-	if (!d || dbrec2id(d->key) > arg->rngmax)
+	if (!d ||
+	    !betweenbothincl (arg->rngmin, arg->rngmax, dbrec2id(d->key)))
 	  break;
 	keys.push_back (d->key);
       }
@@ -77,7 +78,8 @@ merkle_server::dispatch (user_args *sbp)
       bool more = false;
       if (keys.size () == 64) {
 	d = enumer->nextElement ();
-	if (d && dbrec2id(d->key) <= arg->rngmax)
+	if (d && 
+	    betweenbothincl (arg->rngmin, arg->rngmax, dbrec2id(d->key)))
 	  more = true;
       }
 
