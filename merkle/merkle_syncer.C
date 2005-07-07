@@ -272,8 +272,9 @@ merkle_getkeyrange::getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res,
     const merkle_hash &key = res->resok->keys[i];
     rkeys.push_back (key);
   }
-  assert (res->resok->keys.size () > 0);
-  chordID sentmax = tobigint (res->resok->keys.back ());
+  chordID sentmax = rngmax;
+  if (res->resok->keys.size () > 0)
+    sentmax = tobigint (res->resok->keys.back ());
   compare_keylists (lkeys, rkeys, current, sentmax, missing);
 
   current = incID (sentmax);
