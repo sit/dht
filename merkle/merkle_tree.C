@@ -38,7 +38,7 @@ merkle_tree::merkle_tree (ptr<dbfe> realdb, bool populate)
     for (int i = 0; d; i++, d = it->nextElement()) {
       if (i == 0)
 	warn << "Database is not empty.  Loading into merkle tree\n";
-      //      warn << "[" << i << "] " << dbrec2id (d->key) << "\n";
+      // warn << "[" << i << "] " << dbrec2id (d->key) << "\n";
       merkle_hash key = to_merkle_hash (d->key);
       int ret = insert (0, key, &root);
       assert (!ret);
@@ -71,7 +71,7 @@ merkle_tree::merkle_tree (ptr<dbfe> realdb,
   for (int i = 0; d; i++, d = it->nextElement()) {
     ptr<dbrec> mkey = to_merkle_key (realdb, d->key, ctype);
     
-    warn << "[" << i << "] " << dbrec2id(mkey) << "\n";
+    // warn << "[" << i << "] " << dbrec2id(mkey) << "\n";
     //leave out keys that we know the other side doesn't have
     chordID k = dbrec2id(mkey);
     if (!bsm->missing_on (k, remoteID)) {
