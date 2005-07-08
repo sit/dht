@@ -115,6 +115,11 @@ block_status_manager::unmissing (ptr<location> remote, const chordID &b)
   // who we confirmed to have it
   if (remote->id () == my_id) 
     blocks[b]->clear_confirmed ();
+
+  // If it's not actually missing anywhere, don't need
+  // to remember anything.
+  if (blocks[b]->missing.size () == 0)
+    del_block (b);
 }
 
 chordID
