@@ -60,6 +60,9 @@ public:
   // this version connects to the dhash service on TCP
   dhashclient (ptr<axprt_stream> xprt);
 
+  // Deal with potentially too large blocks.
+  void seteofcb (cbv::ptr);
+
   void append (chordID to, const char *buf, size_t buflen, cbinsertgw_t cb);
 
   // insert using key = hash(buf).  (buf need not remain involatile

@@ -45,7 +45,7 @@
  * dhashclient
  */
 
-dhashclient::dhashclient(str sockname)
+dhashclient::dhashclient (str sockname)
 {
   int fd = unixsocket_connect(sockname);
   if (fd < 0) {
@@ -62,7 +62,12 @@ dhashclient::dhashclient (ptr<axprt_stream> xprt)
   gwclnt = aclnt::alloc (xprt, dhashgateway_program_1);
 }
 
-
+void
+dhashclient::seteofcb (cbv::ptr cb)
+{
+  // Just pass through the callback; it takes no arguments anyway.
+  gwclnt->seteofcb (cb);
+}
 
 /*
  * nopk block layout

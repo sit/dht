@@ -12,6 +12,7 @@ ptr<dbfe> group_db, header_db;
 // in group_db, each key is a group name. each record contains artnum,messageID,chordID
 // in header_db, each key is a messageID. each record is a header (plus lines and other info)
 dhashclient *dhash;
+static char *sock = "/tmp/chord-sock";
 
 str
 collect_stats ()
@@ -31,6 +32,7 @@ stop ()
 {
   // XXX shutdown open connections cleanly....
   warn << "Shutting down on signal.\n";
+  delete dhash;
   exit (1);
 }
 
@@ -88,6 +90,16 @@ syncdb (void)
   delaycb (opt->sync_interval, wrap (&syncdb));
 }
 
+static void
+eofhandler (void)
+{
+  warn << "Unexpected EOF from DHash client; attempting to recover...\n";
+  delete dhash;
+
+  dhash = New dhashclient (sock);
+  dhash->seteofcb (wrap (eofhandler));
+}
+
 void
 usage ()
 {
@@ -99,7 +111,6 @@ main (int argc, char *argv[])
 {
   setprogname (argv[0]);
 
-  char *sock = "/tmp/chord-sock";
   char *dirbase = NULL;
   bool create_groups = opt->create_unknown_groups;
 
@@ -134,6 +145,7 @@ main (int argc, char *argv[])
   opt->create_unknown_groups = create_groups;
 
   dhash = New dhashclient (sock);
+  dhash->seteofcb (wrap (eofhandler));
 
   dbOptions opts;
   group_db = New refcounted<dbfe> ();

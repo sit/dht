@@ -201,10 +201,29 @@ usage (char *progname)
   exit(0);
 }
 
+void
+cleanup (void)
+{
+  if (outfile) {
+    fclose (outfile);
+  }
+  if (bwfile) {
+    fclose (bwfile);
+  }
+  exit (1);
+}
+
+void
+eofhandler () 
+{
+  warn << "Unexpected EOF: block too large?\n";
+  cleanup ();
+}
 
 void
 connected (dhashclient *dhash, int argc, char **argv) 
 {
+  dhash->seteofcb (wrap (eofhandler));
 
   fconnected = 1;
   int num = atoi(argv[3]);
@@ -273,18 +292,6 @@ tcp_connect_cb (int argc, char **argv, int fd)
   xprt = axprt_stream::alloc (fd);    
   dhashclient *dhash = New dhashclient (xprt);
   connected (dhash, argc, argv);
-}
-
-void
-cleanup (void)
-{
-  if (outfile) {
-    fclose (outfile);
-  }
-  if (bwfile) {
-    fclose (bwfile);
-  }
-  exit (1);
 }
 
 int
