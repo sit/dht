@@ -1,5 +1,5 @@
 // -*-c++-*-
-/* $Id: usenet.h,v 1.9 2005/02/22 14:29:06 sit Exp $ */
+/* $Id: usenet.h,v 1.10 2005/07/15 04:07:34 sit Exp $ */
 
 /*
  *
@@ -35,6 +35,7 @@ struct dbfe;
 struct dhashclient;
 extern ptr<dbfe> group_db, header_db;
 extern dhashclient *dhash;
+extern unsigned int nrpcout;
 
 str collect_stats ();
 
@@ -54,6 +55,7 @@ struct options {
   unsigned int peer_timeout;
   bool create_unknown_groups;
   unsigned int sync_interval;
+  unsigned int max_parallel;
 
   vec<ptr<peerinfo> > peers;
 

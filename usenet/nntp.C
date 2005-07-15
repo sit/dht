@@ -296,10 +296,12 @@ nntp::cmd_article (str c) {
     if (nntp_trace >= 8)
       warn << s << ": msgkey " << msgkey << "\n";
 
-    if (msgkey != 0)
+    if (msgkey != 0) {
       dhash->retrieve (msgkey,
 		       wrap (this, &nntp::cmd_article_cb, deleted,
 			     true, msgkey));
+      nrpcout++;
+    }
     else
       aio << noarticle;
   }
@@ -314,6 +316,7 @@ nntp::cmd_article_cb (ptr<bool> deleted, bool head, chordID msgkey,
 {
   if (*deleted)
     return;
+  nrpcout--;
   if (status != DHASH_OK) {
     aio << noarticle;
     return;
@@ -461,16 +464,21 @@ nntp::read_post (str resp, str bad, bool takedht)
     header_db->insert (k, d);
     if (!takedht) {
       dhash->insert (wholeart, wholeart.len (),
-		     wrap (this, &nntp::read_post_cb,
+		     wrap (this, &nntp::read_post_cb, deleted,
 			   wholeart.len (), k, groups));
+      nrpcout++;
     }
   }
 }
 
 void
-nntp::read_post_cb (size_t len, ptr<dbrec> msgid, vec<str> groups,
+nntp::read_post_cb (ptr<bool> deleted,
+		    size_t len, ptr<dbrec> msgid, vec<str> groups,
 		    dhash_stat status, ptr<insert_info> i)
 {
+  if (*deleted)
+    return;
+  nrpcout--;
   str k (msgid->value, msgid->len);
   if (status == DHASH_OK) {
     dhashbytes_ += len;
@@ -518,6 +526,8 @@ nntp::cmd_ihave (str c)
 
 char *checksendb = "238 ";
 char *checksende = " no such article found, please send it to me\r\n";
+char *checklaterb = "431 ";
+char *checklatere = " try sending it again later.\r\n";
 char *checknob = "438 ";
 char *checknoe = " already have it, please don't send it to me\r\n";
 
@@ -529,10 +539,16 @@ nntp::cmd_check (str c)
   if (c.len ()) {
     key = New refcounted<dbrec> (c, c.len ());
     d = header_db->lookup (key);
-    if (!d)
-      aio << checksendb << c << checksende;
-    else
+    if (!d) {
+      if (nrpcout > opt->max_parallel) {
+	// Defer! We're too busy.
+	aio << checklaterb << c << checklatere;
+      } else {
+	aio << checksendb << c << checksende;
+      }
+    } else {
       aio << checknob << c << checknoe;
+    }
   } else
     aio << syntax;
 }

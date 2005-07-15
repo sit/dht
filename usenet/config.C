@@ -1,4 +1,4 @@
-/* $Id: config.C,v 1.4 2005/02/22 14:29:06 sit Exp $ */
+/* $Id: config.C,v 1.5 2005/07/15 04:07:34 sit Exp $ */
 
 /*
  *
@@ -42,7 +42,8 @@ options::options ()
     peer_max_queue (1024),
     peer_timeout (300),
     create_unknown_groups (false),
-    sync_interval (5)
+    sync_interval (5),
+    max_parallel (64)
 {
 }
 
@@ -165,6 +166,12 @@ parseconfig (options *op, str cf)
 	  op->sync_interval < 0) {
 	errors = true;
 	WARN << "usage: SyncInterval seconds\n";
+      }
+    } else if (!strcasecmp("MaxParallel", av[0])) {
+      if (!convertint (av[1], &op->max_parallel) ||
+	  op->max_parallel < 0) {
+	errors = true;
+	WARN << "usage: MaxParallel nrpcs\n";
       }
 #endif /* 1 */	     
     } else {

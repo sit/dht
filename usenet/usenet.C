@@ -11,7 +11,9 @@
 ptr<dbfe> group_db, header_db;
 // in group_db, each key is a group name. each record contains artnum,messageID,chordID
 // in header_db, each key is a messageID. each record is a header (plus lines and other info)
+
 dhashclient *dhash;
+unsigned int nrpcout (0); // number of RPCs dispatched
 static char *sock = "/tmp/chord-sock";
 
 str
