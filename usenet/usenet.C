@@ -21,10 +21,14 @@ collect_stats ()
 {
   strbuf s;
   s << "nconn " << nntp::nconn () << "\r\n";
+  s << "ndeferrals " << nntp::deferred_articles () << "\r\n";
+  s << "fedinposts " << nntp::fedinposts () << "\r\n";
   s << "fedinbytes " << nntp::fedinbytes () << "\r\n";
   s << "dhashbytes " << nntp::dhashbytes () << "\r\n";
+  s << "dhashposts " << nntp::dhashposts () << "\r\n";
   s << "npeers " << opt->peers.size () << "\r\n";
   s << "fedoutbytes " << newspeer::totalfedbytes () << "\r\n";
+  s << "nrpcsout " << nrpcout << "\r\n";
 
   return s;
 }

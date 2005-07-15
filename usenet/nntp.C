@@ -23,7 +23,10 @@
 static int nntp_trace (getenv ("NNTP_TRACE") ? atoi (getenv ("NNTP_TRACE")) : 0);
 u_int64_t nntp::nconn_ (0);
 u_int64_t nntp::fedinbytes_ (0);
+u_int64_t nntp::fedinposts_ (0);
 u_int64_t nntp::dhashbytes_ (0);
+u_int64_t nntp::dhashposts_ (0);
+u_int64_t nntp::ndeferrals_ (0);
 
 nntp::nntp (int _s, const sockaddr_in &sin) :
 	s (_s),
@@ -44,10 +47,10 @@ nntp::nntp (int _s, const sockaddr_in &sin) :
 
   cmd_hello ("READER");
 
-  add_cmd ("CHECKDHT", wrap (this, &nntp::cmd_check));
+  add_cmd ("CHECKDHT", wrap (this, &nntp::cmd_check, true));
   add_cmd ("TAKEDHT", wrap (this, &nntp::cmd_takethis, true));
 
-  add_cmd ("CHECK", wrap (this, &nntp::cmd_check));
+  add_cmd ("CHECK", wrap (this, &nntp::cmd_check, false));
   add_cmd ("TAKETHIS", wrap (this, &nntp::cmd_takethis, false));
 
   add_cmd ("IHAVE", wrap (this, &nntp::cmd_ihave));
@@ -405,6 +408,8 @@ nntp::read_post (str resp, str bad, bool takedht)
   } else
     aio << resp;
 
+  fedinposts_++;
+
   // Satisified that we have received a valid article;
   // now try and post it somewhere.
   bool posted (false);
@@ -482,6 +487,7 @@ nntp::read_post_cb (ptr<bool> deleted,
   str k (msgid->value, msgid->len);
   if (status == DHASH_OK) {
     dhashbytes_ += len;
+    dhashposts_++;
     feed_article (k, groups);
     return;
   }
@@ -532,7 +538,7 @@ char *checknob = "438 ";
 char *checknoe = " already have it, please don't send it to me\r\n";
 
 void
-nntp::cmd_check (str c)
+nntp::cmd_check (bool checkdht, str c)
 {
   ptr<dbrec> key, d;
 
@@ -540,11 +546,12 @@ nntp::cmd_check (str c)
     key = New refcounted<dbrec> (c, c.len ());
     d = header_db->lookup (key);
     if (!d) {
-      if (nrpcout > opt->max_parallel) {
-	// Defer! We're too busy.
-	aio << checklaterb << c << checklatere;
-      } else {
+      if (checkdht || nrpcout < opt->max_parallel) {
 	aio << checksendb << c << checksende;
+      } else {
+	// Defer! We're too busy.
+	ndeferrals_++;
+	aio << checklaterb << c << checklatere;
       }
     } else {
       aio << checknob << c << checknoe;
@@ -555,6 +562,9 @@ nntp::cmd_check (str c)
 
 char *takethisokb = "239 ";
 char *takethisoke = " article transferred ok\r\n";
+// XXX should this be 431 also?  cf check responses
+char *takethisdeferb = "400 ";
+char *takethisdefere = " not accepting articles\r\n";
 char *takethisbadb = "439 ";
 char *takethisbade = " article transfer failed\r\n";
 
@@ -564,10 +574,17 @@ nntp::cmd_takethis (bool takedht, str c)
   str resp, bad;
 
   if (c.len ()) {
-    resp = strbuf () << takethisokb << c << takethisoke;
-    bad = strbuf () << takethisbadb << c << takethisbade;
-    posting = true;
-    process_input = wrap (this, &nntp::read_post, resp, bad, takedht);
+    if (takedht || nrpcout < opt->max_parallel) {
+      resp = strbuf () << takethisokb << c << takethisoke;
+      bad = strbuf () << takethisbadb << c << takethisbade;
+      posting = true;
+      process_input = wrap (this, &nntp::read_post, resp, bad, takedht);
+    } else {
+      // This may defer an article accepted by cmd_check if an
+      // intervening post was read and dhash post started.
+      ndeferrals_++;
+      aio << takethisdeferb << c << takethisdefere;
+    }
   } else
     aio << syntax;
 }

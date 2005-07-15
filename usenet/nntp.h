@@ -17,8 +17,11 @@ typedef struct c_jmp_entry {
 
 class nntp {
   static u_int64_t nconn_;
+  static u_int64_t fedinposts_;
   static u_int64_t fedinbytes_;
   static u_int64_t dhashbytes_; // differs from above in \r\n, ., dupes, ...
+  static u_int64_t dhashposts_;
+  static u_int64_t ndeferrals_;
   
   int s;
   ptr<aios> aio;
@@ -43,7 +46,7 @@ class nntp {
   void cmd_quit (str);
   void cmd_help (str);
   void cmd_ihave (str);
-  void cmd_check (str);
+  void cmd_check (bool, str);
   void cmd_takethis (bool, str);
   void cmd_stats (str);
 
@@ -60,8 +63,11 @@ public:
   ~nntp ();
 
   static u_int64_t fedinbytes () { return fedinbytes_; }
+  static u_int64_t fedinposts () { return fedinposts_; }
   static u_int64_t nconn () { return nconn_; }
   static u_int64_t dhashbytes () { return dhashbytes_; }
+  static u_int64_t dhashposts () { return dhashposts_; }
+  static u_int64_t deferred_articles () { return ndeferrals_; }
 };
 
 #endif /* NNTP_H */
