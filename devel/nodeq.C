@@ -183,6 +183,7 @@ void
 print_keys (const chord_node &dst)
 {
   ref<getkeys_arg> arg = New refcounted<getkeys_arg> ();
+  arg->ctype  = DHASH_CONTENTHASH;
   arg->rngmin = 0;
   arg->rngmax = decID (arg->rngmin);
   ref<getkeys_res> res = New refcounted<getkeys_res> ();

@@ -231,6 +231,7 @@ dhash_impl::fetchiter_sbp_gotdata_cb (user_args *sbp, s_dhash_fetch_arg *arg,
 void
 dhash_impl::merkle_dispatch (user_args *sbp)
 {
+  merkle_stat err (MERKLE_ERR);
   dhash_ctype *ctype = sbp->template getarg<dhash_ctype> ();
   ptr<dhblock_srv> srv = blocksrv[*ctype];
   if (srv) {
@@ -238,9 +239,9 @@ dhash_impl::merkle_dispatch (user_args *sbp)
     if (msrv)
       msrv->dispatch (sbp);
     else
-      sbp->reply (NULL);
+      sbp->replyref (err);
   } else 
-    sbp->reply (NULL); //XXX replyref(MERKLE_ERR) instead?
+    sbp->replyref (err);
 }
 
 void
