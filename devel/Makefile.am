@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.46 2005/07/20 16:18:35 sit Exp $
+# $Id: Makefile.am,v 1.47 2005/07/20 16:24:33 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -23,7 +23,7 @@ dhashping_SOURCES = dhashping.C rpclib.C
 dhashping_LDADD = ../svc/libsvc.la ../utils/libutil.a ../merkle/libmerkle.a $(LDADD)
 
 lsdping_SOURCES = lsdping.C rpclib.C
-lsdping_LDADD =  ../svc/libsvc.la ../utils/libutil.a ../merkle/libmerkle.a $(LDADD)
+lsdping_LDADD =  ../svc/libsvc.la ../utils/libutil.a $(LDADD)
 
 walk_SOURCES = walk.C rpclib.C
 walk_LDADD = ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
