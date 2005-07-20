@@ -1,15 +1,11 @@
 #include <async.h>
-#include <dns.h>
 #include <arpc.h>
-#include <aios.h>
 
 #include <chord_types.h>
 #include <chord_prot.h>
 #include <fingers_prot.h>
-#include <merkle_sync_prot.h>
 #include <misc_utils.h>
 #include <id_utils.h>
-#include <merkle_misc.h>
 
 #include "rpclib.h"
 
