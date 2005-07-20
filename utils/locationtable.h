@@ -85,7 +85,8 @@ class locationtable {
   ptr<location> insert (const chordID &n, 
 			const chord_hostname &s, 
 			int p, int v,
-			const Coord &coords);
+			const Coord &coords,
+			time_t k, time_t a, int32_t b, bool m);
 
   void pin (const chordID &x, short num = 0);
   void unpin (const chordID &x);

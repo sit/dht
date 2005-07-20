@@ -13,6 +13,7 @@ struct recroute_complete_arg;
  * A recursive variant of Chord routing.
  */
 class route_recchord : public route_iterator {
+ protected:
   timespec start_time_;
   u_long desired_;
 
@@ -42,7 +43,7 @@ class route_recchord : public route_iterator {
   ~route_recchord ();
   void print ();
   void send (ptr<chordID> guess);
-  void first_hop (cbhop_t cb, ptr<chordID> guess);
+  virtual void first_hop (cbhop_t cb, ptr<chordID> guess);
   void next_hop ();
   ptr<location> pop_back ();
 

@@ -37,6 +37,11 @@ struct chord_node {
   int32_t vnode_num;
   int32_t coords<>;
   int32_t e;
+
+  //for Accordion
+  int32_t knownup;
+  int32_t age;
+  int32_t budget;
 };
 
 /* Strict encoding to minimize wire length */
@@ -47,6 +52,12 @@ struct chord_node_wire {
   u_int32_t machine_order_port_vnnum; /* (port << 16) | vnnum */
   int32_t coords[3];    /* XXX hardcoded length of 3; cf NCOORD in chord.h */
   int32_t e; /* node's predicition error */
+
+  //for Accordion
+  int32_t knownup;
+  int32_t age;
+  int32_t budget;
+
 };
 
 struct chord_node_ext {

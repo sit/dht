@@ -155,10 +155,15 @@ locationtable::realinsert (ref<location> l)
     if (!loc->alive ()) {
       timespec ts;
       clock_gettime (CLOCK_REALTIME, &ts);
-      if (ts.tv_sec - loc->dead_time () > 60)
+      if (ts.tv_sec - loc->dead_time () > 60) {
 	loc->set_alive (true);
-      else
+	loc->update (l);
+      } else 
 	locinfo << "locationtable::insert: damping " << loc << "\n";
+    } else {
+      loctrace << "update " << l->id () << " " << l->address () << " "
+	<< l->vnode () << "\n";
+      loc->update (l);
     }
     return loc;
   } else {
@@ -190,20 +195,25 @@ ptr<location>
 locationtable::insert (const chord_node &n)
 {
   Coord coords (n);
-  return insert (n.x, n.r.hostname, n.r.port, n.vnode_num, coords);
+  return insert (n.x, n.r.hostname, n.r.port, 
+      n.vnode_num, coords, n.knownup, n.age, n.budget, false);
 }
 
 ptr<location>
 locationtable::insert (const chordID &n, 
 		       const chord_hostname &s, 
 		       int p, int v,
-		       const Coord &coords)
+		       const Coord &coords,
+		       time_t k,
+		       time_t a,
+		       int32_t b,
+		       bool m)
 {
   net_address r;
   r.hostname = s;
   r.port = p;
   
-  ptr<location> loc = New refcounted<location> (n, r, v, coords);
+  ptr<location> loc = New refcounted<location> (n, r, v, coords, k, a, b, m);
   if (loc->vnode () < 0)
     return NULL;
   return realinsert (loc);

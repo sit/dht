@@ -23,12 +23,17 @@ location::init ()
     trace << "badnode " << n_ << " " << addr_ << " " << vnode_ << "\n";
     vnode_ = -1;
   }
+  updatetime_ = getusec () / 1000000;
 }
 
 location::location (const chordID &n, 
 		    const net_address &r, 
 		    const int v,
-		    const Coord &coords) 
+		    const Coord &coords,
+		    time_t k,
+		    time_t a,
+		    int32_t b,
+		    bool m) 
   : n_ (n),
     addr_ (r),
     vnode_ (v),
@@ -36,7 +41,11 @@ location::location (const chordID &n,
     a_var_ (0.0),
     alive_ (true),
     dead_time_ (0),
-    nrpc_ (0)
+    nrpc_ (0),
+    knownup_(k),
+    age_(a),
+    budget_(b),
+    isme_(m)
 {
   coords_ = coords;
   init ();
@@ -50,7 +59,11 @@ location::location (const chord_node &node)
     a_var_ (0.0),
     alive_ (true),
     dead_time_ (0),
-    nrpc_ (0)
+    nrpc_ (0),
+    knownup_(node.knownup),
+    age_(node.age),
+    budget_(node.budget),
+    isme_(false)
 {
   coords_.set (node);
   init ();
@@ -60,25 +73,69 @@ location::~location () {
 }
 
 void
-location::fill_node (chord_node &data) const
+location::update_knownup () 
+{
+  time_t now = getusec () / 1000000;
+  knownup_ = (now - updatetime_); 
+  assert(isme_);
+}
+
+void
+location::update_age ()
+{
+  if (!isme_) {
+    time_t now = getusec () / 1000000;
+    age_ += (now - updatetime_); 
+    updatetime_ = now;
+  }
+}
+
+void
+location::update (ptr<location> l)
+{
+  update_age ();
+  if (l->age () < (age_ + 10)) {
+    age_ = l->age ();
+    knownup_ = l->knownup ();
+    budget_ = l-> budget ();
+    coords_.set (l->coords ());
+  }
+}
+
+void
+location::fill_node (chord_node &data)
 {
   data.x = n_;
   data.r = addr_;
   data.vnode_num = vnode_;
+
+  //for Accordion
+  this->update_age ();
+  data.knownup = knownup_;
+  data.age = age_;
+  data.budget = budget_;
+
   coords_.fill_node (data);
 }
 
 void
-location::fill_node (chord_node_wire &data) const
+location::fill_node (chord_node_wire &data) 
 {
   /* saddr fields are in network byte order */
   data.machine_order_ipv4_addr = ntohl (saddr_.sin_addr.s_addr);
   data.machine_order_port_vnnum = (ntohs (saddr_.sin_port) << 16) | vnode_;
+
+  //for Accordion
+  this->update_age ();
+  data.knownup = knownup_;
+  data.age = age_;
+  data.budget = budget_;
+ 
   coords_.fill_node (data);
 }
 
 void
-location::fill_node_ext (chord_node_ext &data) const
+location::fill_node_ext (chord_node_ext &data)
 {
   fill_node (data.n);
   data.a_lat = static_cast<int> (a_lat_);

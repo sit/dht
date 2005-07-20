@@ -97,6 +97,12 @@ make_chord_node (const chord_node_wire &nl)
   n.x = make_chordID (n.r.hostname, n.r.port, n.vnode_num);
   n.coords = nl.coords;
   n.e = nl.e;
+
+  //jy
+  n.budget = nl.budget;
+  n.knownup = nl.knownup;
+  n.age = nl.age;
+
   return n;
 }
 

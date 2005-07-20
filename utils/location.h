@@ -21,10 +21,16 @@ class location {
   sockaddr_in saddr_;
   unsigned long nrpc_;
 
+  //for Accordion
+  time_t updatetime_;
+  time_t knownup_;
+  time_t age_;
+  int32_t budget_;
+
   void init ();
  public:
   location (const chordID &_n, const net_address &_r, const int v, 
-	    const Coord &coords);
+      const Coord &coords, time_t knownup, time_t age, int32_t budget, bool m);
   location (const chord_node &n);
   ~location ();
 
@@ -41,9 +47,20 @@ class location {
   const sockaddr_in &saddr () const { return saddr_; };
   unsigned long nrpc () const { return nrpc_; };
 
-  void fill_node (chord_node &data) const;
-  void fill_node (chord_node_wire &data) const;
-  void fill_node_ext (chord_node_ext &data) const;
+  // jy: for Accordion
+  time_t knownup () const { return knownup_;}
+  void update_knownup ();
+  time_t age () const { return age_;}
+  time_t updatetime () { return updatetime_;}
+  int32_t budget () const { return budget_;}
+  void set_budget (int32_t b) { budget_ = b;}
+  void update_age ();
+  void update ( ptr<location> l);
+
+
+  void fill_node (chord_node &data);
+  void fill_node (chord_node_wire &data);
+  void fill_node_ext (chord_node_ext &data);
 
   // Mutators
   void set_alive (bool alive);
@@ -53,6 +70,8 @@ class location {
   void set_distance (float dist) { a_lat_ = dist; };
   void set_variance (float variance) { a_var_ = variance; };
   void inc_nrpc () { nrpc_++; }
+
+  bool isme_;
 };
 
 const strbuf &strbuf_cat (const strbuf &sb, const ref<location> l);

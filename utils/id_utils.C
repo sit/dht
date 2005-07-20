@@ -317,6 +317,18 @@ make_chordID (const chord_node_wire &n)
   return z.x;
 }
 
+chordID
+make_randomID ()
+{
+  chordID ID;
+  unsigned rand = random()>>1;
+  str ids = strbuf () << rand;
+  char id[sha1::hashsize];
+  sha1_hash (id, ids, ids.len());
+  mpz_set_rawmag_be (&ID, id, sizeof (id));  // For big endian
+  return ID;
+}
+
 bool
 is_authenticID (const chordID &x, chord_hostname n, int p, int vnode)
 {  

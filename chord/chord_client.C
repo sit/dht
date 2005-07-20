@@ -143,7 +143,7 @@ chord::chord (str host, int port,
     warnx << gettime () << ": creating new vnode: " << newID << "\n";
     Coord coords;
     ptr<location> l = locations->insert (newID, myname, myport,
-					 i, coords);
+					 i, coords, 1, 0, 1, true);
     assert (l);
     locations->pin (newID);
 

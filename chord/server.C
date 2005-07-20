@@ -390,7 +390,8 @@ user_args::reply (void *res)
 
   //stuff into a transport wrapper
   dorpc_res *rpc_res = New dorpc_res (DORPC_OK);
-
+  
+  me_->update_knownup ();
   me_->fill_node (rpc_res->resok->src);
   rpc_res->resok->send_time_echo = send_time;
   rpc_res->resok->results.setsize (res_len);
@@ -646,6 +647,9 @@ vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc,
     Coord u_coords (n);
     update_coords (u_coords,
 		   distance);
+
+    if (me_->id () != n.x) 
+      locations->insert (n); 
 
     //unmarshall the result and copy to out
     xdrmem x ((char *)res->resok->results.base (), 

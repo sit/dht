@@ -1,6 +1,7 @@
 #include "chord_prot.h"
 #include "debruijn_prot.h"
 #include "fingers_prot.h"
+#include "accordion_prot.h"
 #include "transport_prot.h"
 
 #include "id_utils.h"

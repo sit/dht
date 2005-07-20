@@ -3,6 +3,8 @@
 #include <id_utils.h>
 #include "rpclib.h"
 
+time_t starttime;
+
 void
 findroute_cb (chord_node n,
 	      ptr<chord_findarg> fa, chord_nodelistres *route, clnt_stat err)
@@ -26,6 +28,7 @@ findroute_cb (chord_node n,
       warnx << i << ": "
 	    << n << " " << host << " " << port << " " << index << "\n";
     }
+    warnx << "done " << ((getusec ()/1000)-starttime) << " msec\n";
   }      
   delete route;
   exit (0);
@@ -62,6 +65,7 @@ main (int argc, char *argv[])
   dst.vnode_num = 0;
   fa->x = x;
   chord_nodelistres *route = New chord_nodelistres ();
+  starttime = getusec () / 1000;
   doRPC (dst, chord_program_1,
 	 CHORDPROC_FINDROUTE, fa, route, wrap (&findroute_cb, dst, fa, route));
   

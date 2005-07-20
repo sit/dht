@@ -12,6 +12,8 @@
 
 #define NELEM(x)	(sizeof (x)/ sizeof ((x)[0]))
 
+bool accordion = false;
+
 // Interesting things to draw and their handlers.
 static const unsigned int DRAW_IMMED_SUCC = 1 << 0;
 static const unsigned int DRAW_SUCC_LIST  = 1 << 1;
@@ -1150,7 +1152,7 @@ redraw()
 void 
 usage ()
 {
-  fatal << "vis [gtk options] -j <IP in dotted decimal>:<port> [-a delay]\n";
+  fatal << "vis [gtk options] -j <IP in dotted decimal>:<port> [-m accordion] [-a delay]\n";
 }
 
 int
@@ -1171,7 +1173,7 @@ main (int argc, char** argv)
   color_file = ".viscolors";
 
   int ch;
-  while ((ch = getopt (argc, argv, "c:h:j:a:l:f:is:d")) != -1) {
+  while ((ch = getopt (argc, argv, "c:h:j:a:l:f:is:dm")) != -1) {
     switch (ch) {
     case 'c':
       {
@@ -1235,6 +1237,9 @@ main (int argc, char** argv)
     case 'h':
       highlight = optarg;
       break;
+    case 'm':
+      accordion = true;
+      break;
   default:
     usage ();
     }
@@ -1242,6 +1247,8 @@ main (int argc, char** argv)
 
   if (host == "not set")
     usage ();
+
+  warn << " vis in " << (accordion? "ACCORDION" : "FINGER") << " mode\n";
 
   initgraf ();
 

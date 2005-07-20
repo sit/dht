@@ -41,6 +41,7 @@
 #include <fingerroute.h>
 #include <fingerroutepns.h>
 #include <recroute.h>
+#include <accordion.h>
 
 #include <modlogger.h>
 #define info  modlogger ("lsd", modlogger::INFO)
@@ -85,6 +86,7 @@ enum routing_mode_t {
   MODE_PNSREC,
   MODE_CHORDREC,
   MODE_TCPPNSREC,
+  MODE_ACCORDION,
 } mode;
 
 struct routing_mode_desc {
@@ -111,6 +113,8 @@ routing_mode_desc modes[] = {
     wrap (recroute<fingerroute>::produce_vnode) },
   { MODE_TCPPNSREC, "tcppnsrec", "g^2 pns recursive with data over tcp",
     wrap (recroute<fingerroutepns>::produce_vnode) },
+  { MODE_ACCORDION, "accordion", "Accordion Routing",
+    wrap (accordion::produce_vnode)},
 };
 
 void stats ();
@@ -406,7 +410,10 @@ stop ()
 void
 halt ()
 {
-  warnx << "Exiting on command.\n";
+  for (unsigned int i = 0; i < chordnode->num_vnodes (); i++) {
+    ptr<vnode> v = chordnode->get_vnode (i);
+    warnx << "Exiting on command " << v->my_location ()->id () << "\n";
+  }
   info << "stopping.\n";
   chordnode = NULL;
   exit (0);
@@ -687,11 +694,13 @@ main (int argc, char **argv)
 				     modes[mode].producer,
 				     vnodes,
                                      max_loccache);
+  /*
   for (int i = 0; i < vnodes; i++) {
     str db_name_prime = strbuf () << db_name << "-" << i;
     ptr<vnode> v = chordnode->get_vnode (i);
     dh.push_back (dhash::produce_dhash (v, db_name_prime));
   }
+  */
 
   chordnode->startchord ();
   chordnode->join (wellknownhost, wellknownport);

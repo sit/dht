@@ -10,6 +10,8 @@ short interval (1000);
 vec<chordID> get_queue;
 ihash<chordID, f_node, &f_node::ID, &f_node::link, hashID> nodes;
 
+extern bool accordion;
+
 // f_node functions
 f_node::f_node (const chord_node &n) :
   ID (n.x), host (n.r.hostname), hostname(""), port (n.r.port),
@@ -250,10 +252,14 @@ update_fingers (f_node *nu)
 {
   chordID n = nu->ID;
   chord_nodelistextres *res = New chord_nodelistextres ();
-  doRPC (nu, fingers_program_1, FINGERSPROC_GETFINGERS_EXT, &n, res,
+  if (accordion) 
+    doRPC (nu, accordion_program_1, ACCORDIONPROC_GETFINGERS_EXT, &n, res,
 	 wrap (&update_fingers_got_fingers, 
 	       nu->ID, nu->host, nu->port, res));
-  
+   else 
+    doRPC (nu, fingers_program_1, FINGERSPROC_GETFINGERS_EXT, &n, res,
+	 wrap (&update_fingers_got_fingers, 
+	       nu->ID, nu->host, nu->port, res));
 }
 
 void
