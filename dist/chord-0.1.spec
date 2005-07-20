@@ -59,6 +59,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/dbdump
 %{_bindir}/dbm
 %{_bindir}/dbm.py
+%{_bindir}/dhashping
 %{_bindir}/filestore
 %{_bindir}/findroute
 %{_bindir}/lsd
@@ -112,6 +113,9 @@ rm -rf $RPM_BUILD_ROOT
 %{_includedir}/chord-%{version}/skiplist.h
 
 %changelog
+* Wed Jul 20 2005 Emil Sit <sit@mit.edu>
+- dhashping
+
 * Tue May 24 2005 Emil Sit <sit@mit.edu>
 - New dhblock header files
 
