@@ -100,7 +100,7 @@ prepare_test_data (int num)
 
 
 void
-store_cb (dhash_stat status, ptr<insert_info> i)
+store_cb (u_int64_t start, dhash_stat status, ptr<insert_info> i)
 {
   out--;
 
@@ -109,7 +109,10 @@ store_cb (dhash_stat status, ptr<insert_info> i)
     s << "store_cb: " << i->key << " " << status << "\n";
   } else {
     bps++;
-    s << "stored " << i->key << " at " << i->path.back () << "\n";
+    s << i->key << " / " << (getusec () - start)/1000 << " /";
+    for (size_t j = 0; j < i->path.size (); j++)
+      s << " " << i->path[j];
+    s << "\n";
   }
   str buf (s);
   fprintf (outfile, "%s", buf.cstr ());
@@ -123,7 +126,7 @@ store (dhashclient *dhash, int num)
 {
   for (int i = 0; i < num; i++) {
     out++;
-    dhash->insert ((char *)data[i], datasize, wrap (store_cb));
+    dhash->insert ((char *)data[i], datasize, wrap (store_cb, getusec ()));
     while (out > MAX_OPS_OUT) 
       acheck ();
   }
