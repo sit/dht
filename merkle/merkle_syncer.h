@@ -14,6 +14,7 @@ typedef callback<void, bigint, bool, bool>::ref missingfnc_t;
 
 class merkle_syncer {
  private:
+  ptr<bool> deleted;
   strbuf log;
 
   void setdone ();
@@ -39,7 +40,8 @@ class merkle_syncer {
 
   merkle_syncer (dhash_ctype ctype,
 		 merkle_tree *ltree, rpcfnc_t rpcfnc, missingfnc_t missingfnc);
-  ~merkle_syncer () {}
+  ~merkle_syncer ();
+
   void dump ();
   str getsummary ();
   void doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb);
@@ -49,7 +51,8 @@ class merkle_syncer {
   bool done () { return sync_done; }
   void sync (bigint rngmin, bigint rngmax);
   void sendnode (u_int depth, const merkle_hash &prefix);
-  void sendnode_cb (ref<sendnode_arg> arg, ref<sendnode_res> res, 
+  void sendnode_cb (ptr<bool> deleted,
+                    ref<sendnode_arg> arg, ref<sendnode_res> res, 
 		    clnt_stat err);
 };
 

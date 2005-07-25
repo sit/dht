@@ -34,10 +34,15 @@ merkle_syncer::merkle_syncer (dhash_ctype ctype, merkle_tree *ltree,
 			      rpcfnc_t rpcfnc, missingfnc_t missingfnc)
   : ctype (ctype), ltree (ltree), rpcfnc (rpcfnc), missingfnc (missingfnc)
 {
+  deleted = New refcounted<bool> (false);
   fatal_err = NULL;
   sync_done = false;
 }
 
+merkle_syncer::~merkle_syncer ()
+{
+  *deleted = true;
+}
 
 void
 merkle_syncer::sync (bigint rngmin, bigint rngmax)
@@ -191,15 +196,17 @@ merkle_syncer::sendnode (u_int depth, const merkle_hash &prefix)
   arg->rngmin = local_rngmin;
   arg->rngmax = local_rngmax;
   doRPC (MERKLESYNC_SENDNODE, arg, res,
-	 wrap (this, &merkle_syncer::sendnode_cb, arg, res));
+	 wrap (this, &merkle_syncer::sendnode_cb, deleted, arg, res));
 }
 
 
 void
-merkle_syncer::sendnode_cb (ref<sendnode_arg> arg, ref<sendnode_res> res, 
+merkle_syncer::sendnode_cb (ptr<bool> deleted,
+			    ref<sendnode_arg> arg, ref<sendnode_res> res, 
 			    clnt_stat err)
 {
-
+  if (*deleted)
+    return;
   if (err) {
     error (strbuf () << "SENDNODE: rpc error " << err);
     return;
