@@ -99,7 +99,12 @@ dbEnumeration::dbEnumeration(DB *db, DB_ENV *dbe) {
   db_sync = db;
 
   r = db->cursor(db, NULL, &cursor, 0);
-  assert (!r);
+  if (r) {
+    const char *path (NULL);
+    dbe->get_home (dbe, &path);
+    fatal << "enumeration error for " << path << ": "
+          << db_strerror (r) << "\n";
+  }
   cursor_init = 0;
 }
 
@@ -448,7 +453,7 @@ int dbfe::IMPL_insert_sync_sleepycat(ref<dbrec> key, ref<dbrec> data) {
   r = db->put(db, t, &skey, &content, 0);
 
   if (r) {
-    warn << "insert (put): db3 error: " << db_strerror(r) << "\n";
+    warn << "insert (put): db error: " << db_strerror(r) << "\n";
     return r;
   }
 
@@ -462,7 +467,7 @@ int dbfe::IMPL_insert_sync_sleepycat(ref<dbrec> key, ref<dbrec> data) {
     t = NULL;
   }
 
-  if (r) warn << "insert: db3 error: " << db_strerror(r) << "\n";
+  if (r) warn << "insert: db error: " << db_strerror(r) << "\n";
   
   return r;
 } 
