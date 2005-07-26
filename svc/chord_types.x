@@ -38,7 +38,7 @@ struct chord_node {
   int32_t coords<>;
   int32_t e;
 
-  //for Accordion
+  /* for Accordion */
   int32_t knownup;
   int32_t age;
   int32_t budget;
@@ -53,7 +53,7 @@ struct chord_node_wire {
   int32_t coords[3];    /* XXX hardcoded length of 3; cf NCOORD in chord.h */
   int32_t e; /* node's predicition error */
 
-  //for Accordion
+  /* for Accordion */
   int32_t knownup;
   int32_t age;
   int32_t budget;
