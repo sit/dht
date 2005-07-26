@@ -317,9 +317,9 @@ void
 nntp::cmd_article_cb (ptr<bool> deleted, bool head, chordID msgkey,
 		      dhash_stat status, ptr<dhash_block> blk, vec<chordID> r)
 {
+  nrpcout--;
   if (*deleted)
     return;
-  nrpcout--;
   if (status != DHASH_OK) {
     aio << noarticle;
     return;
@@ -481,8 +481,6 @@ nntp::read_post_cb (ptr<bool> deleted,
 		    size_t len, ptr<dbrec> msgid, vec<str> groups,
 		    dhash_stat status, ptr<insert_info> i)
 {
-  if (*deleted)
-    return;
   nrpcout--;
   str k (msgid->value, msgid->len);
   if (status == DHASH_OK) {
@@ -491,10 +489,13 @@ nntp::read_post_cb (ptr<bool> deleted,
     feed_article (k, groups);
     return;
   }
+  header_db->del (msgid);
+  // Above this line, no object state accessed.
+  if (*deleted)
+    return;
   // Clean up state after something goes wrong...
   warn << s << ": didn't store " << k
        << " in DHash after all: " << status << "\n";
-  header_db->del (msgid);
 }
 
 void
