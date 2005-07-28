@@ -7,6 +7,7 @@
 
 bool opt_verbose;
 bool opt_quiet;
+int  opt_timeout (120);
 char *control_socket = "/tmp/lsdctl-sock";
 
 /* Prototypes for table. */
@@ -43,7 +44,7 @@ static const modevec *lsdctl_mode;
 void
 usage (void)
 {
-  warnx << "usage: " << progname << " [-S sock] [-vq] ";
+  warnx << "usage: " << progname << " [-S sock] [-t timeout] [-vq] ";
   if (lsdctl_mode && lsdctl_mode->usage)
     warnx << lsdctl_mode->usage << "\n";
   else
@@ -83,14 +84,20 @@ lsdctl_connect (str sockname)
 }
 
 void
+lsdctl_default (str name, clnt_stat err)
+{
+  if (err)
+    fatal << name << ": " << err << "\n";
+  exit (0);
+}
+
+void
 lsdctl_exit (int argc, char *argv[])
 {
   // Ignore arguments
   ptr<aclnt> c = lsdctl_connect (control_socket);
-  clnt_stat err = c->scall (LSDCTL_EXIT, NULL, NULL);
-  if (err)
-    fatal << "lsdctl_exit: " << err << "\n";
-  exit (0);
+  c->timedcall (opt_timeout, LSDCTL_EXIT, NULL, NULL,
+	        wrap (&lsdctl_default, "lsdctl_exit"));
 }
 
 void
@@ -114,9 +121,17 @@ lsdctl_trace (int argc, char *argv[])
     usage ();
   
   ptr<aclnt> c = lsdctl_connect (control_socket);
-  clnt_stat err = c->scall (LSDCTL_SETTRACELEVEL, &lvl, NULL);
+  c->timedcall (opt_timeout, LSDCTL_SETTRACELEVEL, &lvl, NULL,
+	        wrap (&lsdctl_default, "lsdctl_trace"));
+}
+
+void
+lsdctl_toggle_cb (ptr<bool> res, bool t, str name, clnt_stat err)
+{
   if (err)
-    fatal << "lsdctl_trace: " << err << "\n";
+    fatal << name << ": " << err << "\n";
+  if (*res != t)
+    warnx << name << ": lsd did not switch to new state.\n";
   exit (0);
 }
 
@@ -134,13 +149,9 @@ lsdctl_stabilize (int argc, char *argv[])
     t = false;
   
   ptr<aclnt> c = lsdctl_connect (control_socket);
-  bool res = !t;
-  clnt_stat err = c->scall (LSDCTL_SETSTABILIZE, &t, &res);
-  if (err)
-    fatal << "lsdctl_stabilize: " << err << "\n";
-  if (res != t)
-    warnx << "lsdctl_stabilize: lsd did not switch to new state.\n";
-  exit (0);
+  ptr<bool> res = New refcounted<bool> (!t);
+  c->timedcall (opt_timeout, LSDCTL_SETSTABILIZE, &t, res,
+		wrap (&lsdctl_toggle_cb, res, t, "lsdctl_stabilize"));
 }
 
 void
@@ -170,18 +181,16 @@ lsdctl_replicate (int argc, char *argv[])
     t->enable = false;
   
   ptr<aclnt> c = lsdctl_connect (control_socket);
-  bool res = !t;
-  clnt_stat err = c->scall (LSDCTL_SETREPLICATE, t, &res);
-  if (err)
-    fatal << "lsdctl_replicate: " << err << "\n";
-  if (res != t->enable)
-    warnx << "lsdctl_replicate: lsd did not switch to new state.\n";
-  exit (0);
+  ptr<bool> res = New refcounted<bool> (!t->enable);
+  c->timedcall (opt_timeout, LSDCTL_SETREPLICATE, t, res,
+	        wrap (&lsdctl_toggle_cb, res, t->enable, "lsdctl_replicate"));
 }
 
-strbuf
-lsdctl_nlist_printer (ptr<lsdctl_nodeinfolist> nl)
+void
+lsdctl_nlist_printer_cb (ptr<lsdctl_nodeinfolist> nl, str name, clnt_stat err)
 {
+  if (err)
+    fatal << name << ": " << err << "\n";
   strbuf out;
   for (size_t i = 0; i < nl->nlist.size (); i++) {
     out << nl->nlist[i].n << " "
@@ -197,7 +206,9 @@ lsdctl_nlist_printer (ptr<lsdctl_nodeinfolist> nl)
         << nl->nlist[i].alive << " "
         << nl->nlist[i].dead_time << "\n";
   }
-  return out;
+  make_sync (1);
+  out.tosuio ()->output (1);
+  exit (0);
 }
 
 void
@@ -206,13 +217,8 @@ lsdctl_getmyids (int argc, char *argv[])
   ptr<lsdctl_nodeinfolist> nl = New refcounted <lsdctl_nodeinfolist> ();
   ptr<aclnt> c = lsdctl_connect (control_socket);
 
-  clnt_stat err = c->scall (LSDCTL_GETMYIDS, NULL, nl);
-  if (err)
-    fatal << "lsdctl_getmyids: " << err << "\n";
-  strbuf out (lsdctl_nlist_printer (nl));
-  make_sync (1);
-  out.tosuio ()->output (1);
-  exit (0);
+  c->timedcall (opt_timeout, LSDCTL_GETMYIDS, NULL, nl,
+	        wrap (&lsdctl_nlist_printer_cb, nl, "lsdctl_getmyids"));
 }
 
 void
@@ -222,13 +228,8 @@ lsdctl_getloctab (int argc, char *argv[])
   ptr<lsdctl_nodeinfolist> nl = New refcounted <lsdctl_nodeinfolist> ();
   ptr<aclnt> c = lsdctl_connect (control_socket);
 
-  clnt_stat err = c->scall (LSDCTL_GETLOCTABLE, &vnode, nl);
-  if (err)
-    fatal << "lsdctl_getloctab: " << err << "\n";
-  strbuf out (lsdctl_nlist_printer (nl));
-  make_sync (1);
-  out.tosuio ()->output (1);
-  exit (0);
+  c->timedcall (opt_timeout, LSDCTL_GETLOCTABLE, &vnode, nl,
+	        wrap (&lsdctl_nlist_printer_cb, nl, "lsdctl_getloctab"));
 }
 
 static int
@@ -237,29 +238,10 @@ statcmp (const void *a, const void *b)
   return strcmp (((lsdctl_rpcstat *) a)->key.cstr (),
 		 ((lsdctl_rpcstat *) b)->key.cstr ());
 }
+
 void
-lsdctl_getrpcstats (int argc, char *argv[])
+lsdctl_getrpcstats_cb (bool formatted, ptr<lsdctl_rpcstatlist> nl, clnt_stat err)
 {
-  int ch;
-  bool clear = false;
-  bool formatted = false;
-  while ((ch = getopt (argc, argv, "rf")) != -1)
-    switch (ch) {
-    case 'r':
-      clear = true;
-      break;
-    case 'f':
-      formatted = true;
-      break;
-    default:
-      usage ();
-      break;
-    }
-
-  ptr<lsdctl_rpcstatlist> nl = New refcounted <lsdctl_rpcstatlist> ();
-  ptr<aclnt> c = lsdctl_connect (control_socket);
-
-  clnt_stat err = c->scall (LSDCTL_GETRPCSTATS, &clear, nl);
   if (err)
     fatal << "lsdctl_rpcstats: " << err << "\n";
   strbuf out;
@@ -296,30 +278,35 @@ lsdctl_getrpcstats (int argc, char *argv[])
 }
 
 void
-lsdctl_getdhashstats (int argc, char *argv[])
+lsdctl_getrpcstats (int argc, char *argv[])
 {
   int ch;
-  lsdctl_getdhashstats_arg a;
-  a.vnode = 0;
-  a.doblockinfo = false;
-
-  while ((ch = getopt (argc, argv, "l")) != -1)
+  bool clear = false;
+  bool formatted = false;
+  while ((ch = getopt (argc, argv, "rf")) != -1)
     switch (ch) {
-    case 'l':
-      a.doblockinfo = true;
+    case 'r':
+      clear = true;
+      break;
+    case 'f':
+      formatted = true;
       break;
     default:
       usage ();
       break;
     }
 
-  if (optind != argc)
-    if (!convertint (argv[optind], &a.vnode))
-      usage ();
-  
+  ptr<lsdctl_rpcstatlist> nl = New refcounted <lsdctl_rpcstatlist> ();
   ptr<aclnt> c = lsdctl_connect (control_socket);
-  ptr<lsdctl_dhashstats> ds = New refcounted <lsdctl_dhashstats> ();
-  clnt_stat err = c->scall (LSDCTL_GETDHASHSTATS, &a, ds);
+
+  c->timedcall (opt_timeout, LSDCTL_GETRPCSTATS, &clear, nl,
+	        wrap (&lsdctl_getrpcstats_cb, formatted, nl));
+}
+
+void
+lsdctl_getdhashstats_cb (ptr<lsdctl_getdhashstats_arg> a,
+			 ptr<lsdctl_dhashstats> ds, clnt_stat err)
+{
   if (err)
     fatal << "lsdctl_getdhashstats: " << err << "\n";
 
@@ -329,11 +316,39 @@ lsdctl_getdhashstats (int argc, char *argv[])
     out << "  " << ds->stats[i].desc << " " << ds->stats[i].value << "\n";
   for (size_t i = 0; i < ds->blocks.size (); i++) 
     out << ds->blocks[i].id << "\t" << ds->blocks[i].missing.size () << "\n";
-  if (a.doblockinfo)
+  if (a->doblockinfo)
     out << ds->hack;
   make_sync (1);
   out.tosuio ()->output (1);
   exit (0);
+}
+
+void
+lsdctl_getdhashstats (int argc, char *argv[])
+{
+  int ch;
+  ptr<lsdctl_getdhashstats_arg> a = New refcounted<lsdctl_getdhashstats_arg> ();
+  a->vnode = 0;
+  a->doblockinfo = false;
+
+  while ((ch = getopt (argc, argv, "l")) != -1)
+    switch (ch) {
+    case 'l':
+      a->doblockinfo = true;
+      break;
+    default:
+      usage ();
+      break;
+    }
+
+  if (optind != argc)
+    if (!convertint (argv[optind], &a->vnode))
+      usage ();
+  
+  ptr<aclnt> c = lsdctl_connect (control_socket);
+  ptr<lsdctl_dhashstats> ds = New refcounted <lsdctl_dhashstats> ();
+  c->timedcall (opt_timeout, LSDCTL_GETDHASHSTATS, a, ds,
+		wrap (&lsdctl_getdhashstats_cb, a, ds));
 }
 
 
@@ -344,10 +359,14 @@ main (int argc, char *argv[])
   putenv ("POSIXLY_CORRECT=1"); // Prevents Linux from reordering options
 
   int ch;
-  while ((ch = getopt (argc, argv, "S:vq")) != -1)
+  while ((ch = getopt (argc, argv, "S:t:vq")) != -1)
     switch (ch) {
     case 'S':
       control_socket = optarg;
+      break;
+    case 't':
+      if (!convertint (optarg, &opt_timeout))
+	usage ();
       break;
     case 'v':
       opt_verbose = true;
@@ -375,7 +394,7 @@ main (int argc, char *argv[])
   optind++;
   
   mp->fn (argc, argv);
-  // amain ();
+  amain ();
   
   return 0;
 }
