@@ -54,9 +54,9 @@ dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
     }
     ptr<dbEnumeration> it = db->enumerate ();
     ptr<dbPair> d = it->firstElement();
-    ptr<dbrec> nulldata = NULL;
+    ptr<dbrec> FAKE_DATA = New refcounted<dbrec> ("", 1);
     for (int i = 0; d; i++, d = it->nextElement ()) {
-      fdb->insert (d->key, nulldata);
+      fdb->insert (d->key, FAKE_DATA);
     }
     it = NULL;
     db = fdb;
