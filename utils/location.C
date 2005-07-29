@@ -2,7 +2,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-#include <amisc.h>
+#include <async.h>
 
 #include "location.h"
 #include "misc_utils.h"
@@ -23,7 +23,7 @@ location::init ()
     trace << "badnode " << n_ << " " << addr_ << " " << vnode_ << "\n";
     vnode_ = -1;
   }
-  updatetime_ = getusec () / 1000000;
+  updatetime_ = timenow;
 }
 
 location::location (const chordID &n, 
@@ -75,8 +75,7 @@ location::~location () {
 void
 location::update_knownup () 
 {
-  time_t now = getusec () / 1000000;
-  knownup_ = (now - updatetime_); 
+  knownup_ = (timenow - updatetime_); 
   assert(isme_);
 }
 
@@ -84,9 +83,9 @@ void
 location::update_age ()
 {
   if (!isme_) {
-    time_t now = getusec () / 1000000;
-    age_ += (now - updatetime_); 
-    updatetime_ = now;
+    // timenow is updated by libasync core.C
+    age_ += (timenow - updatetime_); 
+    updatetime_ = timenow;
   }
 }
 
@@ -147,9 +146,7 @@ void
 location::set_alive (bool alive)
 {
   if (!alive && alive_) {
-    timespec ts;
-    clock_gettime (CLOCK_REALTIME, &ts);
-    dead_time_ = ts.tv_sec;
+    dead_time_ = timenow;
   }
   alive_ = alive;
 }

@@ -28,6 +28,8 @@
  *
  */
 
+#include <async.h>
+
 #include "id_utils.h"
 #include "location.h"
 #include "locationtable.h"
@@ -153,9 +155,7 @@ locationtable::realinsert (ref<location> l)
     // Try to dampen node becoming alive so it only happens once
     // a minute.
     if (!loc->alive ()) {
-      timespec ts;
-      clock_gettime (CLOCK_REALTIME, &ts);
-      if (ts.tv_sec - loc->dead_time () > 60) {
+      if (timenow - loc->dead_time () > 60) {
 	loc->set_alive (true);
 	loc->update (l);
       } else 
