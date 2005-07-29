@@ -6,6 +6,9 @@ int modlogger::maxprio = modlogger::INFO;
 
 modlogger::modlogger (char *module, int p) : prio (p)
 {
+  /* Don't expect to be outputting, so don't make syscall */
+  if (prio > maxprio)
+    return;
   timespec ts;
   clock_gettime (CLOCK_REALTIME, &ts);
   fmt ("%d.%06d ", int (ts.tv_sec), int (ts.tv_nsec/1000));
