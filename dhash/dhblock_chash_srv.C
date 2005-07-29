@@ -15,6 +15,7 @@
 #include <merkle_misc.h>
 
 #include <block_status.h>
+#include <configurator.h>
 #include <locationtable.h>
 #include <ida.h>
 
@@ -40,6 +41,27 @@ dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
   repair_outstanding (0),
   repair_tcb (NULL)
 {
+  int drop_writes = -1;
+  Configurator::only ().get_int ("dhash.drop_writes", drop_writes);
+  if (drop_writes) {
+    // Switch to an in-memory database.
+    ptr<dbfe> fdb = New refcounted<dbfe> ();
+    if (int err = fdb->opendb (NULL, opts))
+    {
+      warn << desc << ": " << dbname <<"\n";
+      warn << "open returned: " << strerror (err) << "\n";
+      exit (-1);
+    }
+    ptr<dbEnumeration> it = db->enumerate ();
+    ptr<dbPair> d = it->firstElement();
+    ptr<dbrec> nulldata = NULL;
+    for (int i = 0; d; i++, d = it->nextElement ()) {
+      fdb->insert (d->key, nulldata);
+    }
+    it = NULL;
+    db = fdb;
+  }
+
   // create merkle tree and populate it from DB
   mtree = New merkle_tree (db, true);
 
@@ -141,9 +163,9 @@ dhblock_chash_srv::db_insert_immutable (ref<dbrec> key, ref<dbrec> data)
   if (!exists) {
     action = "N"; // New
     // insert the key into the merkle tree 
-    // for conent hash, key is not bit-hacked
+    // for content hash, key is not bit-hacked
     ret = mtree->insert (mkey);
-    //also insert the data into our DB
+    // also insert the data into our DB
     db->insert (key, data);
   } else {
     action = "R"; // Re-write

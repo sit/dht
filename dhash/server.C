@@ -71,6 +71,8 @@ dhash_config_init::dhash_config_init ()
 #define set_int Configurator::only ().set_int
   /** How frequently to sync database to disk */
   ok = ok && set_int ("dhash.sync_timer", 45);
+  /** Whether or not to drop writes */
+  ok = ok && set_int ("dhash.drop_writes", 0);
   /** Should replication run initially? */
   ok = ok && set_int ("dhash.start_maintenance", 1);
   
