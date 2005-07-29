@@ -568,7 +568,10 @@ dbfe::IMPL_delete_async_sleepycat(ptr<dbrec> key, errReturn_cb cb)
 }
 
 void
-dbfe::IMPL_sync () {
+dbfe::IMPL_sync () 
+{
+  if (dbe)
+    return;
   db->sync (db, 0L);
 }
 
