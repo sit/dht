@@ -3,8 +3,7 @@
 #include <transport_prot.h>
 #include "rpclib.h"
 
-
-static const unsigned int TIMEOUT = 15;
+unsigned int rpclib_timeout (15);
 
 static int dgram_fd = -1;
 static ptr<axprt_dgram> dgram_xprt;
@@ -74,7 +73,7 @@ doRPC (const chord_node &n, const rpc_program &prog,
     free (marshalled_args);
 
     dorpc_res *res = New dorpc_res (DORPC_OK);
-    c->timedcall (TIMEOUT, TRANSPORTPROC_DORPC, arg, res,
+    c->timedcall (rpclib_timeout, TRANSPORTPROC_DORPC, arg, res,
 		  wrap (&doRPCcb, outproc, res, out, cb));
   }
 }
