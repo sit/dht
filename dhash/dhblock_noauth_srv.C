@@ -26,6 +26,8 @@ dhblock_noauth_srv::get_merkle_key (chordID key, ptr<dbrec> data)
   long hash = 0;
   for (int i = 0; i < data->len/4; i++) 
     hash ^= d[i];
+  
+  if (hash < 0) hash = -hash;
 
   //mix the hash in with the low bytes
   chordID fkey = key >> 32;
