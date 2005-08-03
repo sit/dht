@@ -127,10 +127,8 @@ chord::chord (str host, int port,
   /* In case myport == 0, need to initialize to something in order
    * to create chordIDs during vnode initialization */
   myport = initxprt (myport, SOCK_DGRAM, &fd_dgram);
-  if (chord_rpc_style == CHORD_RPC_SFST || chord_rpc_style == CHORD_RPC_SFSBT)
-  {
-    myport = initxprt (myport, SOCK_STREAM, &fd_stream);
-  }
+  myport = initxprt (myport, SOCK_STREAM, &fd_stream);
+
   warnx << "chord: running on " << myname << ":" << myport << "\n";
 
   locations = New refcounted<locationtable> (max_cache);

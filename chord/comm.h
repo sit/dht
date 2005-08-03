@@ -162,6 +162,16 @@ class rpc_manager {
 			   void *out, 
 			   aclnt_cb cb, 
 			   long fake_seqno = 0);
+
+  virtual long doRPC_stream (ptr<location> from,
+			     ptr<location> l, 
+			     const rpc_program &prog, 
+			     int procno,
+			     ptr<void> in, 
+			     void *out, 
+			     aclnt_cb cb)
+  { return doRPC (from, l, prog, procno, in, out, cb, NULL, 0); }
+
   // the following may not necessarily make sense for all implementations.
   virtual float get_a_lat (ptr<location> l);
   virtual float get_a_var (ptr<location> l); 
@@ -185,6 +195,15 @@ class tcp_manager : public rpc_manager {
 	      ptr<void> in, void *out, aclnt_cb cb, 
 	      cbtmo_t cb_tmo = NULL,
 	      long fake_seqno = 0);
+
+  long doRPC_stream (ptr<location> from, ptr<location> l, 
+		     const rpc_program &prog, 
+		     int procno,
+		     ptr<void> in, 
+		     void *out, 
+		     aclnt_cb cb)
+  { return doRPC (from, l, prog, procno, in, out, cb, NULL, 0); }
+  
   long doRPC_dead (ptr<location> l, const rpc_program &prog, int procno,
 		   ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
   tcp_manager (ptr<u_int32_t> _nrcv) : rpc_manager (_nrcv) {}
@@ -225,6 +244,8 @@ class stp_manager : public rpc_manager {
 
   timecb_t *idle_timer;
 
+  ptr<tcp_manager> stream_rpcm;
+
   // methods
   void doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err);
   
@@ -250,6 +271,12 @@ class stp_manager : public rpc_manager {
 	      long fake_seqno = 0);
   long doRPC_dead (ptr<location> l, const rpc_program &prog, int procno,
 		   ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
+  long doRPC_stream (ptr<location> from, ptr<location> l, 
+		     const rpc_program &prog, 
+		     int procno,
+		     ptr<void> in, 
+		     void *out, 
+		     aclnt_cb cb);
 
   stp_manager (ptr<u_int32_t> _nrcv);
   ~stp_manager ();

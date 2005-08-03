@@ -526,7 +526,7 @@ err_cb (aclnt_cb cb)
 long
 vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno, 
 		   ptr<void> in, void *out, aclnt_cb cb,
-		   cbtmo_t cb_tmo)
+		   cbtmo_t cb_tmo /* = NULL */, bool stream /* = false */)
 {
 
   //check to see if this is alive
@@ -587,12 +587,15 @@ vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno,
 	cbw = wrap (printreply, cbw, name, out, rtp->print_res);
     }
   
-
-    return rpcm->doRPC (me_, l, transport_program_1, TRANSPORTPROC_DORPC, 
-			arg, res, cbw, 
-			wrap(this, &vnode_impl::tmo, cb_tmo, 
-			     prog.progno, procno, args_len));
-			
+    if (!stream)
+      return rpcm->doRPC (me_, l, transport_program_1, TRANSPORTPROC_DORPC, 
+			  arg, res, cbw, 
+			  wrap(this, &vnode_impl::tmo, cb_tmo, 
+			       prog.progno, procno, args_len));
+    else
+      return rpcm->doRPC_stream (me_, l, 
+				 transport_program_1, TRANSPORTPROC_DORPC, 
+				 arg, res, cbw);
   }
 }
 
@@ -777,10 +780,10 @@ vnode_impl::update_coords (Coord uc, float ud)
 long
 vnode_impl::doRPC (const chord_node &n, const rpc_program &prog, int procno, 
 		   ptr<void> in, void *out, aclnt_cb cb, 		    
-		   cbtmo_t cb_tmo)
+		   cbtmo_t cb_tmo, bool stream)
 {
   ptr<location> l = locations->lookup_or_create (n);
-  return doRPC (l, prog, procno, in, out, cb, cb_tmo);
+  return doRPC (l, prog, procno, in, out, cb, cb_tmo, stream);
 }
 
 void

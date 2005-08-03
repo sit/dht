@@ -203,10 +203,10 @@ class vnode_impl : public vnode {
   // For other modules
   long doRPC (ref<location> l, const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb,
-	      cbtmo_t cb_tmo = NULL);
+	      cbtmo_t cb_tmo = NULL, bool stream = false);
   long doRPC (const chord_node &ID, const rpc_program &prog, int procno, 
 	      ptr<void> in, void *out, aclnt_cb cb,
-	      cbtmo_t cb_tmo = NULL);
+	      cbtmo_t cb_tmo = NULL, bool stream = false);
 
   void resendRPC (long seqno);
   void fill_user_args (user_args *a);

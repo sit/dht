@@ -30,6 +30,7 @@ stp_manager::stp_manager (ptr<u_int32_t> _nrcv)
   reset_idle_timer ();
   st = getusec ();
   fake_seqno = -1;
+  stream_rpcm = New refcounted<tcp_manager> (nrcv);
 }
 
 stp_manager::~stp_manager ()
@@ -50,6 +51,14 @@ stp_manager::ratecb () {
   delaycb (1, 0, wrap (this, &stp_manager::ratecb));
   nsent = outbytes;
   *nrcv = 0;
+}
+
+long
+stp_manager::doRPC_stream (ptr<location> from, ptr<location> l,
+			   const rpc_program &prog, int procno, 
+			   ptr<void> in, void *out, aclnt_cb cb)
+{
+  stream_rpcm->doRPC (from, l, prog, procno, in, out, cb, NULL, 0);
 }
 
 long
@@ -88,7 +97,6 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
 					       in, out, cb, cb_tmo);
     args->fake_seqno = fake_seqno;
 
-    //    warn << "RPCTIMING: " << getusec () << " fake sequo " << args->fake_seqno << " placed in queue pending window\n";
     enqueue_rpc (args);
     fake_seqno--;
     
@@ -100,8 +108,6 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
 				 (sockaddr *)&(l->saddr ()));
     rpc_state *C = New rpc_state (from, l, cb, cb_tmo, seqno, 
 				  prog.progno, out);
-
-    //    warn << "RPCTIMING: " << getusec () << " fake sequo " << _fake_seqno << " becomes " << (u_int)out << "\n";
 
     C->procno = procno;
    
@@ -139,17 +145,10 @@ void
 stp_manager::timeout (rpc_state *C)
 {
 
+
   //run through the list of pending RPCs and bump
   // the retransmit timers of any RPCs that are
   // bound for the same destination.
-
-#ifdef VERBOSE_LOG  
-  warn << "timeout for RPC pending on " << C->loc->id ()
-       << " " << inet_ntoa (C->loc->saddr().sin_addr)
-       << " " (u_int)C->out << "\n";
-#endif /* VERBOSE_LOG */
-
-#if 0
   rpc_state *O = pending.first;
   while (O) {
     if (O->loc->id () == C->loc->id () &&
@@ -168,12 +167,12 @@ stp_manager::timeout (rpc_state *C)
     O = pending.next (O);
   }
 
-
+  // multiple retransmissions is a good sign the node is dead
+  // don't hold up the window waiting for him to time out
   if (C->rexmits > 1 && C->in_window) {
     C->in_window = false;
     inflight--;
   }
-#endif
 
   if (C->cb_tmo) {
     chord_node n;

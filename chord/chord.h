@@ -163,10 +163,10 @@ class vnode : public virtual refcount {
 		      ptr<void> in, 
 		      void *out, 
 		      aclnt_cb cb,
-		      cbtmo_t cb_tmo = NULL) = 0;
+		      cbtmo_t cb_tmo = NULL, bool stream = false) = 0;
   virtual long doRPC (ref<location> l, const rpc_program &prog, int procno,
 		      ptr<void> in, void *out, aclnt_cb cb,
-		      cbtmo_t cb_tmo = NULL) = 0;
+		      cbtmo_t cb_tmo = NULL, bool stream = false) = 0;
 
   virtual void resendRPC (long seqno) = 0;
   virtual void fill_user_args (user_args *a) = 0;

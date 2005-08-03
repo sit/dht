@@ -272,15 +272,13 @@ tcp_manager::remove_host (hostinfo *h)
   // unnecessary SO_LINGER already set
   // tcp_abort (h->fd);
   
-  if (chord_rpc_style == CHORD_RPC_SFST) {
-    h->fd = -2;
-    h->xp = NULL;
-    while (h->connect_waiters.size ()) {
-      RPC_delay_args *a =  h->connect_waiters.pop_front ();
-      a->cb (RPC_CANTSEND);
-      delete a;
+  h->fd = -2;
+  h->xp = NULL;
+  while (h->connect_waiters.size ()) {
+    RPC_delay_args *a =  h->connect_waiters.pop_front ();
+    a->cb (RPC_CANTSEND);
+    delete a;
     }
-  }
 }
 
 void
@@ -317,6 +315,7 @@ tcp_manager::send_RPC_ateofcb (RPC_delay_args *args)
 void
 tcp_manager::doRPC_tcp_connect_cb (RPC_delay_args *args, int fd)
 {
+
   hostinfo *hi = lookup_host (args->l->address ());
   if (fd < 0) {
     warn << "locationtable: connect failed: " << strerror (errno) << "\n";
@@ -332,22 +331,12 @@ tcp_manager::doRPC_tcp_connect_cb (RPC_delay_args *args, int fd)
     setsockopt (fd, SOL_SOCKET, SO_LINGER, (char *) &li, sizeof (li));
     tcp_nodelay (fd);
     make_async(fd);
-    if (chord_rpc_style == CHORD_RPC_SFST) {
-      hi->fd = fd;
-      hi->xp = axprt_stream::alloc (fd);
-      assert (hi->xp);
-      send_RPC (args);
-      while (hi->connect_waiters.size ())
-	send_RPC (hi->connect_waiters.pop_front ());
-    }
-    else {
-      ptr<axprt_stream> xp = axprt_stream::alloc (fd);
-      assert (xp);
-      ptr<aclnt> c = aclnt::alloc (xp, args->prog);
-      assert (c);
-      c->call (args->procno, args->in, args->out, 
-	       wrap (this, &tcp_manager::doRPC_tcp_cleanup, c, args));
-    }
+    hi->fd = fd;
+    hi->xp = axprt_stream::alloc (fd);
+    assert (hi->xp);
+    send_RPC (args);
+    while (hi->connect_waiters.size ())
+      send_RPC (hi->connect_waiters.pop_front ());
   }
 }
 
