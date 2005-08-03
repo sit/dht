@@ -61,10 +61,11 @@ dhash_download::getchunk (u_int start, u_int len, int cookie, gotchunkcb_t cb)
   npending++;
   ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> ();
 
+  bool stream = (totsz > 8000);
   long seqno = clntnode->doRPC 
     (source, dhash_program_1, DHASHPROC_FETCHITER, arg, res, 
      wrap (this, &dhash_download::gotchunk, cb, res, numchunks++),
-     cb_tmo);
+     cb_tmo, stream);
 
   seqnos.push_back (seqno);
 }
@@ -86,7 +87,7 @@ dhash_download::first_chunk_cb  (ptr<dhash_fetchiter_res> res, int chunknum,
     fail (dhasherr2str (res->status));
   else {
     int cookie     = res->compl_res->cookie;
-    size_t totsz   = res->compl_res->attr.size;
+    totsz   = res->compl_res->attr.size;
     size_t datalen = res->compl_res->res.size ();
     char  *data    = res->compl_res->res.base ();
     process_first_chunk (data, datalen, totsz, cookie);

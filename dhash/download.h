@@ -20,6 +20,7 @@ private:
   int nextchunk;     //  fast
   int numchunks;     //   retransmit
   vec<long> seqnos;  //   parameters
+  unsigned long totsz;
   bool didrexmit;
 
   u_int64_t start;

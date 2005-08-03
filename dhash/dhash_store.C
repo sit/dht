@@ -121,9 +121,11 @@ dhash_store::store (ptr<location> dest, blockID blockID, char *data,
   arg->type    = store_type;
   arg->attr.size     = totsz;
     
+  bool stream = (totsz > 8000);
   clntnode->doRPC
     (dest, dhash_program_1, DHASHPROC_STORE, arg, res,
-     wrap (mkref(this), &dhash_store::finish, res, num));
+     wrap (mkref(this), &dhash_store::finish, res, num), NULL, stream);
+    
 }
 
 void 

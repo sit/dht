@@ -236,17 +236,18 @@ dhashcli::fetch_frag (ptr<rcv_state> rs, ptr<dhblock> b)
 			   blockID(rs->key.ID, rs->key.ctype),
 			   (char *)NULL, 0, 0, 0, 
 			   wrap (this, &dhashcli::retrieve_fetch_cb, rs, i, b),
-			   wrap (this, &dhashcli::on_timeout, rs));
+			   wrap (this, &dhashcli::on_timeout, rs, b));
   rs->nextsucc += 1;
 }
 
 void
 dhashcli::on_timeout (ptr<rcv_state> rs, 
+		      ptr<dhblock> b,
 		      chord_node dest,
 		      int retry_num) 
 {
-  //  if (retry_num == 1)
-  //    fetch_frag (rs);
+  if (retry_num == 1)
+    fetch_frag (rs, b);
 }
 
 void

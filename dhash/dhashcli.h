@@ -116,6 +116,7 @@ private:
   void sendblock_cb (callback<void, dhash_stat, bool>::ref cb, 
 		     dhash_stat err, chordID dest, bool present);
   void on_timeout (ptr<rcv_state> rs, 
+		   ptr<dhblock> b,
 		   chord_node dest,
 		   int retry_num);
 
