@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.47 2005/07/20 16:24:33 sit Exp $
+# $Id: Makefile.am,v 1.48 2005/08/03 04:40:58 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -7,7 +7,7 @@ if GTK_AVAILABLE
 VIS = vis
 endif
 
-bin_PROGRAMS = dbm walk findroute filestore nodeq dbdump dhashping lsdping $(VIS) 
+bin_PROGRAMS = dbm walk findroute filestore nodeq dbdump dhashping lsdping dbm_noauth $(VIS) 
 bin_SCRIPTS = dbm.py usenetlsdmon.py nodeq-filter
 chorddata_DATA =  RPC.py RPCProto.py vischat.py
 
@@ -15,9 +15,11 @@ EXTRA_DIST = .cvsignore $(bin_SCRIPTS) $(chorddata_DATA)
 CLEANFILES = core *.core *~ *.rpo
 MAINTAINERCLEANFILES = Makefile.in
 
-
 noinst_PROGRAMS = coords dhc_test pkc builddb
 noinst_HEADERS = rpclib.h
+
+dbm_noauth_SOURCES = dhash_benchmark_noauth.C
+dbm_noauth_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)
 
 dhashping_SOURCES = dhashping.C rpclib.C
 dhashping_LDADD = ../svc/libsvc.la ../utils/libutil.a ../merkle/libmerkle.a $(LDADD)
