@@ -58,7 +58,7 @@ stp_manager::doRPC_stream (ptr<location> from, ptr<location> l,
 			   const rpc_program &prog, int procno, 
 			   ptr<void> in, void *out, aclnt_cb cb)
 {
-  stream_rpcm->doRPC (from, l, prog, procno, in, out, cb, NULL, 0);
+  return stream_rpcm->doRPC (from, l, prog, procno, in, out, cb, NULL, 0);
 }
 
 long
