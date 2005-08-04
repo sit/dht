@@ -58,6 +58,7 @@ rm -rf $RPM_BUILD_ROOT
 %doc  README
 %{_bindir}/dbdump
 %{_bindir}/dbm
+%{_bindir}/dbm_noauth
 %{_bindir}/dbm.py
 %{_bindir}/dhashping
 %{_bindir}/filestore
@@ -113,6 +114,9 @@ rm -rf $RPM_BUILD_ROOT
 %{_includedir}/chord-%{version}/skiplist.h
 
 %changelog
+* Wed Aug  3 2005 Emil Sit <sit@mit.edu>
+- dbm_noauth
+
 * Wed Jul 20 2005 Emil Sit <sit@mit.edu>
 - dhashping
 
