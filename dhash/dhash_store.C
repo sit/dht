@@ -32,11 +32,8 @@ dhash_store::start ()
   else
     mtu = dhblock::dhash_mtu ();
   
-  if (dcb)
-    timecb_remove (dcb);
-  
   dcb = delaycb
-    (STORE_TIMEOUT, wrap (mkref(this), &dhash_store::timed_out));
+    (STORE_TIMEOUT, wrap (this, &dhash_store::timed_out, mkref(this)));
   
   size_t nstored = 0;
   while (nstored < data.len ()) {
@@ -53,7 +50,8 @@ dhash_store::start ()
 
 
 void 
-dhash_store::finish (ptr<dhash_storeres> res, int num, clnt_stat err)
+dhash_store::finish (ptr<dhash_store> hold,
+		     ptr<dhash_storeres> res, int num, clnt_stat err)
 {
   npending--;
   chord_node pred_node;
@@ -124,7 +122,7 @@ dhash_store::store (ptr<location> dest, blockID blockID, char *data,
   bool stream = (totsz > 8000);
   clntnode->doRPC
     (dest, dhash_program_1, DHASHPROC_STORE, arg, res,
-     wrap (mkref(this), &dhash_store::finish, res, num), NULL, stream);
+     wrap (this, &dhash_store::finish, mkref(this), res, num), NULL, stream);
     
 }
 
@@ -143,7 +141,7 @@ dhash_store::done (bool present)
 
 
 void 
-dhash_store::timed_out ()
+dhash_store::timed_out (ptr<dhash_store> hold)
 {
   dcb = NULL;
   error = true;

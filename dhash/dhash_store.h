@@ -68,9 +68,10 @@ protected:
   }
 
   void done (bool present);
-  void timed_out ();
+  void timed_out (ptr<dhash_store> hold);
   void start ();
-  void finish (ptr<dhash_storeres> res, int num, clnt_stat err);
+  void finish (ptr<dhash_store> hold,
+	       ptr<dhash_storeres> res, int num, clnt_stat err);
   void store (ptr<location> dest, blockID blockID, char *data, size_t len,
 	      size_t off, size_t totsz, int num, dhash_ctype ctype, 
 	      store_status store_type);  
