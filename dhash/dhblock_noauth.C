@@ -17,14 +17,15 @@ dhblock_noauth::get_payload (const char *buf, u_int len)
   vec<str> ret;
   xdrmem x (buf, len, XDR_DECODE);
   noauth_block *block = New noauth_block ();
-  if (!xdr_noauth_block (x.xdrp (), block)) 
-    fatal << "Failed to unmarshall noauth block\n";
-  else 
+  if (xdr_noauth_block (x.xdrp (), block)) {
     //copy entries to string vector
     for (unsigned int i = 0; i < block->blocks.size (); i++) {
       str item (block->blocks[i].data.base (), block->blocks[i].data.size ());
       ret.push_back (item);
     }
+  } else {
+    warnx << "Failed to unmarshall noauth block\n";
+  }
   return ret;
 }
 
