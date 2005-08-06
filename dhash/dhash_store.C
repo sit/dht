@@ -27,10 +27,7 @@ dhash_store::start ()
   int blockno = 0;
 
   unsigned int mtu;
-  if (clntnode->my_location ()->id () == dest->id ())
-    mtu = data.len ();
-  else
-    mtu = dhblock::dhash_mtu ();
+  mtu = dhblock::dhash_mtu ();
   
   dcb = delaycb
     (STORE_TIMEOUT, wrap (this, &dhash_store::timed_out, mkref(this)));
