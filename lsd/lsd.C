@@ -431,7 +431,7 @@ start_logs ()
       close (tracefd);
     tracefd = open (tracefname, O_WRONLY|O_APPEND|O_CREAT, 0666);
     if (tracefd < 0)
-      fatal << "Couldn't open trace file " << optarg << " for append.\n";
+      fatal << "Couldn't open trace file " << tracefname << " for append.\n";
     modlogger::setlogfd (tracefd);
   }
 
@@ -440,7 +440,7 @@ start_logs ()
       close (logfd);
     logfd = open (logfname, O_RDWR | O_CREAT, 0666);
     if (logfd < 0)
-      fatal << "Could not open log file " << optarg << " for appending.\n";
+      fatal << "Could not open log file " << logfname << " for appending.\n";
     lseek (logfd, 0, SEEK_END);
     errfd = logfd;
   }
