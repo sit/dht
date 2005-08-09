@@ -21,18 +21,13 @@
 void 
 dhash_store::start ()
 {
-  error = false;
-  status = DHASH_OK;
-  npending = 0;
-  int blockno = 0;
 
-  unsigned int mtu;
-  mtu = dhblock::dhash_mtu ();
-  
   dcb = delaycb
-    (STORE_TIMEOUT, wrap (this, &dhash_store::timed_out, mkref(this)));
-  
+    (STORE_TIMEOUT, wrap (this, &dhash_store::timed_out, deleted));
+ 
+  unsigned int mtu = dhblock::dhash_mtu ();
   size_t nstored = 0;
+  int blockno = 0;
   while (nstored < data.len ()) {
     size_t chunklen = MIN (mtu, data.len () - nstored);
     char  *chunkdat = (char *)(data.cstr () + nstored);
@@ -47,9 +42,11 @@ dhash_store::start ()
 
 
 void 
-dhash_store::finish (ptr<dhash_store> hold,
+dhash_store::finish (ptr<bool> p_deleted, 
 		     ptr<dhash_storeres> res, int num, clnt_stat err)
 {
+  if (*p_deleted) return;
+
   npending--;
   chord_node pred_node;
 
@@ -57,46 +54,16 @@ dhash_store::finish (ptr<dhash_store> hold,
     trace << "store failed: " << bid << ": RPC error " << err << "\n";
     error = true;
     status = DHASH_RPCERR;
-  }
-  else if (res->status != DHASH_OK) {
-    if (res->status == DHASH_RETRY)
-      pred_node = make_chord_node (res->pred->p);
-    if (!error)
-      status = res->status;
+  } else if (res->status != DHASH_OK && !error) {
+    status = res->status;
     error = true;
-  }
-  else {
-    if (res->resok->already_present)
-      present = res->resok->already_present;
-  }
-  // removed retransmit code - benjie, july 18 2003
+  } else if (res->resok->already_present)
+    present = res->resok->already_present;
+  
 
-  if (npending == 0) {
-    if (status == DHASH_RETRY) {
-      ptr<location> pn = clntnode->locations->lookup_or_create (pred_node);
-      if (!pn && !returned) {
-        status = DHASH_CHORDERR;
-	done (false);
-	return;
-      }
-      num_retries++;
-      if (num_retries > 2) {
-	if (!returned) {
-	  status = DHASH_RETRY;
-	  done (false);
-	  return;
-	}
-      } else {
-	assert (!returned);
-	info << "retrying (" << num_retries << "): dest was " 
-	     << dest->id () << " now is " << pred_node.x << "\n";
-	dest = pn;
-	start ();
-      }
-    }
-    else
-      done (present);
-  }
+  if (npending == 0) 
+    done (present);
+  
 }
 
 
@@ -119,30 +86,27 @@ dhash_store::store (ptr<location> dest, blockID blockID, char *data,
   bool stream = (totsz > 8000);
   clntnode->doRPC
     (dest, dhash_program_1, DHASHPROC_STORE, arg, res,
-     wrap (this, &dhash_store::finish, mkref(this), res, num), NULL, stream);
+     wrap (this, &dhash_store::finish, deleted, res, num), NULL, stream);
     
 }
 
 void 
 dhash_store::done (bool present)
 {
-  if (!returned) { 
-    if (dcb) {
-      timecb_remove (dcb);
-      dcb = NULL;
-    }
-    (*cb) (status, dest->id (), present);
-    returned = true;
-  }
+  (*cb) (status, dest->id (), present);
+  *deleted = true;
+  delete this;
 }
 
 
 void 
-dhash_store::timed_out (ptr<dhash_store> hold)
+dhash_store::timed_out (ptr<bool> p_deleted)
 {
-  dcb = NULL;
+  if (*p_deleted) return;
+
   error = true;
   status = DHASH_TIMEDOUT;
+  dcb = NULL;
   done (false);
   // npending might still be > 0;
   // need to wait until all the RPCs really time out, and

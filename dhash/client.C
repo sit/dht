@@ -464,8 +464,6 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
   gettimeofday (&tp, NULL);
   start_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
 
-  //  if (block->ctype == DHASH_KEYHASH || block->ctype == DHASH_NOAUTH) {
-    
   for (u_int i = 0; i < succs.size(); i++) {
       // Count up for each RPC that will be dispatched
       ss->out += 1;
