@@ -56,7 +56,7 @@ protected:
       present (false),
       deleted (New refcounted<bool> (false))
   {
-    start ();
+    start (deleted);
   }
   
 
@@ -67,7 +67,7 @@ protected:
 
   void done (bool present);
   void timed_out (ptr<bool> deleted);
-  void start ();
+  void start (ptr<bool> deleted);
   void finish (ptr<bool> deleted, ptr<dhash_storeres> res, int num, clnt_stat err);
   void store (ptr<location> dest, blockID blockID, char *data, size_t len,
 	      size_t off, size_t totsz, int num, dhash_ctype ctype, 

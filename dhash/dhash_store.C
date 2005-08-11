@@ -19,7 +19,7 @@
 #define STORE_TIMEOUT 60
     
 void 
-dhash_store::start ()
+dhash_store::start (ptr<bool> p_deleted)
 {
 
   dcb = delaycb
@@ -35,6 +35,7 @@ dhash_store::start ()
     npending++;
     store (dest, bid, chunkdat, chunklen, chunkoff, 
 	   data.len (), blockno, ctype, store_type);
+    if (*p_deleted) return;
     nstored += chunklen;
     blockno++;
   }
