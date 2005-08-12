@@ -23,7 +23,7 @@ dhblock_noauth_srv::get_merkle_key (chordID key, ptr<dbrec> data)
 
   //get the low bits: xor of the marshalled words
   long *d = (long *)data->value;
-  long hash = 0;
+  unsigned long hash = 0;
   for (int i = 0; i < data->len/4; i++) 
     hash ^= d[i];
   
@@ -34,6 +34,7 @@ dhblock_noauth_srv::get_merkle_key (chordID key, ptr<dbrec> data)
   fkey = fkey << 32;
   chordID mkey = fkey | bigint(hash);
 
+  //warn << "merkle key for " << key << " with data hash " << hash << " is " << mkey << "\n"; 
   return id2dbrec(mkey);
 }
 
