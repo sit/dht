@@ -50,6 +50,7 @@ private:
 			  chordID localID,
 			  chordID remoteID,
 			  ptr<adb> realdb, 
+			  cbv cb,
 			  adb_status stat, 
 			  vec<chordID> keys);
 
@@ -66,7 +67,8 @@ public:
 			    block_status_manager *bsm,
 			    chordID remoteID,
 			    vec<ptr<location> > succs,
-			    dhash_ctype ctype);
+			    dhash_ctype ctype,
+			    cbv cb);
   void remove (merkle_hash &key);
   int insert (merkle_hash &key);
   merkle_node *lookup_exact (u_int depth, const merkle_hash &key);

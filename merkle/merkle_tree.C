@@ -42,7 +42,8 @@ merkle_tree::merkle_tree (ptr<adb> realdb,
 			  block_status_manager *bsm,
 			  chordID remoteID,
 			  vec<ptr<location> > succs,
-			  dhash_ctype ctype)
+			  dhash_ctype ctype,
+			  cbv done_cb)
 {
   chordID localID = succs[0]->id ();
 
@@ -50,7 +51,7 @@ merkle_tree::merkle_tree (ptr<adb> realdb,
   realdb->getkeys (start, wrap (this, &merkle_tree::iterate_custom_cb, 
 				bsm, 
 				localID, remoteID,
-				realdb));
+				realdb, done_cb));
 }
   
 
@@ -58,7 +59,8 @@ void
 merkle_tree::iterate_custom_cb (block_status_manager *bsm, 
 				chordID localID,
 				chordID remoteID,
-				ptr<adb> realdb, 
+				ptr<adb> realdb, 				
+				cbv done_cb,
 				adb_status stat, 
 				vec<chordID> keys)
 {
@@ -76,7 +78,7 @@ merkle_tree::iterate_custom_cb (block_status_manager *bsm,
   if (stat == ADB_OK)
     realdb->getkeys (incID(keys.back ()), 
 		     wrap (this, &merkle_tree::iterate_custom_cb, 
-			   bsm, localID, remoteID, realdb));
+			   bsm, localID, remoteID, realdb, done_cb));
 
   else {
     //now add the keys that we know we are missing
@@ -108,6 +110,7 @@ merkle_tree::iterate_custom_cb (block_status_manager *bsm,
 	//	}
       }
     
+    done_cb ();
   }
 }
 
@@ -307,13 +310,13 @@ merkle_tree::database_get_keys (u_int depth, const merkle_hash &prefix)
   vec<merkle_hash> ret;
   merkle_key *cur = sk_keys.closestsucc (tobigint (prefix));
   
-  do {
+  while (cur) {
     merkle_hash key = to_merkle_hash (cur->id);
     if (!prefix_match (depth, key, prefix))
       break;
     ret.push_back (key);
     cur = sk_keys.next (cur);
-  } while (cur);
+  } 
   return ret;
 }
 

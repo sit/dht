@@ -148,10 +148,7 @@ syncer::sync_replicas_gotsucclist (ptr<location> pred,
   assert (pred);
   assert (succs[0]);
   assert (host_loc);
-
-  bigint rngmin = pred->id ();
-  bigint rngmax = succs[0]->id ();
-  
+ 
   cur_succ++; // start at 1 (0 is me)
   if (efrags > 0 && cur_succ >= efrags) cur_succ = 1;
   else if (cur_succ >= succs.size ()) cur_succ = 1;
@@ -165,22 +162,32 @@ syncer::sync_replicas_gotsucclist (ptr<location> pred,
   // XXX need to twiddle the keys as they come out...
   tmptree = New merkle_tree(db, bsm, 
 			    succs[cur_succ]->id (), 
-			    succs, ctype);
+			    succs, ctype,
+			    wrap (this, &syncer::sync_replicas_treedone, start, succs, pred));
+}
 
+void
+syncer::sync_replicas_treedone (int64_t start, 
+				vec<ptr<location> > succs,
+				ptr<location> pred)
+{
   warn << host_loc->id () << " tree build: " 
-	<< getusec () - start << " usecs\n";
+       << getusec () - start << " usecs\n";
 
-  warn << host_loc->id () << " syncing with " << succs[cur_succ] 
-       << " for range [ " << rngmin << ", " << rngmax << " ]\n";
 
   replica_syncer = New refcounted<merkle_syncer> 
     (ctype, tmptree, 
      wrap (this, &syncer::doRPC_unbundler, succs[cur_succ]),
      wrap (this, &syncer::missing, succs[cur_succ],  succs));
+  
+  bigint rngmin = pred->id ();
+  bigint rngmax = succs[0]->id ();
 
-
+  warn << host_loc->id () << " syncing with " << succs[cur_succ] 
+       << " for range [ " << rngmin << ", " << rngmax << " ]\n";
+  
   replica_syncer->sync (rngmin, rngmax);
-
+  
   delaycb (replica_timer, wrap(this, &syncer::sync_replicas)); 
 }
 

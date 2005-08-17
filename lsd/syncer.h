@@ -62,4 +62,8 @@ protected:
 		vec<ptr<location> > succs,
 		bigint key, bool missingLocal, bool round_over);
   void lookup_cb (adb_status stat, chordID key, str data);
+
+  void sync_replicas_treedone (int64_t start, 
+			       vec<ptr<location> > succs,
+			       ptr<location> pred);
 };
