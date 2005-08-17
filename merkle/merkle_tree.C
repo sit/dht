@@ -7,22 +7,6 @@
 #include "dhblock.h"
 #include "dhblock_noauth.h"
 
-#if 0
-void
-dump_db  (dbfe *db)
-{
-  warn << "db_dump\n";
-  ptr <dbEnumeration> it = db->enumerate ();
-  ptr<dbPair> entry = it->firstElement ();
-  while (entry) {
-    merkle_hash key = to_merkle_hash (entry->key);
-    warn << "db_dump: " << key << "\n";
-    entry = it->nextElement ();
-  }
-  it = NULL;
-}
-//DDD
-#endif
 
 merkle_tree::merkle_tree (ptr<adb> realdb, bool populate)
 {
@@ -143,7 +127,6 @@ merkle_tree::rehash (u_int depth, const merkle_hash &key, merkle_node *n)
     assert (n->count > 0 && n->count <= 64);
     merkle_hash prefix = key;
     prefix.clear_suffix (depth);
-    ///warn << "prefix: " << prefix << "\n";
     vec<merkle_hash> keys = database_get_keys (depth, prefix);
     for (u_int i = 0; i < keys.size (); i++)
       sc.update (keys[i].bytes, keys[i].size);
@@ -232,7 +215,8 @@ merkle_tree::insert (u_int depth, merkle_hash& key, merkle_node *n)
     leaf2internal (depth, key, n);
   
   if (n->isleaf ()) {
-    sk_keys.insert ( New merkle_key (key) );
+    merkle_key *k = New merkle_key (key);
+    sk_keys.insert (k);
   } else {
     u_int32_t branch = key.read_slot (depth);
     ret = insert (depth+1, key, n->child (branch));
@@ -342,6 +326,24 @@ merkle_tree::database_get_IDs (u_int depth, const merkle_hash &prefix)
     ret.push_back (tobigint(mhash[i]));
   return ret;
 }
+
+vec<chordID> 
+merkle_tree::get_keyrange (chordID min, chordID max, u_int n)
+{
+  vec<chordID> keys;
+  warn << min << " " << max << " " << n << "\n";
+  merkle_key *k = sk_keys.closestsucc (min);
+  for (u_int i = 0; k && i < n; i++) {
+    warn << "k: " << k->id << "\n";
+    if (!betweenbothincl (min, max, k->id))
+      break;
+    keys.push_back (k->id);
+    k = sk_keys.next (k);
+  }
+  
+  return keys;
+}
+
 
 void
 merkle_tree::dump ()

@@ -79,6 +79,7 @@ public:
   vec<merkle_hash> database_get_keys (u_int depth, const merkle_hash &prefix);
   vec<chordID> database_get_IDs (u_int depth, const merkle_hash &prefix);
   bool key_exists (chordID key) { return sk_keys.search (key) != NULL; };
+  vec<chordID> get_keyrange (chordID min, chordID max, u_int n);
 
   void dump ();
   void check_invariants ();

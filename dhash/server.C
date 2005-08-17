@@ -163,16 +163,6 @@ dhash_impl::dhash_impl (ptr<vnode> node, str dbname) :
     start ();
 }
 
-/* DDD
-bool
-dhash_impl::key_present (const blockID &n)
-{
-  ptr<dhblock_srv> srv = blocksrv[n.ctype];
-  if (srv == NULL)
-    return false;
-  return srv->key_present (n);
-}
-*/
 
 dhash_fetchiter_res *
 dhash_impl::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg, str val)

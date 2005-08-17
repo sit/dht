@@ -19,10 +19,6 @@ class merkle_server {
   void dispatch (user_args *a);
   merkle_server (merkle_tree *ltree);
 
-private:
-
-  void getkeys_cb (user_args *sbp, getkeys_arg *arg, adb_status stat, 
-		   vec<chordID> dbkeys);
 };
 
 

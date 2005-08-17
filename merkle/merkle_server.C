@@ -23,9 +23,6 @@ merkle_server::dispatch (user_args *sbp)
   if (!sbp)
     return;
 
-
-  //NNN choose the right merkle_server object based on a field of the RPC?
-
   switch (sbp->procno) {
   case MERKLESYNC_SENDNODE:
     // request a node of the merkle tree
@@ -61,9 +58,20 @@ merkle_server::dispatch (user_args *sbp)
     {
       getkeys_arg *arg = sbp->template getarg<getkeys_arg> ();
 
-      ltree->db->getkeys (arg->rngmin, 
-			  wrap (this, &merkle_server::getkeys_cb,
-				sbp, arg));
+      //get the first 65 keys in the range. We'll return 64, but we get
+      // 65 so we can tell if we got them all
+      vec<chordID> keys = ltree->get_keyrange (arg->rngmin, arg->rngmax, 65);
+      
+      warn << "get keys (" << arg->rngmin << ", " << arg->rngmax << " returning " << keys.size () << " keys\n";
+      bool more = (keys.size () == 65); // there is at least one more key to get
+      
+      getkeys_res res (MERKLE_OK);
+      res.resok->morekeys = more;
+      //trim off the extra key if necessary
+      while (keys.size () > 64) keys.pop_back ();
+      res.resok->keys = keys;
+
+      sbp->reply (&res);
       break;
     }
   default:
@@ -73,30 +81,4 @@ merkle_server::dispatch (user_args *sbp)
   }
 }
 
-
-void
-merkle_server::getkeys_cb (user_args *sbp, getkeys_arg *arg, adb_status stat, 
-			   vec<chordID> dbkeys)
-{
-  
-  vec<chordID> keys;
-  for (u_int i = 0; i < dbkeys.size () && i < 64; i++) {
-    if (!betweenbothincl (arg->rngmin, arg->rngmax, dbkeys[i]))
-      break;
-    keys.push_back (dbkeys[i]);
-  }
-  
-  bool more =  (keys.size () == 64 && // we took all we could get
-		dbkeys.size () > 64 && // there are more to get
-		// and they are potentially interesting
-		betweenbothincl (arg->rngmin, arg->rngmax, dbkeys[64]));
-    
-  getkeys_res res (MERKLE_OK);
-  res.resok->morekeys = more;
-  res.resok->keys.setsize (keys.size ());
-  for (u_int i = 0; i < keys.size (); i++)
-    res.resok->keys[i] = keys[i];
-  
-  sbp->reply (&res);
-}
 

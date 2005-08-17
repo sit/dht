@@ -32,12 +32,15 @@ do_fetch (ptr<dbfe> db, svccb *sbp)
   adb_fetcharg *arg = sbp->template getarg<adb_fetcharg> ();
  
   ref<dbrec> k = id_to_dbrec (arg->key, arg->name);
-  ref<dbrec> dbres = db->lookup (k);
+  ptr<dbrec> dbres = db->lookup (k);
 
   adb_fetchres *res = New adb_fetchres ();
-  res->resok->key = arg->key;
-  res->resok->data.setsize (dbres->len);
-  memcpy(res->resok->data.base (), dbres->value, dbres->len);
+  if (dbres) {
+    res->resok->key = arg->key;
+    res->resok->data.setsize (dbres->len);
+    memcpy(res->resok->data.base (), dbres->value, dbres->len);
+  } else
+    res->set_status (ADB_NOTFOUND);
 
   sbp->reply (res);
   
@@ -67,10 +70,7 @@ do_getkeys (ptr<dbfe> db, svccb *sbp)
   res->resok->complete =  (!entry || 
 			   (entry && dbrec_to_name (entry->key) != argname));
 
-  res->resok->keys.setsize (ret.size ());
-  for (unsigned int i = 0; i < ret.size (); i++)
-    res->resok->keys[i] = ret[i];
-
+  res->resok->keys = ret;
   sbp->reply (res);
   delete res;
 }
