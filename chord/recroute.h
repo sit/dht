@@ -10,6 +10,7 @@ template<class T>
 class recroute : public T {
  private:
   bool shave;
+  int lto;
   timecb_t *sweep_cb;
   ihash<u_long, route_recchord,
     &route_recchord::routeid_, &route_recchord::hlink_> routers;

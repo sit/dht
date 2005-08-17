@@ -149,20 +149,28 @@ stp_manager::timeout (rpc_state *C)
   //run through the list of pending RPCs and bump
   // the retransmit timers of any RPCs that are
   // bound for the same destination.
+  // also: remove any RPCs that seem to be headed
+  //       for failed nodes from the window
   rpc_state *O = pending.first;
   while (O) {
     if (O->loc->id () == C->loc->id () &&
 	O != C) {
-      warn << "bumping timer on host " << C->loc->id () << "\n";
-      O->b->reset_tmo (); 
 
-      if ((getusec () - O->sendtime) > 1000000000 && O->in_window) {
-	//this RPC is almost certainlly destined for a dead host
-	// get it out of the window
+      if ((getusec () - O->sendtime) > 2000000000 && O->in_window) {
+	//this RPC is almost certainly destined for a dead host
+	// get it out of the window.
+
+	// leave it's retransmit timer alone so that it fails 
+	// quickly and the application can get on with business
 	O->in_window = false;
 	inflight--;
-      }
-      
+      } else
+	// we've seen a timeout to this host, two possibilities:
+	// a) it's a random drop. 
+	// b) the host is down/going down
+	// in either case retransmitting the other RPCs to that host
+	// won't help. delay those retransmissions for a bit
+	O->b->reset_tmo ();       
     }
     O = pending.next (O);
   }

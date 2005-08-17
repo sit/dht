@@ -10,6 +10,7 @@
 #define rinfo    modlogger ("recroute", modlogger::INFO)
 #define rtrace   modlogger ("recroute", modlogger::TRACE)
 
+
 template<class T>
 ref<vnode>
 recroute<T>::produce_vnode (ref<chord> _chordnode,
@@ -27,13 +28,16 @@ recroute<T>::recroute (ref<chord> _chord,
     sweep_cb (NULL)
 {
   addHandler (recroute_program_1, wrap (this, &recroute<T>::dispatch));
-  sweep_cb = delaycb (60, 0, wrap (this, &recroute<T>::sweeper));
 
   {
     int x = 1;
     assert (Configurator::only ().get_int ("chord.find_succlist_shaving", x));
+    assert (Configurator::only ().get_int ("chord.lookup_timeout", lto));
     shave = (x == 1);
   }
+
+  sweep_cb = delaycb (lto, 0, wrap (this, &recroute<T>::sweeper));
+
 }
 
 template<class T>
@@ -66,7 +70,7 @@ recroute<T>::sweeper ()
   timespec now;
   clock_gettime (CLOCK_REALTIME, &now);
   timespec maxtime;
-  maxtime.tv_sec = 60; // XXX hardcoded constant.
+  maxtime.tv_sec = lto;
   maxtime.tv_nsec = 0;
 
   route_recchord *r = routers.first ();

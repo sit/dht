@@ -58,6 +58,8 @@ chord_config_init::chord_config_init ()
 
   ok = ok && set_str ("chord.rpc_mode", "stp");
 
+  ok = ok && set_int ("chord.lookup_timeout", 15);
+
   /** use the greedy metric instead.  Probably desirable if toes are
    *  enabled. */
   ok = ok && set_int ("chord.greedy_lookup", 0);
