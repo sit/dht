@@ -1,11 +1,11 @@
 #include "dhash_types.h"
+#include "libadb.h"
 
 class locationtable;
 class location;
 class block_status_manager;
 class merkle_tree;
 class merkle_syncer;
-class dbfe;
 struct RPC_delay_args;
 
 typedef callback<void, ptr<location> >::ref  cb_location;
@@ -23,7 +23,7 @@ class syncer {
   merkle_tree *tmptree;
   ptr<merkle_syncer> replica_syncer;
   ptr<location> host_loc;
-  ptr<dbfe> db;
+  ptr<adb> db;
 
   u_int cur_succ;
 
@@ -34,6 +34,7 @@ public:
   syncer::syncer (ptr<locationtable> locations,
 		  ptr<location> h,
 		  str dbname,
+		  str dbext,
 		  dhash_ctype ctype,
 		  u_int dfrags = 0,
 		  u_int efrags = 0);
@@ -60,4 +61,5 @@ protected:
   void missing (ptr<location> from,
 		vec<ptr<location> > succs,
 		bigint key, bool missingLocal, bool round_over);
+  void lookup_cb (adb_status stat, chordID key, str data);
 };

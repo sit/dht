@@ -7,6 +7,7 @@
 #include "dhblock.h"
 #include "dhblock_noauth.h"
 
+#if 0
 void
 dump_db  (dbfe *db)
 {
@@ -20,99 +21,113 @@ dump_db  (dbfe *db)
   }
   it = NULL;
 }
+//DDD
+#endif
 
-merkle_tree::merkle_tree (ptr<dbfe> realdb, bool populate)
+merkle_tree::merkle_tree (ptr<adb> realdb, bool populate)
 {
-  // create an in-memory database to hold keys
-  db = New refcounted<dbfe> ();
-  dbOptions opts;
-  opts.addOption("opt_cachesize", 1000);
-  opts.addOption("opt_nodesize", 4096);
-  if (int err = db->opendb(NULL, opts))
-    fatal << "merkle_tree::merkle_tree opendb failed: " << strerror(err);
 
-  if (populate) {
+  chordID start = bigint (0);
+  if (populate) 
     // populate merkle tree with keys
-    ptr<dbEnumeration> it = realdb->enumerate ();
-    ptr<dbPair> d = it->firstElement();
-    for (int i = 0; d; i++, d = it->nextElement()) {
-      if (i == 0)
-	warn << "Database is not empty.  Loading into merkle tree\n";
-      // warn << "[" << i << "] " << dbrec2id (d->key) << "\n";
-      merkle_hash key = to_merkle_hash (d->key);
-      int ret = insert (0, key, &root);
-      assert (!ret);
-    }
-  }
-
+    realdb->getkeys (start, wrap (this, &merkle_tree::iterate_cb, realdb));
+  
+  
   //leave the merkle tree under the fakedb. We'll only use this to hold keys
   // higher layers are responsible for managing their own data in the db
 }
 
+void
+merkle_tree::iterate_cb (ptr<adb> realdb, adb_status stat, vec<chordID> keys)
+{
+
+  for (unsigned int i = 0; i < keys.size (); i++) {
+      merkle_hash key = to_merkle_hash (keys[i]);
+      int ret = insert (0, key, &root);
+      assert (!ret);
+  }
+  
+  if (stat == ADB_OK)
+    realdb->getkeys (incID(keys.back ()), 
+		     wrap (this, &merkle_tree::iterate_cb, 
+			   realdb));
+}
+
 //build a merkle tree custom-tailored for remoteID
-merkle_tree::merkle_tree (ptr<dbfe> realdb,
+merkle_tree::merkle_tree (ptr<adb> realdb,
 			  block_status_manager *bsm,
 			  chordID remoteID,
 			  vec<ptr<location> > succs,
 			  dhash_ctype ctype)
 {
   chordID localID = succs[0]->id ();
-  // create an in-memory database to hold the keys
-  db = New refcounted<dbfe> ();
-  dbOptions opts;
-  opts.addOption("opt_cachesize", 1000);
-  opts.addOption("opt_nodesize", 4096);
-  if (int err = db->opendb(NULL, opts))
-    fatal << "merkle_tree::merkle_tree opendb failed: " << strerror(err);
 
-  // populate merkle tree/mem db from realdb
-  ptr<dbEnumeration> it = realdb->enumerate ();
-  ptr<dbPair> d = it->firstElement();
-  for (int i = 0; d; i++, d = it->nextElement()) {
-    ptr<dbrec> mkey = to_merkle_key (realdb, d->key, ctype);
-    
-    // warn << "[" << i << "] " << dbrec2id(mkey) << "\n";
-    //leave out keys that we know the other side doesn't have
-    chordID k = dbrec2id(mkey);
-    if (!bsm->missing_on (k, remoteID)) {
-      merkle_hash key = to_merkle_hash (mkey);
-      int ret = insert (0, key, &root);
-      assert (!ret);
-    } else {
-      warn << "leaving " << k << " out of merkle tree for " << remoteID <<"\n";
-    }
-
-  }
-
-  //now add the keys that we know we are missing
-  vec<chordID> mis = bsm->missing_what (localID);
-  for (unsigned int i = 0; i < mis.size (); i++)
-    {
-      merkle_hash key = to_merkle_hash (id2dbrec(mis[i]));
-      bool indb = database_lookup (db, key);
-
-      /* only fake having a key if: 
-       1) we really don't have it, and
-       2) we've confirmed other node has block
-         or: 
-       3) other node might have it and we need to learn which it is
-      */
-
-      if (!indb && 
-	  (bsm->confirmed_on (mis[i], remoteID)
-	   || !bsm->missing_on (mis[i], remoteID))) 
-	{
-	  int ret = insert (0, key, &root);
-	  assert (!ret);
-	} 
-      
-      if (indb) {
-	bsm->unmissing (succs[0], tobigint(key));
-	warn << "had " << tobigint(key) << " even though bsm thought I didn't\n";
-      }
-    }
-  
+  chordID start = bigint (0);
+  realdb->getkeys (start, wrap (this, &merkle_tree::iterate_custom_cb, 
+				bsm, 
+				localID, remoteID,
+				realdb));
 }
+  
+
+void
+merkle_tree::iterate_custom_cb (block_status_manager *bsm, 
+				chordID localID,
+				chordID remoteID,
+				ptr<adb> realdb, 
+				adb_status stat, 
+				vec<chordID> keys)
+{
+
+  for (unsigned int i = 0; i < keys.size (); i++) {
+      merkle_hash key = to_merkle_hash (keys[i]);
+      if (!bsm->missing_on (keys[i], remoteID)) 
+	assert (!insert (0, key, &root));
+      else 
+	warn << "leaving " << keys[i]
+	     << " out of merkle tree.\n";
+      
+  }
+  
+  if (stat == ADB_OK)
+    realdb->getkeys (incID(keys.back ()), 
+		     wrap (this, &merkle_tree::iterate_custom_cb, 
+			   bsm, localID, remoteID, realdb));
+
+  else {
+    //now add the keys that we know we are missing
+    vec<chordID> mis = bsm->missing_what (localID);
+    for (unsigned int i = 0; i < mis.size (); i++)
+      {
+	bool indb = (sk_keys.search (mis[i]) != NULL);	
+
+	/* only fake having a key if: 
+	   1) we really don't have it, and
+	   2) we've confirmed other node has block
+	   or: 
+	   3) other node might have it and we need to learn which it is
+	*/
+	
+	if (!indb && 
+	    (bsm->confirmed_on (mis[i], remoteID)
+	     || !bsm->missing_on (mis[i], remoteID))) 
+	  {
+	    merkle_hash key = to_merkle_hash (mis[i]);
+	    int ret = insert (0, key, &root);
+	    assert (!ret);
+	  } 
+	
+	//	if (indb) {
+	//	  bsm->unmissing (succs[0], tobigint(key));
+	//  warn << "had " << tobigint(key) 
+	//     << " even though bsm thought I didn't\n";
+	//	}
+      }
+    
+  }
+}
+
+ 
 
 
 
@@ -129,7 +144,7 @@ merkle_tree::rehash (u_int depth, const merkle_hash &key, merkle_node *n)
     merkle_hash prefix = key;
     prefix.clear_suffix (depth);
     ///warn << "prefix: " << prefix << "\n";
-    vec<merkle_hash> keys = database_get_keys (db, depth, prefix);
+    vec<merkle_hash> keys = database_get_keys (depth, prefix);
     for (u_int i = 0; i < keys.size (); i++)
       sc.update (keys[i].bytes, keys[i].size);
   } else {
@@ -155,7 +170,7 @@ merkle_tree::count_blocks (u_int depth, const merkle_hash &key,
   merkle_hash prefix = key;
   prefix.clear_suffix (depth);
   
-  vec<merkle_hash> keys = database_get_keys (db, depth, prefix);
+  vec<merkle_hash> keys = database_get_keys (depth, prefix);
   for (u_int i = 0; i < keys.size (); i++) {
     u_int32_t branch = keys[i].read_slot (depth);
     nblocks[branch] += 1;
@@ -192,9 +207,9 @@ void
 merkle_tree::remove (u_int depth, merkle_hash& key, merkle_node *n)
 {
   if (n->isleaf ()) {
-    assert (database_lookup (db, key));
-    database_remove (db, key);
-    assert (!database_lookup (db, key));
+    merkle_key * mkey = sk_keys.remove (tobigint(key));
+    assert (mkey);
+    delete mkey;
   } else {
     u_int32_t branch = key.read_slot (depth);
     remove (depth+1, key, n->child (branch));
@@ -217,9 +232,7 @@ merkle_tree::insert (u_int depth, merkle_hash& key, merkle_node *n)
     leaf2internal (depth, key, n);
   
   if (n->isleaf ()) {
-    ret = database_insert (db, key);
-    if (ret != 0)
-      n->count -= 1;
+    sk_keys.insert ( New merkle_key (key) );
   } else {
     u_int32_t branch = key.read_slot (depth);
     ret = insert (depth+1, key, n->child (branch));
@@ -236,10 +249,9 @@ void
 merkle_tree::remove (merkle_hash &key)
 {
   // assert block must exist..
-  if (!database_lookup (db, key)) {
+  str foo;
+  if (sk_keys.search (tobigint (key)) == NULL) 
     fatal << "merkle_tree::remove: key does not exist " << key << "\n";
-    return;
-  }
 
   remove (0, key, &root);
 }
@@ -247,7 +259,8 @@ merkle_tree::remove (merkle_hash &key)
 int
 merkle_tree::insert (merkle_hash &key)
 {
-  if (database_lookup (db, key))
+
+  if (sk_keys.search (tobigint (key)) != NULL) 
     fatal << "merkle_tree::insert: key already exists " << key << "\n";
 
   return insert (0, key, &root);
@@ -302,6 +315,32 @@ merkle_node *
 merkle_tree::lookup (const merkle_hash &key)
 {
   return lookup (merkle_hash::NUM_SLOTS, key);
+}
+
+vec<merkle_hash>
+merkle_tree::database_get_keys (u_int depth, const merkle_hash &prefix)
+{
+  vec<merkle_hash> ret;
+  merkle_key *cur = sk_keys.closestsucc (tobigint (prefix));
+  
+  do {
+    merkle_hash key = to_merkle_hash (cur->id);
+    if (!prefix_match (depth, key, prefix))
+      break;
+    ret.push_back (key);
+    cur = sk_keys.next (cur);
+  } while (cur);
+  return ret;
+}
+
+vec<chordID>
+merkle_tree::database_get_IDs (u_int depth, const merkle_hash &prefix)
+{
+  vec<merkle_hash> mhash = database_get_keys (depth, prefix);
+  vec<chordID> ret;
+  for (unsigned int i = 0; i < mhash.size (); i++)
+    ret.push_back (tobigint(mhash[i]));
+  return ret;
 }
 
 void

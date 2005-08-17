@@ -3,7 +3,7 @@
 #include <dhash_common.h>
 #include <dhashcli.h>
 
-#include <dbfe.h>
+#include <libadb.h>
 
 #include <dhblock_chash.h>
 #include <dhblock_chash_srv.h>
@@ -28,11 +28,13 @@
 #include <dmalloc.h>
 #endif
 
+void store_res (str context, int stat);
+
 dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
 				      str desc,
 				      str dbname,
-				      dbOptions opts) :
-  dhblock_srv (node, desc, dbname, opts),
+				      str dbext) :
+  dhblock_srv (node, desc, dbname, dbext),
   cache_db (NULL),
   bsm (NULL),
   msrv (NULL),
@@ -41,26 +43,6 @@ dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
   repair_outstanding (0),
   repair_tcb (NULL)
 {
-  int drop_writes = -1;
-  Configurator::only ().get_int ("dhash.drop_writes", drop_writes);
-  if (drop_writes) {
-    // Switch to an in-memory database.
-    ptr<dbfe> fdb = New refcounted<dbfe> ();
-    if (int err = fdb->opendb (NULL, opts))
-    {
-      warn << desc << ": " << dbname <<"\n";
-      warn << "open returned: " << strerror (err) << "\n";
-      exit (-1);
-    }
-    ptr<dbEnumeration> it = db->enumerate ();
-    ptr<dbPair> d = it->firstElement();
-    ptr<dbrec> FAKE_DATA = New refcounted<dbrec> ("", 1);
-    for (int i = 0; d; i++, d = it->nextElement ()) {
-      fdb->insert (d->key, FAKE_DATA);
-    }
-    it = NULL;
-    db = fdb;
-  }
 
   // create merkle tree and populate it from DB
   mtree = New merkle_tree (db, true);
@@ -70,18 +52,11 @@ dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
 
   bsm = New refcounted<block_status_manager> (node->my_ID ());
 
-  pmaint_obj = New pmaint (cli, node, db, 
-      wrap (this, &dhblock_chash_srv::db_delete_immutable));
+  pmaint_obj = New pmaint (cli, node, db); 
 
-  str cdbs = strbuf () << dbname << ".c";
-  cache_db = New refcounted<dbfe> ();
+  // database for caching whole blocks 
+  cache_db = New refcounted<adb> (dbname, ".c");
 
-  if (int err = cache_db->opendb (const_cast <char *> (cdbs.cstr ()), opts))
-  {
-    warn << desc << ": " << dbname <<"\n";
-    warn << "open returned: " << strerror (err) << "\n";
-    exit (-1);
-  }
 }
 
 dhblock_chash_srv::~dhblock_chash_srv ()
@@ -104,6 +79,8 @@ dhblock_chash_srv::~dhblock_chash_srv ()
 void
 dhblock_chash_srv::sync_cb ()
 {
+
+  // DDD call db sync? Probably just drop this
   // Probably only one of sync or checkpoint is needed.
   db->sync ();
   db->checkpoint ();
@@ -141,52 +118,28 @@ dhblock_chash_srv::stop ()
 }
 
 
-dhash_stat
-dhblock_chash_srv::store (chordID key, ptr<dbrec> d)
-{
-  ptr<dbrec> k = id2dbrec (key);
-  int ret = db_insert_immutable (k, d);
-  if (ret != 0) {
-    warning << "db write failure: " << db_strerror (ret) << "\n";
-    return DHASH_ERR; 
-  }
-  return DHASH_OK;
-}
-
-int
-dhblock_chash_srv::db_insert_immutable (ref<dbrec> key, ref<dbrec> data)
+void
+dhblock_chash_srv::store (chordID key, str d, cbi cb)
 {
   char *action;
-  merkle_hash mkey = to_merkle_hash (key);
-  bool exists = (database_lookup (db, mkey) != NULL);
-  int ret = 0;
-  if (!exists) {
+
+  if (!mtree->key_exists (key)) {
     action = "N"; // New
     // insert the key into the merkle tree 
     // for content hash, key is not bit-hacked
-    ret = mtree->insert (mkey);
+    merkle_hash mkey = to_merkle_hash (key);
+    mtree->insert (mkey);
+
     // also insert the data into our DB
-    db->insert (key, data);
-  } else {
-    action = "R"; // Re-write
-  }
-  bigint h = compute_hash (data->value, data->len);
+    db->store (key, d, cb);
+  } else
+    action = "R";
+  
+  bigint h = compute_hash (d.cstr (), d.len ());
   info << "db write: " << node->my_ID () << " " << action
-       << " " << dbrec2id(key) << " " << data->len 
+       << " " << key << " " << d.len () 
        << " " << h
        << "\n";
-  return ret;
-}
-
-void
-dhblock_chash_srv::db_delete_immutable (ref<dbrec> key)
-{
-  merkle_hash hkey = to_merkle_hash (key);
-  bool exists = database_lookup (db, hkey);
-  assert (exists);
-  mtree->remove (hkey);
-  info << "db delete: " << node->my_ID ()
-       << " " << dbrec2id(key) << "\n";
 }
 
 void
@@ -276,13 +229,34 @@ dhblock_chash_srv::repair (blockID k, ptr<location> to)
   // cases for a repair; the end of each branch must decrement!
   repair_outstanding++;
 
-  ref<dbrec> dbk = id2dbrec (k.ID);
-  ptr<dbrec> hit = cache_db->lookup (dbk);
-  if (hit) {
-    str blk (hit->value, hit->len);
-    send_frag (k, blk, to);
+  //check the cache database
+  cache_db->fetch (k.ID, wrap (this, &dhblock_chash_srv::repair_cache_cb,
+			       k, to));
+}
+
+void
+dhblock_chash_srv::repair_cache_cb (blockID k, ptr<location> to, 
+				    adb_status stat, chordID key, str d)
+{
+  if (stat == ADB_OK) {
+    send_frag (k, d, to);
   } else {
-    cli->retrieve (k, wrap (this, &dhblock_chash_srv::repair_retrieve_cb, k, to));
+    cli->retrieve (k, 
+		   wrap (this, &dhblock_chash_srv::repair_retrieve_cb, k, to));
+  }
+}
+
+void
+dhblock_chash_srv::repair_store_cb (chordID key, ptr<location> to, 
+				      int stat)
+{
+  if (stat != ADB_OK) {
+    warning << "dhblock_chash_srv database store error: "
+	    << stat << "\n";
+  } else {
+    info << "repair: " << node->my_ID ()
+	 << " sent " << key << " to " << to->id () <<  " (me).\n";
+    
   }
 }
 
@@ -293,18 +267,13 @@ dhblock_chash_srv::send_frag (blockID key, str block, ptr<location> to)
   if (m > dhblock_chash::num_dfrags ())
     m = dhblock_chash::num_dfrags ();
   str frag = Ida::gen_frag (m, block);
+
+  //if the block will be sent to us, just store it instead of sending
+  // an RPC to ourselves. This will happen a lot, so the optmization
+  // is probably worth it.
   if (to == node->my_location ()) {
-    ref<dbrec> d = New refcounted<dbrec> (frag.cstr (), frag.len ());
-    ref<dbrec> k = id2dbrec (key.ID);
-    int ret = db_insert_immutable (k, d);
-    if (ret != 0) {
-      warning << "merkle db_insert_immutable failure: "
-	      << db_strerror (ret) << "\n";
-    } else {
-      info << "repair: " << node->my_ID ()
-	   << " sent " << key << " to " << to->id () <<  ".\n";
-      bsm->unmissing (node->my_location (), key.ID);
-    }
+    db->store (key.ID, frag, wrap (this, &dhblock_chash_srv::repair_store_cb, key.ID, to));
+    bsm->unmissing (node->my_location (), key.ID);
     repair_outstanding--;
   } else {
     cli->sendblock (to, key, frag, 
@@ -327,6 +296,11 @@ dhblock_chash_srv::send_frag_cb (ptr<location> to, blockID k,
          << " (" << err << ").\n";
 }
 
+void store_res (str context, int stat)
+{
+  if (stat != ADB_OK) 
+    warn << "store errror: " << context << "\n";
+}
 void
 dhblock_chash_srv::repair_retrieve_cb (blockID k, ptr<location> to,
                                 dhash_stat err, ptr<dhash_block> b, route r)
@@ -337,11 +311,9 @@ dhblock_chash_srv::repair_retrieve_cb (blockID k, ptr<location> to,
     repair_outstanding--;
   } else {
     assert (b);
-    // Oh, the memory copies.
+
     // Cache this for future reference.
-    ref<dbrec> key = id2dbrec (k.ID);
-    ref<dbrec> data = New refcounted<dbrec> (b->data.cstr (), b->data.len ());
-    cache_db->insert (key, data);
+    cache_db->store (k.ID, b->data, wrap (store_res, str("caching block")));
 
     send_frag (k, b->data, to);
   }
@@ -371,16 +343,12 @@ dhblock_chash_srv::offer (user_args *sbp, dhash_offer_arg *arg)
     chordID pred = node->my_pred ()->id ();
     bool mine = between (pred, node->my_ID (), key);
 
-    // now that we are in succ list don't need to special case for ourselves
-    //	ref<dbrec> kkk = id2dbrec (key);
-    //	ptr<dbrec> hit = db->lookup (kkk);
-
     // belongs to me and isn't replicated well
     if (mine && count < dhblock_chash::num_efrags ()) {
       res.resok->accepted[i] = DHASH_SENDTO;
-      // best missing might be me (RPC to myself is OK)
       ptr<location> l = bsm->best_missing (key, node->succs ());
-      trace << "server: sending " << key << ": count=" << count << " to=" << l->id () << "\n";
+      trace << "server: sending " << key << ": count=" << count 
+	    << " to=" << l->id () << "\n";
       l->fill_node (res.resok->dest[i]);
       bsm->unmissing (l, key);
     } else {

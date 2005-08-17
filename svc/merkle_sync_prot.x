@@ -29,7 +29,7 @@ struct getkeys_arg {
 };
 
 struct getkeys_res_ok {
-  merkle_hash keys<64>;
+  bigint keys<64>;
   bool morekeys;
 };
 

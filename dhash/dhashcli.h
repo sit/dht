@@ -2,6 +2,7 @@
 #define __DHASH_CLI_H_
 
 #include <sys/types.h>
+#include "adb_prot.h"
 
 // SFS includes
 #include <vec.h>
@@ -13,7 +14,7 @@ typedef callback<void, dhash_stat, vec<chord_node>, route>::ref
 typedef	callback<void, dhash_stat, bool>::ref sendblockcb_t;
 
 // Forward declarations
-class dbfe;
+class adb;
 class vnode;
 class dhash;
 class dhash_block;
@@ -113,8 +114,12 @@ private:
                                int options, int retries, ptr<chordID> guess,
 			       ptr<dhash_block> blk);
 
+  void sendblock_fetch_cb (ptr<location> dst, blockID bid_to_send,
+			   sendblockcb_t cb, adb_status stat,
+			   chordID key, str data);
   void sendblock_cb (callback<void, dhash_stat, bool>::ref cb, 
 		     dhash_stat err, chordID dest, bool present);
+
   void on_timeout (ptr<rcv_state> rs, 
 		   ptr<dhblock> b,
 		   chord_node dest,
@@ -133,7 +138,7 @@ public:
 	       ptr<chordID> guess = NULL);
 
   void sendblock (ptr<location> dst, blockID bid,
-		  ptr<dbfe> db, sendblockcb_t cb);
+		  ptr<adb> db, sendblockcb_t cb);
 
   //send a specific fragment (not the one in the DB)
   void sendblock (ptr<location> dst, blockID bid, str data,

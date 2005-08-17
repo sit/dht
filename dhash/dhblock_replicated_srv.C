@@ -21,12 +21,13 @@
 #include <dmalloc.h>
 #endif
 
+
 dhblock_replicated_srv::dhblock_replicated_srv (ptr<vnode> node,
-				          str desc,
-					  str dbname,
-					  dbOptions opts,
-					  dhash_ctype ctype) :
-  dhblock_srv (node, desc, dbname, opts),
+						str desc,
+						str dbname,
+						str dbext,
+						dhash_ctype ctype) :
+  dhblock_srv (node, desc, dbname, dbext),
   ctype (ctype),
   nrpcsout (0),
   checkrep_tcb (NULL),
@@ -42,29 +43,45 @@ dhblock_replicated_srv::~dhblock_replicated_srv ()
   stop ();
 }
 
-dhash_stat
-dhblock_replicated_srv::store (chordID key, ptr<dbrec> d)
+void
+dhblock_replicated_srv::store (chordID key, str d, cbi cb)
 {
-  dhash_stat stat (DHASH_OK);
 
-  ref<dbrec> k = id2dbrec (key);
-  ptr<dbrec> prev = db->lookup (k);
-  if (prev) {
+  db->fetch (key, wrap (this, &dhblock_replicated_srv::store_fetch_cb, 
+			cb, d));
+}
+
+
+void 
+dhblock_replicated_srv::delete_cb (chordID k, str d, cbi cb, int stat) 
+{
+  assert (stat == ADB_OK);
+  info << "db write: " << node->my_ID ()
+       << " U " << k << " " << d.len () << "\n";
+  
+  db->store (k, d, cb);
+
+};
+
+void
+dhblock_replicated_srv::store_fetch_cb (cbi cb, str d,
+					adb_status stat, 
+					chordID key,
+					str prev)
+{
+  if (stat == ADB_OK) {
     if (is_block_stale (prev, d)) {
       chordID p = node->my_pred ()->id ();
       chordID m = node->my_ID ();
       if (betweenrightincl (p, m, key))
-	stat = DHASH_STALE;
+	cb (DHASH_STALE);
     }
     else {
       info << "db delete: " << key << "\n";
-      db->del (k);
+      db->remove (key, wrap (this, &dhblock_replicated_srv::delete_cb, key, d, cb));
     }
   }
-  db->insert (k, d);
-  info << "db write: " << node->my_ID ()
-       << " U " << key << " " << d->len << "\n";
-  return stat;
+
 }
 
 

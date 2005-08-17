@@ -8,18 +8,20 @@ class dhblock_noauth_srv : public dhblock_replicated_srv
 {
 public:
   
-  dhblock_noauth_srv (ptr<vnode> node, str desc, str dbname, dbOptions opts);
+  dhblock_noauth_srv (ptr<vnode> node, str desc, str dbname, str dbext);
 
-  bool is_block_stale (ref<dbrec> prev, ref<dbrec> d) { return false; };
+  bool is_block_stale (str prev, str d) { return false; };
   void bsmupdate (user_args *sbp, dhash_bsmupdate_arg *arg);
-  dhash_stat store (chordID key, ptr<dbrec> new_data);
-  ptr<dbrec> fetch (chordID k);
+  void store (chordID key, str new_data, cbi cb);
+  void fetch (chordID k, cb_fetch cb);
 
-  static ptr<dbrec> get_merkle_key (chordID key, ptr<dbrec> data);
-  static ptr<dbrec> get_database_key (chordID key);
+  static chordID get_merkle_key (chordID key, str data);
+  static chordID get_database_key (chordID key);
 private:
-  
-  ptr<dbrec> merge_data (chordID key, ptr<dbrec> new_data);
+
+  void iterate_cb (adb_status stat, vec<chordID> keys);  
+  void iterate_fetch_cb (adb_status stat, chordID key, str data);
+  str merge_data (chordID key, str new_data, str old_data);
 
   void repair_retrieve_cb (chordID dbkey,  
 			   dhash_stat err, 
@@ -27,7 +29,9 @@ private:
 			   route r);
 
   void repair_send_cb (dhash_stat err, bool something);
-
+  void store_after_fetch_cb (str new_data, cbi cb, adb_status err,
+			     chordID dbkey, str old_data);
+  void after_delete (chordID key, str data, cbi cb, int err);
 };
 
 #endif

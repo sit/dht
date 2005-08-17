@@ -28,7 +28,7 @@ start_logs ()
       close (logfd);
     logfd = open (logfname, O_RDWR | O_CREAT, 0666);
     if (logfd < 0)
-      fatal << "Could not open log file " << optarg << " for appending.\n";
+      fatal << "Could not open log file " << logfd << " for appending.\n";
     lseek (logfd, 0, SEEK_END);
     errfd = logfd;
     modlogger::setlogfd (logfd);
@@ -133,14 +133,15 @@ main (int argc, char **argv)
     ret.x = make_chordID (ret.r.hostname, ret.r.port, i);
     ptr<location> n = New refcounted<location> (ret);
 
-    str dbname = strbuf () << db_name << "-" << i;
+    //dbname format: ID.".c"
+    str dbname = strbuf () << ret.x << ".c";
     // XXX don't hard-code this
-    vNew syncer (locations, n, dbname, DHASH_CONTENTHASH);
+    vNew syncer (locations, n, db_name, dbname, DHASH_CONTENTHASH);
     
     int v;
     Configurator::only ().get_int ("dhash.replica", v);
-    dbname = strbuf () << db_name << "-" << i << ".n";
-    vNew syncer (locations, n, dbname, DHASH_NOAUTH, v, v);
+    dbname = strbuf () << ret.x << ".n";
+    vNew syncer (locations, n, db_name, dbname, DHASH_NOAUTH, v, v);
   }
 
   // XXX check if lsd is running

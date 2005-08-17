@@ -695,9 +695,8 @@ main (int argc, char **argv)
 				     vnodes,
                                      max_loccache);
   for (int i = 0; i < vnodes; i++) {
-    str db_name_prime = strbuf () << db_name << "-" << i;
     ptr<vnode> v = chordnode->get_vnode (i);
-    dh.push_back (dhash::produce_dhash (v, db_name_prime));
+    dh.push_back (dhash::produce_dhash (v, db_name));
   }
 
   chordnode->startchord ();

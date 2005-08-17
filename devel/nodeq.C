@@ -163,8 +163,7 @@ getkeys_cb (const chord_node dst, ref<getkeys_arg> arg, ref<getkeys_res> res,
   }
 
   for (u_int i = 0; i < res->resok->keys.size (); i++) {
-    const merkle_hash &key = res->resok->keys[i];
-    bigint key2  = tobigint (key);
+    const chordID &key2 = res->resok->keys[i];
     aout << key2 << "\n";
     arg->rngmin = incID (key2);
   }

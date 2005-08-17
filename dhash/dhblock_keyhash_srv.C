@@ -9,16 +9,16 @@
 dhblock_keyhash_srv::dhblock_keyhash_srv (ptr<vnode> node,
 				          str desc,
 					  str dbname,
-					  dbOptions opts) :
-  dhblock_replicated_srv (node, desc, dbname, opts, DHASH_KEYHASH)
+					  str dbext) :
+  dhblock_replicated_srv (node, desc, dbname, dbext, DHASH_KEYHASH)
 {
 }
 
 bool
-dhblock_keyhash_srv::is_block_stale (ref<dbrec> prev, ref<dbrec> d)
+dhblock_keyhash_srv::is_block_stale (str prev, str d)
 {
-  long v0 = dhblock_keyhash::version (prev->value, prev->len);
-  long v1 = dhblock_keyhash::version (d->value, d->len);
+  long v0 = dhblock_keyhash::version (prev.cstr (), d.len ());
+  long v1 = dhblock_keyhash::version (d.cstr (), d.len ());
   if (v0 >= v1)
     return true;
   return false;

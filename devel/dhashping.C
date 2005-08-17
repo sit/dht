@@ -52,8 +52,7 @@ fetch (chord_node dst, chordID k, u_int size)
   arg->ctype = DHASH_CONTENTHASH;
   arg->start = 0;
   arg->len = 1024;
-  arg->cookie = 0;
-
+  
   ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> ();
 
   u_int64_t start = getusec ();
@@ -78,7 +77,7 @@ getkeys_cb (u_int64_t start,
   }
 
   warn << "getkeys: " << (getusec () - start)/1000 << "ms\n";
-  bigint k = tobigint (res->resok->keys[0]);
+  bigint k = res->resok->keys[0];
   fetch (dst, k, 0);
 }
 

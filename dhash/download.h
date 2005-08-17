@@ -26,17 +26,16 @@ private:
   u_int64_t start;
 
   dhash_download (ptr<vnode> clntnode, chord_node source, blockID blockID,
-		  char *data, u_int len, u_int totsz, int cookie,
+		  char *data, u_int len, u_int totsz,
 		  cbretrieve_t cb, cbtmo_t cb_tmo = NULL);
   ~dhash_download ();
 
-  void getchunk (u_int start, u_int len, int cookie, gotchunkcb_t cb);
+  void getchunk (u_int start, u_int len, gotchunkcb_t cb);
   void gotchunk (gotchunkcb_t cb, ptr<dhash_fetchiter_res> res,
 		 int chunknum, clnt_stat err);
   void first_chunk_cb  (ptr<dhash_fetchiter_res> res, int chunknum,
                         clnt_stat err);
-  void process_first_chunk (char *data, size_t datalen, size_t totsz,
-                            int cookie);
+  void process_first_chunk (char *data, size_t datalen, size_t totsz);
   void later_chunk_cb (ptr<dhash_fetchiter_res> res, int chunknum,
                        clnt_stat err);
   void add_data (char *data, int len, int off);
@@ -45,13 +44,12 @@ private:
 
 public:
   static void execute (ptr<vnode> clntnode, chord_node source, blockID blockID,
-		       char *data, u_int len, u_int totsz, int cookie,
+		       char *data, u_int len, u_int totsz, 
 		       cbretrieve_t cb,
 		       cbtmo_t cb_tmo = NULL) 
-    // XXX wtf is this cookie shit
   {
     vNew dhash_download
-      (clntnode, source, blockID, data, len, totsz, cookie, cb, cb_tmo);
+      (clntnode, source, blockID, data, len, totsz, cb, cb_tmo);
   }
 };
 

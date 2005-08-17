@@ -110,12 +110,6 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
 
   trace << myID << ": retrieve (" << blockID << "): new retrieve.\n";
   
-  // First check to see if we're using TCP.  In that case, we should
-  // ship the data over the wire.
-  if (dhash_tcp_transfers) {
-    dofetchrec_execute (blockID, cb);
-    return;
-  }
   
   ptr<rcv_state> rs = New refcounted<rcv_state> (blockID, cb);
   
@@ -234,7 +228,7 @@ dhashcli::fetch_frag (ptr<rcv_state> rs, ptr<dhblock> b)
 
   dhash_download::execute (clntnode, rs->succs[i], 
 			   blockID(rs->key.ID, rs->key.ctype),
-			   (char *)NULL, 0, 0, 0, 
+			   (char *)NULL, 0, 0, 
 			   wrap (this, &dhashcli::retrieve_fetch_cb, rs, i, b),
 			   wrap (this, &dhashcli::on_timeout, rs, b));
   rs->nextsucc += 1;
@@ -563,15 +557,23 @@ dhashcli::sendblock (ptr<location> dst, blockID bid, str data,
 }
 
 void
-dhashcli::sendblock (ptr<location> dst, blockID bid_to_send, ptr<dbfe> from_db,
+dhashcli::sendblock (ptr<location> dst, blockID bid_to_send, ptr<adb> from_db,
 		     sendblockcb_t cb)
 {
   
-  ptr<dbrec> blk = from_db->lookup (id2dbrec (bid_to_send.ID));
-  if(!blk)
+  from_db->fetch (bid_to_send.ID, 
+		  wrap (this, &dhashcli::sendblock_fetch_cb, dst, 
+			bid_to_send, cb));
+}
+
+void
+dhashcli::sendblock_fetch_cb (ptr<location> dst, blockID bid_to_send,
+			      sendblockcb_t cb, adb_status stat,
+			      chordID key, str data)
+{
+  if(stat != ADB_OK)
     cb (DHASH_NOENT, false);
 
-  str data (blk->value, blk->len);
   dhash_store::execute 
     (clntnode, dst, bid_to_send, data,
      wrap (this, &dhashcli::sendblock_cb, cb),

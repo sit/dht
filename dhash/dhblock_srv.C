@@ -11,7 +11,7 @@
 dhblock_srv::dhblock_srv (ptr<vnode> node,
 		          str desc,
 			  str dbname,
-			  dbOptions opts) :
+			  str dbext) :
   node (node),
   desc (desc),
   synctimer (NULL),
@@ -20,14 +20,8 @@ dhblock_srv::dhblock_srv (ptr<vnode> node,
   // XXX share cli with dhash object??
   cli = New refcounted<dhashcli> (node);
 
-  db = New refcounted<dbfe> ();
-
-  if (int err = db->opendb (const_cast <char *> (dbname.cstr ()), opts))
-  {
-    warn << desc << ": " << dbname <<"\n";
-    warn << "open returned: " << strerror (err) << "\n";
-    exit (-1);
-  }
+  db = New refcounted<adb> (dbname, dbext);
+  warn << "opened " << dbname << " with space " << dbext << "\n";
 }
 
 dhblock_srv::~dhblock_srv ()
@@ -66,19 +60,20 @@ dhblock_srv::sync_cb ()
   synctimer = delaycb (dhash::synctm (), wrap (this, &dhblock_srv::sync_cb));
 }
 
-ptr<dbrec>
-dhblock_srv::fetch (chordID k)
+void
+dhblock_srv::fetch (chordID k, cb_fetch cb)
 {
-  ptr<dbrec> id = id2dbrec (k);
-  return db->lookup (id);
+  db->fetch (k, cb);
 }
 
+#ifdef DDD
 bool
 dhblock_srv::key_present (const blockID &n)
 {
   ptr<dbrec> val = fetch (n.ID);
   return (val != NULL);
 }
+#endif
 
 void
 dhblock_srv::stats (vec<dstat> &s)

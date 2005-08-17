@@ -1,8 +1,8 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.39 2005/05/14 06:35:04 strib Exp $
+# $Id: Makefile.am,v 1.40 2005/08/17 03:51:45 fdabek Exp $
 
 
-BASEDIRS = svc utils merkle chord dhc dhash sfsrodb devel lsd
+BASEDIRS = svc utils merkle chord dhash sfsrodb devel lsd
 SUBDIRS_ALL = $(BASEDIRS) chordcd test tst melody proxy usenet arpeggio amud
 SUBDIRS_SOME = $(BASEDIRS)
 if COND_ALL

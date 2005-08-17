@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.48 2005/08/03 04:40:58 fdabek Exp $
+# $Id: Makefile.am,v 1.49 2005/08/17 03:51:53 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -15,7 +15,7 @@ EXTRA_DIST = .cvsignore $(bin_SCRIPTS) $(chorddata_DATA)
 CLEANFILES = core *.core *~ *.rpo
 MAINTAINERCLEANFILES = Makefile.in
 
-noinst_PROGRAMS = coords dhc_test pkc builddb
+noinst_PROGRAMS = coords 
 noinst_HEADERS = rpclib.h
 
 dbm_noauth_SOURCES = dhash_benchmark_noauth.C

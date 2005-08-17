@@ -4,8 +4,12 @@
 #include "qhash.h"
 #include "merkle_hash.h"
 #include "merkle_sync_prot.h"
+#include "libadb.h"
 
-vec<merkle_hash> database_get_keys     (dbfe *db, u_int depth, 
+vec<chordID>
+database_get_IDs (ptr<adb> db, u_int depth, const merkle_hash &prefix);
+
+vec<merkle_hash> database_get_keys     (ptr<adb> db, u_int depth, 
 				        const merkle_hash &prefix);
 
 ptr<dbrec> to_merkle_key (ptr<dbfe> db, ptr<dbrec> key, dhash_ctype c);
@@ -35,17 +39,11 @@ reverse (u_char *buf, u_int size)
   }
 }
 
+merkle_hash to_merkle_hash (str a);
+merkle_hash to_merkle_hash (bigint id);
 
-static inline merkle_hash
-to_merkle_hash (ptr<dbrec> a)
-{
-  merkle_hash h;
-  assert (a->len == h.size);
-  bcopy (a->value, h.bytes, h.size);
-  reverse (h.bytes, h.size);
-  return h;
-}
 
+#if 0
 static inline ref<dbrec>
 todbrec (const merkle_hash &h)
 {
@@ -53,6 +51,7 @@ todbrec (const merkle_hash &h)
   reverse ((u_char *)ret->value, ret->len);
   return ret;
 }
+#endif
 
 static inline bigint
 tobigint (const merkle_hash &h)
@@ -72,7 +71,7 @@ tobigint (const merkle_hash &h)
 #endif
 }
 
-
+#if 0
 static inline ref<dbrec>
 id2dbrec(chordID id)
 {
@@ -88,30 +87,11 @@ dbrec2id (ptr<dbrec> r)
 {
   return tobigint (to_merkle_hash (r));
 }
+#endif
 
 
-static inline int
-database_remove (dbfe *db, merkle_hash& key)
-{
-  return db->del (todbrec(key));
-}
 
 
-static inline int
-database_insert (dbfe *db, merkle_hash& key)
-{
-  ptr<dbrec> FAKE_DATA = New refcounted<dbrec> ("", 1);
-  int ret = db->insert (todbrec (key), FAKE_DATA);
-  return ret;
-}
-
-
-static inline ptr<dbrec>
-database_lookup (dbfe *db, const merkle_hash &key)
-{
-  ptr<dbrec> ret = db->lookup (todbrec (key));
-  return ret;
-}
 
 
 

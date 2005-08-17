@@ -1,11 +1,8 @@
 #ifndef _DHBLOCK_SRV_H_
 #define _DHBLOCK_SRV_H_
 
-#include "dbfe.h"
 #include "dhash.h"
-
-class dbrec;
-struct dbOptions;
+#include "libadb.h"
 
 class vnode;
 class dhashcli;
@@ -18,7 +15,7 @@ struct merkle_server;
 /** This class serves as the parent for new block storage types */
 class dhblock_srv {
  protected:
-  ptr<dbfe> db;
+  ptr<adb> db;
   const ptr<vnode> node;
   const str desc;
 
@@ -28,8 +25,7 @@ class dhblock_srv {
   ptr<dhashcli> cli;
 
  public:
-  dhblock_srv (ptr<vnode> node, str desc, str dbname,
-               dbOptions opts);
+  dhblock_srv (ptr<vnode> node, str desc, str dbname, str dbext);
   virtual ~dhblock_srv ();
 
   virtual void start (bool randomize);
@@ -38,10 +34,10 @@ class dhblock_srv {
   virtual void stats (vec<dstat> &s);
   virtual const strbuf &key_info (const strbuf &sb);
 
-  virtual bool key_present (const blockID &n);
+  //DDD  virtual bool key_present (const blockID &n);
 
-  virtual dhash_stat store (chordID k, ptr<dbrec> d) = 0;
-  virtual ptr<dbrec> fetch (chordID k);
+  virtual void store (chordID k, str d, cbi cb) = 0;
+  virtual void fetch (chordID k, cb_fetch cb);
 
   virtual void offer (user_args *sbp, dhash_offer_arg *arg);
   virtual void bsmupdate (user_args *sbp, dhash_bsmupdate_arg *arg);

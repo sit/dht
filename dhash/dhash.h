@@ -39,7 +39,6 @@
 class location;
 class vnode;
 class dhash_block;
-class dbrec;
 class blockID;
 
 /*
@@ -54,7 +53,7 @@ struct dstat {
   dstat (str s, u_int64_t n) : desc (s), value (n) {};
 };
 
-typedef callback<void, int, ptr<dbrec>, dhash_stat>::ptr cbvalue;
+typedef callback<void, str, dhash_stat>::ptr cbvalue;
 typedef callback<void,dhash_stat>::ptr cbstat_t;
 typedef callback<void, s_dhash_block_arg *>::ptr cbblockuc_t;
 typedef callback<void, dhash_stat, ptr<dhash_block>, vec<ptr<location> > >::ptr cb_ret;

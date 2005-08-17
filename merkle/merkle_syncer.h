@@ -62,13 +62,13 @@ class merkle_syncer {
 class merkle_getkeyrange {
 private:
   dhash_ctype ctype;
-  dbfe *db;
+  ptr<adb> db;
   bigint rngmin;
   bigint rngmax;
   bigint current;
   missingfnc_t missing;
   rpcfnc_t rpcfnc;
-  vec<merkle_hash> lkeys;
+  vec<chordID> lkeys;
 
 
   void go ();
@@ -77,9 +77,9 @@ private:
 
 public:
   ~merkle_getkeyrange () {}
-  merkle_getkeyrange (dhash_ctype ctype, dbfe *db, 
+  merkle_getkeyrange (dhash_ctype ctype, ptr<adb> db, 
 		      bigint rngmin, bigint rngmax, 
-		      vec<merkle_hash> plkeys,
+		      vec<chordID> plkeys,
 		      missingfnc_t missing, rpcfnc_t rpcfnc)
     : ctype (ctype), db (db), rngmin (rngmin), 
       rngmax (rngmax), current (rngmin), 
@@ -100,7 +100,7 @@ compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax,
 	       dhash_ctype ctype, missingfnc_t missingfnc, rpcfnc_t rpcfnc);
 
 void
-compare_keylists (vec<merkle_hash> lkeys, vec<merkle_hash> rkeys,
+compare_keylists (vec<chordID> lkeys, vec<chordID> rkeys,
 		  chordID rngmin, chordID rngmax,
 		  missingfnc_t missingfnc);
 

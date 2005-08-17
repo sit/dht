@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.19 2005/06/27 02:11:21 fdabek Exp $
+# $Id: Makefile.am,v 1.20 2005/08/17 03:51:53 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS)
 
@@ -65,7 +65,6 @@ libdhash_a_SOURCES = \
 		     gateway.C \
 		     download.C \
 		     dhash_store.C \
-		     dhash_fetchrec.C \
 		     pmaint.C \
 		     server.C \
 		     dhblock.C \

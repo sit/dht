@@ -3,6 +3,7 @@
 
 #include "dhash.h"
 #include <qhash.h>
+#include "adb_prot.h"
 
 // Forward declarations.
 class RPC_delay_args;
@@ -53,19 +54,8 @@ struct store_state {
   bool iscomplete ();
 };
 
-struct pk_partial {
-  ptr<dbrec> val;
-  int bytes_read;
-  int cookie;
-  ihash_entry <pk_partial> link;
-
-  pk_partial (ptr<dbrec> v, int c) : val (v), 
-		bytes_read (0),
-		cookie (c) {};
-};
 
 class dhash_impl : public dhash {
-  int pk_partial_cookie;
   
   qhash<dhash_ctype, ref<dhblock_srv> > blocksrv;
 
@@ -74,9 +64,6 @@ class dhash_impl : public dhash {
 
   ihash<chordID, store_state, &store_state::key, 
     &store_state::link, hashID> pst;
-  
-  ihash<int, pk_partial, &pk_partial::cookie, 
-    &pk_partial::link> pk_cache;
   
   void route_upcall (int procno, void *args, cbupcalldone_t cb);
 
@@ -96,19 +83,20 @@ class dhash_impl : public dhash {
   void storesvc_cb (user_args *sbp, s_dhash_insertarg *arg, 
 		    bool already_present, dhash_stat err);
   dhash_fetchiter_res * block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
-				      int cookie, ptr<dbrec> val);
+				      str val);
   void fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *farg,
-			     int cookie, ptr<dbrec> val, dhash_stat stat);
+			     str val, dhash_stat stat);
   void fetchiter_sbp_gotdata_cb (user_args *sbp, s_dhash_fetch_arg *farg,
-				 int cookie, ptr<dbrec> val, dhash_stat stat);
+				 str val, dhash_stat stat);
   void sent_block_cb (dhash_stat *s, clnt_stat err);
 
-  void fetch (blockID id, int cookie, cbvalue cb);
+  void fetch (blockID id, cbvalue cb);
+  void fetch_after_db (blockID id, cbvalue cb,
+		       adb_status stat, chordID k, str data);
 
   void store (s_dhash_insertarg *arg, cbstore cb);
   
   bool key_present (const blockID &n);
-  ptr<dbrec> dblookup (const blockID &i);
 
   void dofetchrec (user_args *sbp, dhash_fetchrec_arg *arg);
   void dofetchrec_nexthop (user_args *sbp, dhash_fetchrec_arg *arg,

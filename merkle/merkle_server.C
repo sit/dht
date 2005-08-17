@@ -8,6 +8,7 @@
 #include <location.h>
 #include <locationtable.h>
 #include <comm.h>
+#include "libadb.h"
 
 // ---------------------------------------------------------------------------
 // merkle_server
@@ -60,42 +61,42 @@ merkle_server::dispatch (user_args *sbp)
     {
       getkeys_arg *arg = sbp->template getarg<getkeys_arg> ();
 
-      ptr<dbPair> d;
-      vec<ptr<dbrec> > keys;
-      ptr<dbEnumeration> enumer = ltree->db->enumerate ();
-      for (u_int i = 0; i < 64; i++) {
-	if (i == 0)
-	  d = enumer->nextElement (id2dbrec(arg->rngmin)); // off-by-one??? 
-	else
-	  d = enumer->nextElement ();
-
-	if (!d ||
-	    !betweenbothincl (arg->rngmin, arg->rngmax, dbrec2id(d->key)))
-	  break;
-	keys.push_back (d->key);
-      }
-      
-      bool more = false;
-      if (keys.size () == 64) {
-	d = enumer->nextElement ();
-	if (d && 
-	    betweenbothincl (arg->rngmin, arg->rngmax, dbrec2id(d->key)))
-	  more = true;
-      }
-
-      getkeys_res res (MERKLE_OK);
-      res.resok->morekeys = more;
-      res.resok->keys.setsize (keys.size ());
-      for (u_int i = 0; i < keys.size (); i++)
-	res.resok->keys[i] = to_merkle_hash (keys[i]);
-
-      sbp->reply (&res);
+      ltree->db->getkeys (arg->rngmin, 
+			  wrap (this, &merkle_server::getkeys_cb,
+				sbp, arg));
       break;
     }
-
   default:
     fatal << "unknown proc in merkle " << sbp->procno << "\n";
     sbp->reject (PROC_UNAVAIL);
     break;
   }
 }
+
+
+void
+merkle_server::getkeys_cb (user_args *sbp, getkeys_arg *arg, adb_status stat, 
+			   vec<chordID> dbkeys)
+{
+  
+  vec<chordID> keys;
+  for (u_int i = 0; i < dbkeys.size () && i < 64; i++) {
+    if (!betweenbothincl (arg->rngmin, arg->rngmax, dbkeys[i]))
+      break;
+    keys.push_back (dbkeys[i]);
+  }
+  
+  bool more =  (keys.size () == 64 && // we took all we could get
+		dbkeys.size () > 64 && // there are more to get
+		// and they are potentially interesting
+		betweenbothincl (arg->rngmin, arg->rngmax, dbkeys[64]));
+    
+  getkeys_res res (MERKLE_OK);
+  res.resok->morekeys = more;
+  res.resok->keys.setsize (keys.size ());
+  for (u_int i = 0; i < keys.size (); i++)
+    res.resok->keys[i] = keys[i];
+  
+  sbp->reply (&res);
+}
+

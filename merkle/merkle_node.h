@@ -5,6 +5,7 @@
 #include "sha1.h"
 #include "merkle_hash.h"
 #include "merkle_misc.h"
+#include "libadb.h"
 
 class merkle_node {
 private:
@@ -24,7 +25,7 @@ public:
   merkle_node ();
   void initialize (u_int64_t _count);
   ~merkle_node ();
-  void check_invariants (u_int depth, merkle_hash prefix, dbfe *db);
+  void check_invariants (u_int depth, merkle_hash prefix, ptr<adb> db);
 };
 
 

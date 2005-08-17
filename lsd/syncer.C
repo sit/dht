@@ -8,7 +8,6 @@
 #include <block_status.h>
 #include <merkle_tree.h>
 #include <merkle_syncer.h>
-#include <dbfe.h>
 
 #include <syncer.h>
 
@@ -17,6 +16,7 @@ static int sync_trace (getenv ("SYNC_TRACE") ? atoi (getenv ("SYNC_TRACE")) : 0)
 syncer::syncer (ptr<locationtable> locations,
 		ptr<location> h,
 		str dbname,
+		str dbext,
 		dhash_ctype ctype,
 		u_int dfrags, u_int efrags)
   : bsm (New refcounted<block_status_manager> (h->id ()) ), 
@@ -27,17 +27,7 @@ syncer::syncer (ptr<locationtable> locations,
   locations->insert (h);
   locations->pin (h->id ());
   
-  db = New refcounted<dbfe> ();
-  dbOptions opts;
-  opts.addOption ("opt_async", 1);
-  opts.addOption ("opt_cachesize", 1000);
-  opts.addOption ("opt_nodesize", 4096);
-  opts.addOption ("opt_dbenv", 1);
-  opts.addOption ("opt_join", 1);
-  
-  if (int err = db->opendb (const_cast <char *> (dbname.cstr ()), opts)) {
-    fatal << "open returned: " << strerror (err) << "\n";
-  }
+  db = New refcounted<adb> (dbname, dbext);
   
   replica_timer = 300;
   if (sync_trace >= 10)
@@ -225,20 +215,21 @@ syncer::missing (ptr<location> from,
     
     //XXX check the DB to make sure we really are missing this block
     // might have gotten this because I tweaked the tree
-    ptr<dbrec> kr = id2dbrec(key);
-    if (!db->lookup (kr)) {
-      if (sync_trace) {
-	warnx << host_loc->id () << ": " << key << " missing locally\n";
-	warnx << host_loc->id () << ": " << key << " found on "<< from << "\n";
-      }
-      bsm->missing (host_loc, key);
-    } else 
-      return; //don't update in this case: we aren't actually missing a block
-    
+    db->fetch (key, wrap (this, &syncer::lookup_cb));    
   } else  {
     if (sync_trace) 
       warnx << host_loc->id () << ": " << key << " missing on " << from << "\n";
     bsm->missing (from, key);
   }
   
+}
+
+void
+syncer::lookup_cb (adb_status stat, chordID key, str data)
+{
+  if (stat != ADB_OK) {
+    if (sync_trace) 
+      warnx << host_loc->id () << ": " << key << " missing locally\n";
+    bsm->missing (host_loc, key);
+  } 
 }

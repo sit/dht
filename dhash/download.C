@@ -13,7 +13,7 @@
 
 dhash_download::dhash_download (ptr<vnode> clntnode, chord_node source,
 				blockID blockID, char *data, u_int len,
-				u_int totsz, int cookie, cbretrieve_t cb,
+				u_int totsz, cbretrieve_t cb,
 				cbtmo_t cb_tmo) :
   clntnode (clntnode),
   npending (0),
@@ -31,12 +31,12 @@ dhash_download::dhash_download (ptr<vnode> clntnode, chord_node source,
 {
   // the first chunk of data may be passed in
   if (data) {
-    process_first_chunk (data, len, totsz, cookie);
+    process_first_chunk (data, len, totsz);
     check_finish ();
   } else {
     unsigned mtu = (clntnode->my_location ()->id () == source.x)
       ? 8192 : dhblock::dhash_mtu ();
-    getchunk (0, mtu, 0, wrap (this, &dhash_download::first_chunk_cb));
+    getchunk (0, mtu, wrap (this, &dhash_download::first_chunk_cb));
   }
 }
 
@@ -49,14 +49,13 @@ dhash_download::~dhash_download ()
 }
 
 void
-dhash_download::getchunk (u_int start, u_int len, int cookie, gotchunkcb_t cb)
+dhash_download::getchunk (u_int start, u_int len, gotchunkcb_t cb)
 {
   ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
   arg->key   = blckID.ID;
   arg->ctype = blckID.ctype;
   arg->start = start;
   arg->len   = len;
-  arg->cookie = cookie;
 
   npending++;
   ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> ();
@@ -86,18 +85,16 @@ dhash_download::first_chunk_cb  (ptr<dhash_fetchiter_res> res, int chunknum,
   if (err || (res && res->status != DHASH_COMPLETE))
     fail (dhasherr2str (res->status));
   else {
-    int cookie     = res->compl_res->cookie;
     totsz   = res->compl_res->attr.size;
     size_t datalen = res->compl_res->res.size ();
     char  *data    = res->compl_res->res.base ();
-    process_first_chunk (data, datalen, totsz, cookie);
+    process_first_chunk (data, datalen, totsz);
   }
   check_finish ();
 }
 
 void
-dhash_download::process_first_chunk (char *data, size_t datalen, size_t totsz,
-				     int cookie)
+dhash_download::process_first_chunk (char *data, size_t datalen, size_t totsz)
 {
   buf_len = totsz;
   buffer = (char *)malloc (buf_len);
@@ -111,7 +108,7 @@ dhash_download::process_first_chunk (char *data, size_t datalen, size_t totsz,
     unsigned mtu = (clntnode->my_location ()->id () == source.x)
       ? 8192 : dhblock::dhash_mtu ();
     int length = MIN (mtu, totsz - nread);
-    getchunk (nread, length, cookie,
+    getchunk (nread, length,
 	      wrap (this, &dhash_download::later_chunk_cb));
     nread += length;
   }

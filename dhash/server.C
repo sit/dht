@@ -60,6 +60,8 @@
 
 #include <configurator.h>
 
+void store_after_store (int status);
+
 struct dhash_config_init {
   dhash_config_init ();
 } dci;
@@ -118,7 +120,6 @@ dhash_impl::~dhash_impl ()
 }
 
 dhash_impl::dhash_impl (ptr<vnode> node, str dbname) :
-  pk_partial_cookie (1),
   host_node (node),
   cli (NULL),
   bytes_stored (0),
@@ -140,29 +141,20 @@ dhash_impl::dhash_impl (ptr<vnode> node, str dbname) :
 
   cli = New refcounted<dhashcli> (host_node);
 
-  //set up the options we want
-  dbOptions opts;
-  opts.addOption ("opt_async", 1);
-  opts.addOption ("opt_cachesize", 1000);
-  opts.addOption ("opt_nodesize", 4096);
-  if (dhash::dhash_disable_db_env ())
-    opts.addOption ("opt_dbenv", 0);
-  else
-    opts.addOption ("opt_dbenv", 1);
-
   ptr<dhblock_srv> srv;
+  str ext = strbuf () << host_node->my_ID () << ".c";
   srv = New refcounted<dhblock_chash_srv> (node, "db file",
-      dbname, opts);
+      dbname, ext);
   blocksrv.insert (DHASH_CONTENTHASH, srv);
 
-  str kdbs = strbuf () << dbname << ".k";
+  ext = strbuf () << host_node->my_ID () << ".k";
   srv = New refcounted<dhblock_keyhash_srv> (node, "keyhash db file",
-      kdbs,  opts);
+      dbname, ext);
   blocksrv.insert (DHASH_KEYHASH, srv);
 
-  str ndbs = strbuf () << dbname << ".n";
+  ext = strbuf () << host_node->my_ID () << ".n";
   srv = New refcounted<dhblock_noauth_srv> (node, "noauth db file",
-      ndbs,  opts);
+      dbname, ext);
   blocksrv.insert (DHASH_NOAUTH, srv);
 
   int v;
@@ -171,6 +163,7 @@ dhash_impl::dhash_impl (ptr<vnode> node, str dbname) :
     start ();
 }
 
+/* DDD
 bool
 dhash_impl::key_present (const blockID &n)
 {
@@ -179,10 +172,10 @@ dhash_impl::key_present (const blockID &n)
     return false;
   return srv->key_present (n);
 }
+*/
 
 dhash_fetchiter_res *
-dhash_impl::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
-		          int cookie, ptr<dbrec> val)
+dhash_impl::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg, str val)
 {
   dhash_fetchiter_res *res;
   if (err) 
@@ -190,28 +183,21 @@ dhash_impl::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
   else {
     res = New dhash_fetchiter_res  (DHASH_COMPLETE);
 
+    int vlen = (int)val.len ();
     if (arg->start < 0)
       arg->start = 0;
-    if (arg->start > val->len)
-      arg->start = val->len;
+    if (arg->start > vlen)
+      arg->start = vlen;
     
-    int n = (arg->len + arg->start < val->len) ? 
-      arg->len : val->len - arg->start;
+    int n = (arg->len + arg->start < vlen) ? 
+      arg->len : vlen - arg->start;
 
     res->compl_res->res.setsize (n);
-    res->compl_res->attr.size = val->len;
+    res->compl_res->attr.size = vlen;
     res->compl_res->offset = arg->start;
     res->compl_res->source = host_node->my_ID ();
-    res->compl_res->cookie = cookie;
-    memcpy (res->compl_res->res.base (), (char *)val->value + arg->start, n);
+    memcpy (res->compl_res->res.base (), (char *)val.cstr () + arg->start, n);
     
-    //free the cookie if we just read the last byte
-    pk_partial *part = pk_cache[cookie];
-    if (part &&
-	arg->len + arg->start == val->len) {
-      pk_cache.remove (part);
-      delete part;
-    }
 	
     bytes_served += n;
   }
@@ -222,10 +208,9 @@ dhash_impl::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
 
 void
 dhash_impl::fetchiter_sbp_gotdata_cb (user_args *sbp, s_dhash_fetch_arg *arg,
-				      int cookie, ptr<dbrec> val, 
-				      dhash_stat err)
+				      str val, dhash_stat err)
 {
-  dhash_fetchiter_res *res = block_to_res (err, arg, cookie, val);
+  dhash_fetchiter_res *res = block_to_res (err, arg, val);
   sbp->reply (res);
   delete res;
 }
@@ -253,20 +238,21 @@ dhash_impl::dispatch (user_args *sbp)
   switch (sbp->procno) {
   case DHASHPROC_FETCHREC:
     {
-      // This RPC may take a long time to respond.
-      dhash_fetchrec_arg *arg = sbp->template getarg<dhash_fetchrec_arg> ();
-      dofetchrec (sbp, arg);
+      assert (0);
+      // dhash_fetchrec_arg *arg = sbp->template getarg<dhash_fetchrec_arg> ();
+      //dofetchrec (sbp, arg);
     }
     break;
   case DHASHPROC_FETCHITER:
     {
+      //DDD we're going to block the RPC during the fetch. fix later.
       s_dhash_fetch_arg *farg = sbp->template getarg<s_dhash_fetch_arg> ();
       blockID id (farg->key, farg->ctype);
 
-      if (key_present (id) && (farg->len > 0)) {
+      if (farg->len > 0) {	
         //fetch the key and return it, end of story
-        fetch (id, farg->cookie,
-               wrap (this, &dhash_impl::fetchiter_sbp_gotdata_cb, sbp, farg));
+        fetch (id, wrap (this, &dhash_impl::fetchiter_sbp_gotdata_cb, 
+			 sbp, farg));
       } else {
         dhash_fetchiter_res res (DHASH_NOENT);
         sbp->reply (&res);
@@ -335,34 +321,21 @@ dhash_impl::storesvc_cb (user_args *sbp,
 // --- node to database transfers --- 
 
 void
-dhash_impl::fetch (blockID id, int cookie, cbvalue cb) 
+dhash_impl::fetch (blockID id, cbvalue cb) 
 {
-  //if the cookie is in the hash, return that value
-  pk_partial *part = pk_cache[cookie];
-  if (part) {
-    warn << "COOKIE HIT\n";
-    cb (cookie, part->val, DHASH_OK);
-    //if done, free
-    return;
-  }
+  ptr<dhblock_srv> srv = blocksrv[id.ctype];
+  assert (srv);
+  srv->fetch (id.ID, wrap (this, &dhash_impl::fetch_after_db, id, cb));
+}
 
-  ptr<dbrec> ret = dblookup(id);
-  if (!ret) {
-    (*cb)(cookie, NULL, DHASH_NOENT);
+void
+dhash_impl::fetch_after_db (blockID id, cbvalue cb,
+			     adb_status stat, chordID k, str data)
+{
+  if (stat != ADB_OK) {
+    (*cb)(str(""), DHASH_NOENT);
   } else {
-
-    // make up a cookie and insert in hash if this is the first
-    // fetch of a KEYHASH
-
-    if ((cookie == 0) && 
-	id.ctype == DHASH_KEYHASH) {
-      pk_partial *part = New pk_partial (ret, pk_partial_cookie);
-      pk_partial_cookie++;
-      pk_cache.insert (part);
-      (*cb)(part->cookie, ret, DHASH_OK);
-    } else
-      (*cb)(-1, ret, DHASH_OK);
-    
+    (*cb)(data, DHASH_OK);
   }
 }
 
@@ -388,19 +361,26 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
   }
 
   if (ss->iscomplete()) {
-    ref<dbrec> d = New refcounted<dbrec> (ss->buf, ss->size);
-    dhash_stat stat = srv->store (arg->key, d);
+    str d (ss->buf, ss->size);
+    // this will start the store, but it won't be on disk when 
+    // the function returns
+    srv->store (arg->key, d, wrap(&store_after_store));
     // XXX keep other stats?
     bytes_stored += ss->size;
     pst.remove (ss);
     delete ss;
-    cb (false, stat);
+    cb (false, DHASH_OK);
   } else {
     cb (false, DHASH_STORE_PARTIAL);
   }
   // XXX should throw out very old store states.
 }
 
+void
+store_after_store (int status)
+{
+  if (status != ADB_OK) warn << "store failed. oops\n";
+}
 // --------- utility
 
 
@@ -498,14 +478,6 @@ dhash_impl::stop ()
   blocksrv.traverse (wrap (&stopcb));
 }
 
-ptr<dbrec>
-dhash_impl::dblookup (const blockID &i)
-{
-  ptr<dhblock_srv> srv = blocksrv[i.ctype];
-  if (srv)
-    return srv->fetch (i.ID);
-  return NULL;
-}
 
 
 // ----------------------------------------------------------------------------

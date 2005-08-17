@@ -35,7 +35,6 @@ struct s_dhash_fetch_arg {
   dhash_ctype ctype;
   int32_t start;
   int32_t len;
-  int32_t cookie;
 };
 
 struct dhash_pred {
@@ -62,7 +61,6 @@ struct dhash_fetchiter_complete_res {
   int32_t offset;
   dhash_valueattr attr;
   chordID source;
-  int32_t cookie;
 };
 
 union dhash_fetchiter_res switch (dhash_stat status) {
@@ -82,7 +80,6 @@ struct s_dhash_block_arg {
   int32_t offset;
   dhash_valueattr attr;
   chordID source;
-  int32_t cookie;
   /* if a the sender of this RPC doesn't have the block 
    * then he sends back a list of successors.
    */

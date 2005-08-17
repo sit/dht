@@ -3,25 +3,31 @@
 #include "dhblock_noauth_srv.h"
 #include "bigint.h"
 
-vec<merkle_hash>
-database_get_keys (dbfe *db, u_int depth, const merkle_hash &prefix)
+merkle_hash
+to_merkle_hash (str a)
 {
-  vec<merkle_hash> ret;
-  ptr<dbEnumeration> iter = db->enumerate ();
-  ptr<dbPair> entry = iter->nextElement (todbrec(prefix));
+  merkle_hash h;
+  assert (a.len () == h.size);
+  bcopy (a.cstr (), h.bytes, h.size);
+  reverse (h.bytes, h.size);
+  return h;
+}
 
-  while (entry) {
-    merkle_hash key = to_merkle_hash (entry->key);
-    if (!prefix_match (depth, key, prefix))
-      break;
-    ret.push_back (key);
-    entry = iter->nextElement ();
-  }
-  iter = NULL;
-  return ret;
+merkle_hash
+to_merkle_hash (bigint id)
+{
+  char buf[sha1::hashsize];
+  bzero (buf, sha1::hashsize);
+  mpz_get_rawmag_be (buf, sha1::hashsize, &id);
+  merkle_hash h;
+  bcopy (buf, h.bytes, h.size);
+  reverse (h.bytes, h.size);
+  return h;
 }
 
 
+
+#if 0
 ptr<dbrec>
 to_merkle_key (ptr<dbfe> db, ptr<dbrec> key, dhash_ctype c) 
 {
@@ -36,7 +42,7 @@ to_merkle_key (ptr<dbfe> db, ptr<dbrec> key, dhash_ctype c)
   case DHASH_NOAUTH:
     {
       //ptr<dbrec>dbkey = dhblock_noauth_srv::get_database_key (dbrec2id(key));
-      chordID dbkey = dbrec2id(key) >> 32;
+      chordID dbkey = dbrec_to_id(key) >> 32;
       dbkey = dbkey << 32;
 
       ptr<dbrec> data = db->lookup (id2dbrec(dbkey));
@@ -61,3 +67,4 @@ to_merkle_key (ptr<dbfe> db, ptr<dbrec> key, dhash_ctype c)
   return ret;
 }
 
+#endif

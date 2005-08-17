@@ -106,8 +106,9 @@ merkle_node::~merkle_node ()
 }
 
 void
-merkle_node::check_invariants (u_int depth, merkle_hash prefix, dbfe *db)
+merkle_node::check_invariants (u_int depth, merkle_hash prefix, ptr<adb> db)
 {
+#if 0
   sha1ctx sc;
   merkle_hash mhash = 0;
   u_int64_t _count = 0;
@@ -141,4 +142,5 @@ merkle_node::check_invariants (u_int depth, merkle_hash prefix, dbfe *db)
     assert (hash == mhash);
     assert (hash != 0);
   }
+  #endif
 }

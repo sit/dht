@@ -1,6 +1,9 @@
 #ifndef _MERKLE_SERVER_H_
 #define _MERKLE_SERVER_H_
 
+#include "libadb.h"
+#include "merkle_sync_prot.h"
+
 class merkle_tree;
 class user_args;
 
@@ -15,6 +18,11 @@ class merkle_server {
 
   void dispatch (user_args *a);
   merkle_server (merkle_tree *ltree);
+
+private:
+
+  void getkeys_cb (user_args *sbp, getkeys_arg *arg, adb_status stat, 
+		   vec<chordID> dbkeys);
 };
 
 

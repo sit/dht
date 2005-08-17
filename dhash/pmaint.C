@@ -3,7 +3,7 @@
 #include <dhblock_chash.h>
 #include <location.h>
 #include <merkle_misc.h>
-#include <dbfe.h>
+#include <libadb.h>
 #include <locationtable.h>
 #include <misc_utils.h>
 #include <modlogger.h>
@@ -16,11 +16,10 @@
 #define trace   modlogger ("pmaint", modlogger::TRACE)
 
 pmaint::pmaint (dhashcli *cli, ptr<vnode> host_node, 
-		ptr<dbfe> db, delete_t delete_helper) : 
+		ptr<adb> db) : 
   cli (cli),  
   host_node (host_node),
   db (db),
-  delete_helper (delete_helper),  
   pmaint_searching (true),
   pmaint_next_key (0),
   active_cb (NULL)
@@ -51,30 +50,36 @@ pmaint::pmaint_next ()
 {
  
   if (pmaint_searching) {
-    bigint key = db_next (db, pmaint_next_key);
-    if (key != -1) {
-      pmaint_next_key = key;
-      vec<ptr<location> > preds = host_node->preds ();
-      if (preds.size () >= dhblock_chash::num_efrags () &&
-	  betweenrightincl (preds[dhblock_chash::num_efrags () - 1]->id(), 
-			   host_node->my_ID (),
-			   key)) {
-	active_cb = delaycb (PRTTMTINY, wrap (this, &pmaint::pmaint_next));
-	return;
-      }
-      cli->lookup (key, wrap (this, &pmaint::pmaint_lookup, pmaint_next_key));
-      active_cb = NULL;
-    } else { 
-      //data base is empty
-      //check back later
-      info << host_node->my_ID () << " PMAINT NEXT: db empty\n";
-      active_cb = delaycb (PRTTMLONG, wrap (this, &pmaint::pmaint_next));
-    }
+    db->getkeys (pmaint_next_key, wrap (this, &pmaint::pmaint_gotkey));
   } else 
     info << host_node->my_ID () << " in offer phase, delaying\n";
 }
 
-
+void
+pmaint::pmaint_gotkey (adb_status stat, vec<chordID> keys)
+{
+  
+  if (stat == ADB_OK && keys.size () > 0) {
+    chordID key = keys[0];
+    pmaint_next_key = key;
+    vec<ptr<location> > preds = host_node->preds ();
+  
+    if (preds.size () >= dhblock_chash::num_efrags () &&
+	betweenrightincl (preds[dhblock_chash::num_efrags () - 1]->id(), 
+			  host_node->my_ID (),
+			  key)) {
+      active_cb = delaycb (PRTTMTINY, wrap (this, &pmaint::pmaint_next));
+      return;
+    }
+    cli->lookup (key, wrap (this, &pmaint::pmaint_lookup, pmaint_next_key));
+    active_cb = NULL;
+  } else { 
+    //data base is empty
+    //check back later
+    info << host_node->my_ID () << " PMAINT NEXT: db empty\n";
+    active_cb = delaycb (PRTTMLONG, wrap (this, &pmaint::pmaint_next));
+  }
+}
 
 void
 pmaint::pmaint_lookup (bigint key, dhash_stat err, vec<chord_node> sl, route r)
@@ -245,9 +250,6 @@ pmaint::pmaint_handoff_cb (bigint key,
   if (err) {
     cb (PMAINT_HANDOFF_ERROR); //error
   } else if (!present) {
-    //    trace << host_node->my_ID () << " deleting " << key << " after handoff\n";
-    //  delete_helper (id2dbrec(key));
-    //   assert (!db->lookup (id2dbrec (key)));
     cb (PMAINT_HANDOFF_NOTPRESENT); //ok, not present
   } else { 
     cb (PMAINT_HANDOFF_PRESENT); //ok, present
@@ -255,38 +257,5 @@ pmaint::pmaint_handoff_cb (bigint key,
   
 }
 
-bigint
-pmaint::db_next (ptr<dbfe> db, bigint a)
-{
-  ptr<dbEnumeration> enumer = db->enumerate ();
-  ptr<dbPair> d = enumer->nextElement (id2dbrec(a)); // >=
-  if (!d) 
-    d = enumer->firstElement ();
-  if (d) {
-    return dbrec2id(d->key);
-  }
-  else
-    return -1; // db is empty
-}
-
-// return a vector up a max 'maxcount' holding the keys
-// in the range [a,b]-on-the-circle.   Starting with a.
-//
-vec<bigint>
-pmaint::get_keys (ptr<dbfe> db, bigint a, bigint b, u_int maxcount)
-{
-  vec<bigint> vres;
-  bigint key = a;
-  while (vres.size () < maxcount) {
-    key = db_next (db, key);
-    if (!betweenbothincl (a, b, key))
-      break;
-    if (vres.size () && vres[0] == key)
-      break;
-    vres.push_back (key);
-    key = incID (key);
-  }
-  return vres;
-}
 
 
