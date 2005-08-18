@@ -216,6 +216,7 @@ class skiplist {
       T *next = (head->*field).forward[0];
       sz--;
       if (next == NULL) {
+	lvl = 1;
 	head = NULL;
 	tail = NULL;
 	return oldhead;
