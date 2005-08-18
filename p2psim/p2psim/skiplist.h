@@ -19,7 +19,7 @@
  *  June 1990.
  */
 
-#define SKLIST_MAX_LEVS 16
+#define SKLIST_MAX_LEVS 2
 
 template<class T>
 struct sklist_entry {
