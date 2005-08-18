@@ -19,7 +19,7 @@
  *  June 1990.
  */
 
-#define SKLIST_MAX_LEVS 2
+#define SKLIST_MAX_LEVS 16
 
 template<class T>
 struct sklist_entry {
@@ -218,7 +218,6 @@ class skiplist {
       if (next == NULL) {
 	head = NULL;
 	tail = NULL;
-	lvl = 1;
 	return oldhead;
       } else {
 	unsigned int i;
