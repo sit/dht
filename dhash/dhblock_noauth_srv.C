@@ -79,9 +79,6 @@ dhblock_noauth_srv::iterate_fetch_cb (adb_status stat,
 
     merkle_hash mkey = to_merkle_hash (get_merkle_key (key, data));
 
-    warn << "(noauth) insert: " << key
-	 << "/" << mkey << " into merkle tree\n";
-
     mtree->insert (mkey);
 
 }
@@ -109,6 +106,10 @@ dhblock_noauth_srv::store_after_fetch_cb (str new_data, cbi cb, adb_status err,
 					  chordID dbkey, str old_data) 
 {
 
+  if (err != ADB_OK) 
+    old_data = "";
+  
+
   str dprep = merge_data (dbkey, new_data, old_data);
 
   if (dprep != old_data) { //new data added something
@@ -121,9 +122,9 @@ dhblock_noauth_srv::store_after_fetch_cb (str new_data, cbi cb, adb_status err,
       mtree->remove (mkey);
       db->remove (kdb, wrap (this, &dhblock_noauth_srv::after_delete, 
 			     dbkey, dprep, cb));
-    }
-    after_delete (dbkey, dprep, cb, ADB_OK);
-  }else
+    } else
+      after_delete (dbkey, dprep, cb, ADB_OK);
+  } else
     cb (ADB_OK);
 }
 
@@ -137,7 +138,7 @@ dhblock_noauth_srv::after_delete (chordID key, str data, cbi cb,
     to_merkle_hash (dhblock_noauth_srv::get_merkle_key (key, data));
   mtree->insert (mkey);
 
-  warn << "db write: " 
+  warn << node->my_ID () << " db write: " 
        << " U " << key << " " << data.len ()  << "\n";
 
   db->store (key, data, cb); 

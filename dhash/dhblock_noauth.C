@@ -26,6 +26,7 @@ dhblock_noauth::get_payload (const char *buf, u_int len)
   } else {
     warnx << "Failed to unmarshall noauth block\n";
   }
+  xdr_delete (reinterpret_cast<xdrproc_t> (xdr_noauth_block), block);
   return ret;
 }
 
