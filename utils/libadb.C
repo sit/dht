@@ -99,16 +99,17 @@ adb::fetch (chordID key, cb_fetch cb)
 
   adb_fetchres *res = New adb_fetchres (ADB_OK);
   c->call (ADBPROC_FETCH, &arg, res,
-	   wrap (this, &adb::fetch_cb, res, cb));
+	   wrap (this, &adb::fetch_cb, res, key, cb));
 }
 
 void
-adb::fetch_cb (adb_fetchres *res, cb_fetch cb, clnt_stat err)
+adb::fetch_cb (adb_fetchres *res, chordID key, cb_fetch cb, clnt_stat err)
 {
   if (err || (res && res->status)) {
-    str nodata;
-    cb (ADB_ERR, bigint(0), nodata);
+    str nodata = "";
+    cb (ADB_ERR, key, nodata);
   } else {
+    assert (key == res->resok->key);
     str data (res->resok->data.base (), res->resok->data.size ());
     cb (ADB_OK, res->resok->key, data);
   }
@@ -147,6 +148,7 @@ void
 adb::remove (chordID key, cbi cb)
 {
   adb_storearg arg;
+  arg.name = name_space;
   arg.key = key;
   adb_status *stat = New adb_status ();
 

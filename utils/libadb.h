@@ -34,7 +34,7 @@ private:
   
   void delete_cb (adb_status *stat, cbi cb, clnt_stat err);
   void store_cb (adb_status *res, cbi cb, clnt_stat err);
-  void fetch_cb (adb_fetchres *res, cb_fetch cb, clnt_stat err);
+  void fetch_cb (adb_fetchres *res, chordID key, cb_fetch cb, clnt_stat err);
   void getkeys_cb (adb_getkeysres *res, cb_getkeys cb, clnt_stat err);
 };
 
