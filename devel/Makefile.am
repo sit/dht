@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.49 2005/08/17 03:51:53 fdabek Exp $
+# $Id: Makefile.am,v 1.50 2005/08/19 20:04:32 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -34,10 +34,8 @@ coords_SOURCES = walk_coords.C
 coords_LDADD = ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
 
 filestore_SOURCES = filestore.C
-filestore_LDADD = ../dhash/libdhashclient.a ../dhc/libdhc.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
+filestore_LDADD = ../dhash/libdhashclient.a  ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
 
-builddb_SOURCES = builddb.C
-builddb_LDADD = ../sfsrodb/libsfsrodb.a ../dhash/libdhash.a ../dhc/libdhc.a ../merkle/libmerkle.a ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la $(DBLIB) $(LDADD)
 
 dbm_SOURCES = dhash_benchmark.C
 dbm_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)
@@ -50,12 +48,6 @@ findroute_LDADD = ../chord/libchord.a ../svc/libsvc.la ../utils/libutil.a $(LDAD
 
 nodeq_SOURCES = nodeq.C rpclib.C
 nodeq_LDADD = ../svc/libsvc.la ../utils/libutil.a ../merkle/libmerkle.a $(LDADD)
-
-dhc_test_SOURCES = dhc_test.C
-dhc_test_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)
-
-pkc_SOURCES = pk_consistency.C
-pkc_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)
 
 if GTK_AVAILABLE
 vis_SOURCES = vis.C vis.h vis_update.C vis_cmd.C

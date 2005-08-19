@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.8 2005/05/24 20:58:57 sit Exp $
+# $Id: Makefile.am,v 1.9 2005/08/19 20:04:33 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS) 
 
@@ -26,7 +26,7 @@ usenet_SOURCES = usenetdht_storage.C \
 usenet_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la ${DBLIB} ${LDADD}
 
 udbctl_SOURCES = udbctl.C usenetdht_storage.C group.C
-udbctl_LDADD = ${DBLIB} ${LDADD}
+udbctl_LDADD = ${DBLIB} ../utils/libutil.a ${LDADD}
 
 EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo

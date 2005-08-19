@@ -1,4 +1,4 @@
-dnl $Id: configure.in,v 1.51 2005/05/14 06:35:04 strib Exp $
+dnl $Id: configure.in,v 1.52 2005/08/19 20:04:28 fdabek Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
@@ -40,8 +40,6 @@ dnl setup db3
 SFS_SLEEPYCAT(4.3 4.2 4.0 4 3, no)
 AC_SUBST(DBLIB)
 AC_SUBST(DBDEPS)
-DBLIB='$(top_builddir)/sfsrodb/libsfsrodb.a'
-DBDEPS='$(top_builddir)/sfsrodb/libsfsrodb.a'
 if test "${with_db3}" != no; then
 	CPPFLAGS="$CPPFLAGS -DSLEEPYCAT"
 	DBLIB="$DBLIB $DB_LIB"
@@ -96,5 +94,5 @@ AC_OUTPUT(Makefile svc/Makefile utils/Makefile
 	merkle/Makefile chord/Makefile chordcd/Makefile 
 	proxy/Makefile devel/Makefile
 	test/Makefile tst/Makefile
-	melody/Makefile dhc/Makefile usenet/Makefile
+	melody/Makefile  usenet/Makefile
 	arpeggio/Makefile amud/Makefile)

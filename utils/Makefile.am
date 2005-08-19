@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-## $Id: Makefile.am,v 1.14 2005/08/19 15:29:33 strib Exp $
+## $Id: Makefile.am,v 1.15 2005/08/19 20:04:33 fdabek Exp $
 
 chordlib_LIBRARIES = libutil.a libadb.a
 chordinclude_HEADERS = id_utils.h configurator.h skiplist.h modlogger.h
@@ -14,7 +14,8 @@ noinst_HEADERS = \
 	misc_utils.h \
 	modlogger.h \
 	ida-field.C \
-	libadb.h
+	libadb.h \
+	dbfe.h
 
 libutil_a_SOURCES = \
 	block_status.C \
@@ -26,14 +27,15 @@ libutil_a_SOURCES = \
 	locationtable.C \
 	misc_utils.C \
 	modlogger.C \
-	libadb.C
+	libadb.C \
+	dbfe.C
 
 libadb_a_SOURCES = libadb.C
 
 bin_PROGRAMS = adbd
 
-adbd_SOURCES = adb.C
-adbd_LDADD =  libutil.a ../svc/libsvc.la $(LIBARPC)  $(LIBSFSCRYPT) $(LIBGMP) ../sfsrodb/libsfsrodb.a $(DBLIB) $(LIBASYNC) 
+adbd_SOURCES = adb.C 
+adbd_LDADD =  libutil.a ../svc/libsvc.la $(LIBARPC)  $(LIBSFSCRYPT) $(LIBGMP) $(DBLIB) $(LIBASYNC) 
 
 # should really figure out how to encode explict rule so that make
 # will run ida-genfield.py to update ida-field.C if ida-genfield.py changes.
@@ -51,7 +53,7 @@ test_locationtable_LDADD = ./libutil.a $(LIBSFSCRYPT) $(LIBARPC) $(LIBASYNC) $(L
 test_skiplist_SOURCES = test_skiplist.C
 
 test_adb_SOURCES = test_adb.C
-test_adb_LDADD = libadb.a ../svc/libsvc.la $(LIBARPC)  $(LIBSFSCRYPT) $(LIBGMP) ../sfsrodb/libsfsrodb.a $(DBLIB) $(LIBASYNC) 
+test_adb_LDADD = libadb.a ../svc/libsvc.la $(LIBARPC)  $(LIBSFSCRYPT) $(LIBGMP)  $(DBLIB) $(LIBASYNC) 
 
 EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo

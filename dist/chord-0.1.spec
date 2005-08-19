@@ -73,6 +73,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/usenet
 %{_bindir}/udbctl
 %{_bindir}/walk
+%{_bindir}/adbd
 %{_includedir}/chord-%{version}/chord_types.x
 %{_includedir}/chord-%{version}/dhash_types.x
 %{_includedir}/chord-%{version}/dhashgateway_prot.x

@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.26 2005/06/27 19:22:33 fdabek Exp $
+# $Id: Makefile.am,v 1.27 2005/08/19 20:04:32 fdabek Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -7,7 +7,7 @@ bin_PROGRAMS = lsdctl lsd syncd
 
 lsd_SOURCES = lsd.C
 
-lsd_LDADD = ../dhash/libdhash.a ../dhc/libdhc.a ../merkle/libmerkle.a \
+lsd_LDADD = ../dhash/libdhash.a ../merkle/libmerkle.a \
 	    ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la \
 	    $(DBLIB) ${LDADD} 
 
