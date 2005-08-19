@@ -517,6 +517,7 @@ main (int argc, char **argv)
   int wellknownport = 0;
   int nreplica = 0;
   bool replicate = true;
+  bool do_daemonize = false;
   str db_name = "/var/tmp/db";
   p2psocket = "/tmp/chord-sock";
   ctlsocket = "/tmp/lsdctl-sock";
@@ -525,13 +526,16 @@ main (int argc, char **argv)
 
   char *cffile = NULL;
 
-  while ((ch = getopt (argc, argv, "b:C:d:fFH:j:l:L:M:m:n:O:Pp:rS:s:T:tv:"))!=-1)
+  while ((ch = getopt (argc, argv, "b:C:d:fFH:j:l:L:M:m:n:O:Pp:rS:s:T:tv:D"))!=-1)
     switch (ch) {
     case 'b':
       lbase = atoi (optarg);
       break;
     case 'C':
       ctlsocket = optarg;
+      break;
+    case 'D':
+      do_daemonize = true;
       break;
     case 'd':
       db_name = optarg;
@@ -633,6 +637,11 @@ main (int argc, char **argv)
 
   if (wellknownport == 0)
     usage ();
+
+  if (do_daemonize) {
+    daemonize ();
+    logfname = tracefname = NULL;
+  }
 
   start_logs ();
   

@@ -193,7 +193,10 @@ void
 merkle_tree::remove (u_int depth, merkle_hash& key, merkle_node *n)
 {
   if (n->isleaf ()) {
-    merkle_key * mkey = sk_keys.remove (tobigint(key));
+    chordID k = tobigint (key);
+    assert (sk_keys.search (k));
+    merkle_key * mkey = sk_keys.remove (k);
+    assert (sk_keys.repok ());
     assert (mkey);
     delete mkey;
   } else {
@@ -219,7 +222,9 @@ merkle_tree::insert (u_int depth, merkle_hash& key, merkle_node *n)
   
   if (n->isleaf ()) {
     merkle_key *k = New merkle_key (key);
+    assert (!sk_keys.search (k->id));
     sk_keys.insert (k);
+    assert (sk_keys.repok ());
   } else {
     u_int32_t branch = key.read_slot (depth);
     ret = insert (depth+1, key, n->child (branch));
@@ -238,7 +243,7 @@ merkle_tree::remove (merkle_hash &key)
   // assert block must exist..
   str foo;
   if (sk_keys.search (tobigint (key)) == NULL) 
-    fatal << "merkle_tree::remove: key does not exist " << key << "\n";
+    fatal << (u_int) this << " merkle_tree::remove: key does not exist " << key << "\n";
 
   remove (0, key, &root);
 }
@@ -334,10 +339,8 @@ vec<chordID>
 merkle_tree::get_keyrange (chordID min, chordID max, u_int n)
 {
   vec<chordID> keys;
-  warn << min << " " << max << " " << n << "\n";
   merkle_key *k = sk_keys.closestsucc (min);
   for (u_int i = 0; k && i < n; i++) {
-    warn << "k: " << k->id << "\n";
     if (!betweenbothincl (min, max, k->id))
       break;
     keys.push_back (k->id);

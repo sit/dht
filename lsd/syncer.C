@@ -24,6 +24,12 @@ syncer::syncer (ptr<locationtable> locations,
     tmptree (NULL),  host_loc (h), cur_succ (0)
 { 
   
+  warn << "new syncer: \n" 
+       << "   dbname: " << dbname << "\n"
+       << "    dbext: " << dbext << "\n"
+       << "    ctype: " << ctype << "\n"
+       << " d/efrags: " << dfrags << "/" << efrags << "\n";
+
   locations->insert (h);
   locations->pin (h->id ());
   

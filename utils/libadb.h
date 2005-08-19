@@ -28,7 +28,6 @@ struct adb {
 
 private:
 
-  ptr<dbfe> db;
   ptr<aclnt> c;
   str name_space;
   

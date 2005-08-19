@@ -313,8 +313,10 @@ compare_keylists (vec<chordID> lkeys,
   // populate a hash table with the remote keys
   qhash<chordID, int, hashID> rkeys;
   for (u_int i = 0; i < vrkeys.size (); i++) {
-    if (betweenbothincl (rngmin, rngmax, vrkeys[i])) 
+    if (betweenbothincl (rngmin, rngmax, vrkeys[i])) {
+      trace << "remote key: " << vrkeys[i] << "\n";
       rkeys.insert (vrkeys[i], 1);
+    }
   }
     
   // do I have something he doesn't have?
@@ -325,6 +327,8 @@ compare_keylists (vec<chordID> lkeys,
 	    << rngmax << "] key=" << lkeys[i] << "\n";
       (*missingfnc) (lkeys[i], false, false);
     } else {
+      if (rkeys[lkeys[i]]) trace << "remote has " << lkeys[i] << "\n";
+      else trace << "out of range: " << lkeys[i] << "\n";
       rkeys.remove (lkeys[i]);
     }
   }
