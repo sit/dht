@@ -95,6 +95,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/chord-%{version}/libsvc.a
 %{_libdir}/chord-%{version}/libsvc.la
 %{_libdir}/chord-%{version}/libutil.a
+%{_libdir}/chord-%{version}/libadb.a
 %{_includedir}/chord-%{version}/chord_types.h
 %{_includedir}/chord-%{version}/config.h
 %{_includedir}/chord-%{version}/configurator.h
@@ -111,6 +112,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_includedir}/chord-%{version}/dhblock_noauth.h
 %{_includedir}/chord-%{version}/id_utils.h
 %{_includedir}/chord-%{version}/lsdctl_prot.h
+%{_includedir}/chord-%{version}/modlogger.h
 %{_includedir}/chord-%{version}/skiplist.h
 
 %changelog
