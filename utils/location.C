@@ -110,7 +110,10 @@ location::fill_node (chord_node &data)
   data.vnode_num = vnode_;
 
   //for Accordion
-  this->update_age ();
+  if (isme_)
+    update_knownup ();
+  else
+    update_age ();
   data.knownup = knownup_;
   data.age = age_;
   data.budget = budget_;
@@ -126,7 +129,10 @@ location::fill_node (chord_node_wire &data)
   data.machine_order_port_vnnum = (ntohs (saddr_.sin_port) << 16) | vnode_;
 
   //for Accordion
-  this->update_age ();
+  if (isme_)
+    update_knownup ();
+  else
+    update_age ();
   data.knownup = knownup_;
   data.age = age_;
   data.budget = budget_;

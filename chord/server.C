@@ -391,7 +391,6 @@ user_args::reply (void *res)
   //stuff into a transport wrapper
   dorpc_res *rpc_res = New dorpc_res (DORPC_OK);
   
-  me_->update_knownup ();
   me_->fill_node (rpc_res->resok->src);
   rpc_res->resok->send_time_echo = send_time;
   rpc_res->resok->results.setsize (res_len);
@@ -615,8 +614,8 @@ vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc,
   if (err) {
     ptr<location> reall = locations->lookup (l->id ());
     if (reall && reall->alive ()) {
-      warn << "got error " << err << ", but " << l->id () 
-		   << " is still marked alive\n";
+      warn << "got error " << err << ", but " << l
+	   << " is still marked alive\n";
       reall->set_alive (false);
     } else if (!reall) {
       locations->insert (l);
@@ -651,6 +650,9 @@ vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc,
     update_coords (u_coords,
 		   distance);
 
+    // This should reset the age of the node to zero because
+    // remote side always provides an age of zero for self
+    // and locationtable will pull in updates that are younger.
     if (me_->id () != n.x) 
       locations->insert (n); 
 
