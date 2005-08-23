@@ -7,12 +7,33 @@
 #include "rxx.h"
 #include "libadb.h"
 
+static bool dbstarted (false);
+static str dbsock;
+int clntfd (-1);
 
 void usage ();
 static void listen_unix (str sock_name, ptr<dbfe> db);
 void accept_cb (int lfd, ptr<dbfe> db);
 void dispatch (ref<axprt_stream> s, ptr<asrv> a, ptr<dbfe> db, svccb *sbp);
 
+EXITFN (cleanup);
+
+static void
+cleanup ()
+{
+  if (dbstarted) {
+    if (clntfd >= 0)
+      fdcb (clntfd, selread, NULL);
+    unlink (dbsock);
+  }
+}
+
+static void
+halt ()
+{
+  warn << "Exiting on command.\n";
+  exit (0);
+}
 
 void
 do_store (ptr<dbfe> db, svccb *sbp)
@@ -119,10 +140,9 @@ static void
 listen_unix (str sock_name, ptr<dbfe> db)
 {
   unlink (sock_name);
-  int clntfd = unixsocket (sock_name);
+  clntfd = unixsocket (sock_name);
   if (clntfd < 0) 
     fatal << "Error creating socket (UNIX)" << strerror (errno) << "\n";
-
   
   if (listen (clntfd, 128) < 0) {
     fatal ("Error from listen: %m\n");
@@ -130,6 +150,7 @@ listen_unix (str sock_name, ptr<dbfe> db)
   } else {
     fdcb (clntfd, selread, wrap (accept_cb, clntfd, db));
   }
+  dbstarted = true;
 }
 
 void 
@@ -149,7 +170,8 @@ accept_cb (int lfd, ptr<dbfe> db)
 }
 
 void
-usage (char *progname) {
+usage (char *progname)
+{
   warn << progname << ": -d db -S sock\n";
   exit (0);
 }
@@ -159,7 +181,11 @@ main (int argc, char **argv)
 {
   char ch;
   str db_name = "/var/tmp/db";
-  str sock_name = "/tmp/chord-sock";
+  dbsock = "/tmp/db-sock";
+
+  sigcb (SIGHUP, wrap (&halt));
+  sigcb (SIGINT, wrap (&halt));
+  sigcb (SIGTERM, wrap (&halt));
 
   while ((ch = getopt (argc, argv, "d:S:"))!=-1)
     switch (ch) {
@@ -167,7 +193,7 @@ main (int argc, char **argv)
       db_name = optarg;
       break;
     case 'S':
-      sock_name = optarg;
+      dbsock = optarg;
       break;
     default:
       usage (argv[0]);
@@ -181,13 +207,13 @@ main (int argc, char **argv)
 
   ptr<dbfe> db = New refcounted<dbfe> ();
   if (int err = db->opendb (const_cast <char *> (db_name.cstr ()), opts))
-    {
-      warn << "DBFE open returned: " << strerror (err) << " for " << db_name << "\n";
-      exit (-1);\
-    }
+  {
+    warn << "DBFE open returned: " << strerror (err) << " for " << db_name << "\n";
+    exit (-1);\
+  }
 
   //setup the asrv
-  listen_unix (sock_name, db);
+  listen_unix (dbsock, db);
 
   amain ();
 }
