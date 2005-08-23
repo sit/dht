@@ -93,6 +93,7 @@ void
 location::update (ptr<location> l)
 {
   update_age ();
+  // Prefer data that is newer than our own data
   if (l->age () < (age_ + 10)) {
     age_ = l->age ();
     knownup_ = l->knownup ();
@@ -148,6 +149,9 @@ location::set_alive (bool alive)
   if (!alive && alive_) {
     dead_time_ = timenow;
   }
+  // Setting age is ok if we only call set_alive after direct comm
+  // with this location.
+  age_ = 0;
   alive_ = alive;
 }
 
