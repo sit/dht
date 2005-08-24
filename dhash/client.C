@@ -571,8 +571,10 @@ dhashcli::sendblock_fetch_cb (ptr<location> dst, blockID bid_to_send,
 			      sendblockcb_t cb, adb_status stat,
 			      chordID key, str data)
 {
-  if(stat != ADB_OK)
+  if (stat != ADB_OK) {
     cb (DHASH_NOENT, false);
+    return;
+  }
 
   dhash_store::execute 
     (clntnode, dst, bid_to_send, data,
