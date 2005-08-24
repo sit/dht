@@ -22,9 +22,10 @@ class succ_list : public stabilizable {
   void stabilize_getpred_cb (ptr<location> sd, chord_node p, chordstat status);
 
   // Helpers for stabilize_succlist
-  void stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
-				chordstat err);
-  void stabilize_getsucclist_check (chordID src, chordID chk, chordstat status);
+  void stabilize_getsucclist_cb (ptr<location> s, vec<chord_node> nlist,
+				 chordstat err);
+  void stabilize_getsucclist_check (ptr<location> src, chordID chk,
+				    chordstat status);
 
  public:  
   succ_list (ptr<vnode> v, ptr<locationtable> locs);

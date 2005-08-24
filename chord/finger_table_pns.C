@@ -123,9 +123,17 @@ finger_table_pns::getsucclist_cb (int l, int r, vec<chord_node> succs,
 	break;
       }
       
+      // Update coordinates, age, etc if node is known.
+      ptr<location> l = locations->lookup (succs[i].x);
+      if (l) {
+	locations->insert (succs[i]);
+	if (!l->alive ())
+	  continue;
+      }
+
       Coord candidate_coords (succs[i]);
       float curdist = Coord::distance_f (my_coords, candidate_coords);
-      trace << myvnode->my_ID () << "candidate " << i << ": "
+      trace << myvnode->my_ID () << ": candidate " << i << ": "
 	    << succs[i].r.hostname << " at distance " << (int)curdist << "\n";
 
       // this is a recursive closeness measure

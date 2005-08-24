@@ -139,11 +139,11 @@ succ_list::stabilize_succlist ()
   nout_backoff++;
   ptr<location> s = succ ();
   myvnode->get_succlist
-    (s, wrap (this, &succ_list::stabilize_getsucclist_cb, s->id ()));
+    (s, wrap (this, &succ_list::stabilize_getsucclist_cb, s));
 }
 
 void
-succ_list::stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
+succ_list::stabilize_getsucclist_cb (ptr<location> s, vec<chord_node> nlist,
 				     chordstat status)
 {
   nout_backoff--;
@@ -153,7 +153,7 @@ succ_list::stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
     stable_succlist = false;
     return;
   }
-  assert (s == nlist[0].x);
+  assert (s->id () == nlist[0].x);
 
   // PODC paper says, set our succlist to successors succlist mod last guy
   // We're going to merge his succlist with our succlist and make sure
@@ -183,7 +183,7 @@ succ_list::stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
       // if succlist[i] > nlist[j].x
       // then maybe a new node joined. check it out.
       ptr<location> newsucc = locations->insert (nlist[j]);
-      if (!newsucc) {
+      if (!newsucc || !newsucc->alive ()) {
 	warnx << myID << ": stabilize_succlist: received bad successor "
 	      << nlist[j].x << " from " << s << "\n";
 	// XXX do something about it?
@@ -209,7 +209,7 @@ succ_list::stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
   while (j < newnsucc && curnsucc < (u_int)nsucc_) {
     assert (!check);
     ptr<location> newsucc = locations->insert (nlist[j]);
-    if (!newsucc) {
+    if (!newsucc || !newsucc->alive ()) {
       warnx << myID << ": stabilize_succlist: received bad successor "
 	    << nlist[j].x << " from " << s << "\n";
       // XXX do something about it?
@@ -224,7 +224,7 @@ succ_list::stabilize_getsucclist_cb (chordID s, vec<chord_node> nlist,
 }
 
 void
-succ_list::stabilize_getsucclist_check (chordID src, chordID chk,
+succ_list::stabilize_getsucclist_check (ptr<location> src, chordID chk,
 					chordstat status)
 {
   nout_backoff--;
@@ -274,7 +274,7 @@ succ_list::stabilize_getpred_cb (ptr<location> sd, chord_node p, chordstat statu
     } else if (betweenleftincl (myID, sd->id (), p.x)) {
       // Did we get someone strictly better?
       ptr<location> newsucc = locations->insert (p);
-      if (newsucc)
+      if (newsucc && newsucc->alive ())
 	oldsucc = newsucc;
     } else {
       // Our successor appears to be confused, better tell
