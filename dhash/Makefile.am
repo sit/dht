@@ -1,8 +1,10 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.20 2005/08/17 03:51:53 fdabek Exp $
+# $Id: Makefile.am,v 1.21 2005/08/24 01:07:59 sit Exp $
 
 $(PROGRAMS): $(LDEPS)
 
+RPCBUILT = dhblock_storage.h dhblock_storage.C 
+ 
 SUFFIXES = .x .C .h
 .x.h:
 	-$(RPCC) -h $< || rm -f $@
@@ -33,11 +35,11 @@ chordinclude_HEADERS = \
 libdhashclient_a_SOURCES = \
 			   dhashclient.C \
 			   dhblock.C \
+			   dhblock_storage.C \
 			   dhblock_chash.C \
 			   dhblock_keyhash.C \
 			   dhblock_replicated.C \
-			   dhblock_noauth.C \
-			   dhblock_storage.C
+			   dhblock_noauth.C 
 
 noinst_HEADERS = \
 		 dhashcli.h \
@@ -68,6 +70,7 @@ libdhash_a_SOURCES = \
 		     pmaint.C \
 		     server.C \
 		     dhblock.C \
+		     dhblock_storage.C \
 		     dhblock_chash.C \
 		     dhblock_keyhash.C \
 		     dhblock_replicated.C \
@@ -76,10 +79,16 @@ libdhash_a_SOURCES = \
 		     dhblock_chash_srv.C \
 		     dhblock_replicated_srv.C \
 		     dhblock_keyhash_srv.C \
-		     dhblock_noauth_srv.C \
-		     dhblock_storage.C
+		     dhblock_noauth_srv.C
+
+dist-hook:
+	cd $(distdir) && rm -f $(RPCBUILT)
+
+.PHONY: rpcclean
+rpcclean:
+	rm -f $(RPCBUILT)
 
 EXTRA_DIST = .cvsignore
-CLEANFILES = core *.core *~ *.rpo
+CLEANFILES = core *.core *~ *.rpo $(RPCBUILT)
 MAINTAINERCLEANFILES = Makefile.in
 
