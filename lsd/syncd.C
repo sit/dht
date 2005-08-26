@@ -7,6 +7,8 @@
 #include <locationtable.h>
 #include <modlogger.h>
 #include "dhash_types.h"
+#include <dhash_common.h>
+#include <dhblock.h>
 
 static char *logfname;
 
@@ -116,12 +118,14 @@ main (int argc, char **argv)
 
   start_logs ();
 
-
   sigcb(SIGHUP, wrap (&start_logs));
   sigcb(SIGINT, wrap (&halt));
   sigcb(SIGTERM, wrap (&halt));
 
   ptr<locationtable> locations = New refcounted<locationtable> (1024);
+
+  // HACK!  To get dhash.replica, must force dhblock.o to be linked...
+  (void) dhblock::dhash_mtu ();
   
   chord_node ret;
   for (u_int i = 0; i < 3; i++)
@@ -138,7 +142,7 @@ main (int argc, char **argv)
     // XXX don't hard-code this
     vNew syncer (locations, n, db_name, dbname, DHASH_CONTENTHASH);
     
-    int v;
+    int v = -1;
     Configurator::only ().get_int ("dhash.replica", v);
     dbname = strbuf () << ret.x << ".n";
     vNew syncer (locations, n, db_name, dbname, DHASH_NOAUTH, v, v);
