@@ -127,6 +127,29 @@ rpc_manager::rpc_manager (ptr<u_int32_t> _nrcv)
   next_xid = &random_getword;
 }
 
+void
+rpc_manager::stats () 
+{
+  char buf[1024];
+
+  warnx << "RPC MANAGER STATS:\n";
+  warnx << "total # of RPCs: good " << nrpc
+	<< " failed " << nrpcfailed << "\n";
+  warnx << buf << "  Per link avg. RPC latencies\n";
+  for (hostinfo *h = hosts.first (); h ; h = hosts.next (h)) {
+    warnx << "    host " << h->host
+	  << " # RPCs: " << h->nrpc
+	  << " (" << h->orpc << " outstanding)\n";
+
+    sprintf (buf,
+	     "       Average latency: %f\n"
+	     "       Average variance: %f\n",
+	     h->a_lat, h->a_var);
+    warnx << buf;
+    sprintf (buf, "       Max latency: %qd\n", h->maxdelay);
+    warnx << buf;
+  }
+}
 
 float
 rpc_manager::get_a_lat (ptr<location> l)
@@ -344,20 +367,15 @@ void
 tcp_manager::doRPC_tcp_cleanup (ptr<aclnt> c, RPC_delay_args *args,
                                 clnt_stat err)
 {
+  hostinfo *hi = lookup_host (args->l->address ());
+  if (err) { 
+    nrpcfailed++;
+  } else {
+    nrpc++;
+    if (hi) 
+      hi->nrpc++;
+  }
+  if (hi) hi->orpc--;
   (*args->cb)(err);
   delete args;
 }
-
-void
-tcp_manager::stats ()
-{
-  char buf[1024];
-  rpc_manager::stats ();
-  for (hostinfo *h = hosts.first (); h ; h = hosts.next (h)) {
-    warnx << "  host " << h->host << ": rpcs " << h->nrpc
-          << ", orpcs " << h->orpc;
-    sprintf (buf, ", lat %.1f, var %.1f\n", h->a_lat/1000, h->a_var/1000);
-    warnx << buf;
-  }
-}
-

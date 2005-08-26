@@ -401,7 +401,6 @@ stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l,
 void
 rpc_manager::update_latency (ptr<location> from, ptr<location> l, u_int64_t lat)
 {
-  //do the gloal latencies
   nrpc++;
 
   //update global latency
@@ -452,35 +451,18 @@ rpc_manager::update_latency (ptr<location> from, ptr<location> l, u_int64_t lat)
    }
 }
 
-void
-rpc_manager::stats () 
-{
-  warnx << "RPC MANAGER STATS:\n";
-  warnx << "total # of RPCs: good " << nrpc
-	<< " failed " << nrpcfailed << "\n";
-}
-
 void stp_manager::stats ()
 {
   char buf[1024];
 
+  stream_rpcm->stats ();
+
   rpc_manager::stats ();
   
-  sprintf(buf, "       Average latency/variance: %f/%f\n", a_lat, a_var);
+  sprintf(buf, "  Average latency/variance: %f/%f\n", a_lat, a_var);
   warnx << buf;
-  sprintf(buf, "       Average cwind: %f\n", cwind_cum/num_cwind_samples);
-  warnx << buf << "  Per link avg. RPC latencies\n";
+  sprintf(buf, "  Average cwind: %f\n", cwind_cum/num_cwind_samples);
 
-  for (hostinfo *h = hosts.first (); h ; h = hosts.next (h)) {
-    warnx << "    host " << h->host
-	  << " # RPCs: " << h->nrpc << "\n";
-    sprintf (buf, "       Average latency: %f\n"
-	     "       Average variance: %f\n",
-	     h->a_lat, h->a_var);
-    warnx << buf;
-    sprintf (buf, "       Max latency: %qd\n", h->maxdelay);
-    warnx << buf;
-  }
   if (shortstats) return;
   warnx << "Timer history:\n";
   for (unsigned int i = 0; i < timers.size (); i++) {
