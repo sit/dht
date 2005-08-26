@@ -141,6 +141,7 @@ adb::getkeys_cb (adb_getkeysres *res, cb_getkeys cb, clnt_stat err)
     adb_status ret = (res->resok->complete) ? ADB_COMPLETE : ADB_OK;
     cb (ret, keys);
   }
+  delete res;
 }
 
 void
