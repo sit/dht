@@ -26,6 +26,7 @@ dhash_download::dhash_download (ptr<vnode> clntnode, chord_node source,
   buf_len (0),
   nextchunk (0),
   numchunks (0),
+  totsz (totsz),
   didrexmit (false),
   start (getusec ())
 {
