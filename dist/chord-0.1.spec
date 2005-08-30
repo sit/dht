@@ -14,8 +14,7 @@ Requires: sfs >= 0.8, db4 >= 4.0
 BuildRequires: sfs >= 0.8, db4 >= 4.0
 
 %description
-Chord and DHash are building blocks for developing distributed applications.
-Chord and DHash together provide a distributed hash table implementation.
+Chord and DHash are building blocks for developing distributed applications.  Chord and DHash together provide a distributed hash table implementation.
 This package also includes the UsenetDHT server.
 
 %package vis
@@ -56,6 +55,7 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %defattr(-,root,root)
 %doc  README
+%{_bindir}/adbmigrate
 %{_bindir}/dbdump
 %{_bindir}/dbm
 %{_bindir}/dbm_noauth
@@ -117,6 +117,9 @@ rm -rf $RPM_BUILD_ROOT
 %{_includedir}/chord-%{version}/skiplist.h
 
 %changelog
+* Tue Aug 30 2005 Emil Sit <sit@mit.edu>
+- adbmigrate 
+
 * Wed Aug  3 2005 Emil Sit <sit@mit.edu>
 - dbm_noauth
 
