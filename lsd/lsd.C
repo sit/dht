@@ -518,7 +518,7 @@ main (int argc, char **argv)
   int nreplica = 0;
   bool replicate = true;
   bool do_daemonize = false;
-  str db_name = "/var/tmp/db";
+  str db_name = "/tmp/db-sock";
   p2psocket = "/tmp/chord-sock";
   ctlsocket = "/tmp/lsdctl-sock";
   str myname = my_addr ();
