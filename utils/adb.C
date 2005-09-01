@@ -170,9 +170,9 @@ accept_cb (int lfd, ptr<dbfe> db)
 }
 
 void
-usage (char *progname)
+usage ()
 {
-  warn << progname << ": -d db -S sock\n";
+  warnx << "Usage: adbd -d db -S sock\n";
   exit (0);
 }
 
@@ -196,7 +196,7 @@ main (int argc, char **argv)
       dbsock = optarg;
       break;
     default:
-      usage (argv[0]);
+      usage ();
     }
  
   //open the DB (using dbfe for now)
