@@ -52,7 +52,7 @@ usage ()
 int 
 main (int argc, char **argv) 
 {
-  str db_name = "/var/tmp/db";
+  str db_name = "/tmp/db-sock";
   int vnodes = 1;
   int efrags = 0, dfrags = 0;
   char ch;
