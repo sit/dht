@@ -181,7 +181,7 @@ my $ymin;
 my $ymax;
 if( defined $options{"yrange"} ) {
     $yrange = $options{"yrange"};
-    if( !($yrange =~ /^([\.\d]+)\:([\.\d]+)$/ ) ) {
+    if( !($yrange =~ /^([\-\.\d]+)\:([\.\d]+)$/ ) ) {
 	die( "yrange not in valid format: $yrange" );
     } else {
 	if( $2 <= $1 ) {

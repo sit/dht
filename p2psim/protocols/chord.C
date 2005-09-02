@@ -141,7 +141,7 @@ Chord::~Chord()
   if (me.ip == 1) { //same hack as tapestry.C so statistics only gets printed once
 
     Node::print_stats();
-    if (rtable_size() > 10) {
+    if (rtable_sz.size () > 10) {
       printf("<-----STATS----->\n");
       sort(rtable_sz.begin(),rtable_sz.end());
       uint totalrtable = 0;
