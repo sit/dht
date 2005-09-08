@@ -12,10 +12,16 @@
 
 static char *logfname;
 
+static vec<syncer *> syncers;
+
 static void
 halt ()
 {
   warnx << "Exiting on command.\n";
+  while (syncers.size ()) {
+    syncer *s = syncers.pop_back ();
+    delete s;
+  }
   exit (0);
 }
 
@@ -128,6 +134,7 @@ main (int argc, char **argv)
   (void) dhblock::dhash_mtu ();
   
   chord_node ret;
+  bzero (&ret, sizeof (ret));
   for (u_int i = 0; i < 3; i++)
     ret.coords.push_back (0);
   ret.r.hostname = host.r.hostname;
@@ -145,7 +152,8 @@ main (int argc, char **argv)
     int v = -1;
     Configurator::only ().get_int ("dhash.replica", v);
     dbname = strbuf () << ret.x << ".n";
-    vNew syncer (locations, n, db_name, dbname, DHASH_NOAUTH, v, v);
+    syncer *s = New syncer (locations, n, db_name, dbname, DHASH_NOAUTH, v, v);
+    syncers.push_back (s);
   }
 
   // XXX check if lsd is running

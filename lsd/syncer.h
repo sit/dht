@@ -12,7 +12,7 @@ typedef callback<void, ptr<location> >::ref  cb_location;
 typedef callback<void, vec<ptr<location> > >::ref cb_locationlist;
 
 class syncer {
-  ref<block_status_manager> bsm;
+  ptr<block_status_manager> bsm;
   ptr<locationtable> locations;
 
   dhash_ctype ctype;
@@ -38,6 +38,7 @@ public:
 		  dhash_ctype ctype,
 		  u_int dfrags = 0,
 		  u_int efrags = 0);
+  ~syncer ();
   
 protected:
   void doRPC (const rpc_program &prog,

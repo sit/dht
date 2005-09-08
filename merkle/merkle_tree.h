@@ -46,7 +46,7 @@ private:
 		       const merkle_hash &key, merkle_node *n);
 
   void iterate_cb (ptr<adb> realdb, adb_status stat, vec<chordID> keys);
-  void iterate_custom_cb (block_status_manager *bsm, 
+  void iterate_custom_cb (ptr<block_status_manager> bsm, 
 			  chordID localID,
 			  chordID remoteID,
 			  ptr<adb> realdb, 
@@ -61,14 +61,14 @@ public:
   merkle_node root; // ditto
   merkle_tree_stats stats;
 
-
   merkle_tree (ptr<adb> db, bool populate); 
-  merkle_tree::merkle_tree (ptr<adb> realdb,
-			    block_status_manager *bsm,
-			    chordID remoteID,
-			    vec<ptr<location> > succs,
-			    dhash_ctype ctype,
-			    cbv cb);
+  merkle_tree (ptr<adb> realdb,
+	       ptr<block_status_manager> bsm,
+	       chordID remoteID,
+	       vec<ptr<location> > succs,
+	       dhash_ctype ctype,
+	       cbv cb);
+  ~merkle_tree ();
   void remove (merkle_hash &key);
   int insert (merkle_hash &key);
   merkle_node *lookup_exact (u_int depth, const merkle_hash &key);

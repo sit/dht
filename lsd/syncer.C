@@ -42,7 +42,16 @@ syncer::syncer (ptr<locationtable> locations,
   // Initially randomize a little.
   int delay = random_getword () % replica_timer;
   delaycb (delay, wrap(this, &syncer::sync_replicas)); 
-};
+}
+
+syncer::~syncer ()
+{
+  delete tmptree;
+  tmptree = NULL;
+  bsm = NULL;
+  replica_syncer= NULL;
+  db = NULL;
+}
 
 
 void

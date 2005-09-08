@@ -7,7 +7,6 @@
 #include "dhblock.h"
 #include "dhblock_noauth.h"
 
-
 merkle_tree::merkle_tree (ptr<adb> realdb, bool populate)
 {
 
@@ -19,6 +18,16 @@ merkle_tree::merkle_tree (ptr<adb> realdb, bool populate)
   
   //leave the merkle tree under the fakedb. We'll only use this to hold keys
   // higher layers are responsible for managing their own data in the db
+}
+
+merkle_tree::~merkle_tree ()
+{
+  merkle_key *kcur, *knext;
+  for (kcur = sk_keys.first (); kcur; kcur = knext) {
+    knext = sk_keys.next (kcur);
+    sk_keys.remove (kcur->id);
+    delete kcur;
+  }
 }
 
 void
@@ -39,7 +48,7 @@ merkle_tree::iterate_cb (ptr<adb> realdb, adb_status stat, vec<chordID> keys)
 
 //build a merkle tree custom-tailored for remoteID
 merkle_tree::merkle_tree (ptr<adb> realdb,
-			  block_status_manager *bsm,
+			  ptr<block_status_manager> bsm,
 			  chordID remoteID,
 			  vec<ptr<location> > succs,
 			  dhash_ctype ctype,
@@ -56,7 +65,7 @@ merkle_tree::merkle_tree (ptr<adb> realdb,
   
 
 void
-merkle_tree::iterate_custom_cb (block_status_manager *bsm, 
+merkle_tree::iterate_custom_cb (ptr<block_status_manager> bsm, 
 				chordID localID,
 				chordID remoteID,
 				ptr<adb> realdb, 				
