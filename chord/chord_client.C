@@ -223,6 +223,7 @@ void
 chord::join (str wellknownhost, int wellknownport, bool failok)
 {
   chord_node wkn;
+  bzero (&wkn, sizeof (wkn));
   wkn.r.hostname = wellknownhost;
   wkn.r.port = wellknownport ? wellknownport : myport;
   wkn.x = make_chordID (wkn.r.hostname, wkn.r.port);
