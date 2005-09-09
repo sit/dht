@@ -14,7 +14,9 @@ dbrec_to_str (ptr<dbrec> dbr, int i)
   // cache:abc03313ff
   rxx m("^([^!]+)!([0-9a-f]+)", "m");
   m.search (buf);
-  assert (m.success ());
+  if (!m.success ()) {
+    fatal << "dbrec_to_str expected match from '" << buf << "' but didn't get one\n";
+  }
   return m[i];
 }
 

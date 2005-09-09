@@ -179,6 +179,8 @@ usage ()
 int 
 main (int argc, char **argv)
 {
+  setprogname (argv[0]);
+
   char ch;
   str db_name = "/var/tmp/db";
   dbsock = "/tmp/db-sock";
@@ -187,8 +189,13 @@ main (int argc, char **argv)
   sigcb (SIGINT, wrap (&halt));
   sigcb (SIGTERM, wrap (&halt));
 
-  while ((ch = getopt (argc, argv, "d:S:"))!=-1)
+  bool do_daemonize (false);
+
+  while ((ch = getopt (argc, argv, "Dd:S:"))!=-1)
     switch (ch) {
+    case 'D':
+      do_daemonize = true;
+      break;
     case 'd':
       db_name = optarg;
       break;
@@ -199,6 +206,11 @@ main (int argc, char **argv)
       usage ();
     }
  
+  if (do_daemonize) {
+    warn << "adbd starting daemonized\n";
+    daemonize ();
+  }
+
   //open the DB (using dbfe for now)
   dbOptions opts;
   opts.addOption ("opt_cachesize", 1000);
