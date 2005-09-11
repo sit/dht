@@ -64,7 +64,7 @@ class accordion : public vnode_impl {
 	              chord_nodelistres *res, 
 		      clnt_stat err);
 
-    void fill_gap_timeout_cb(ptr<location> l,  
+    bool fill_gap_timeout_cb(ptr<location> l,  
 	                     cbchordIDlist_t cb,
 			     chord_nodelistres *res, 
 			     clnt_stat err);
@@ -74,7 +74,7 @@ class accordion : public vnode_impl {
 			  chord_nodelistres *res,
 			  clnt_stat status);
 
-    void accroute_hop_timeout_cb (ptr<recroute_route_arg> ra,
+    bool accroute_hop_timeout_cb (ptr<recroute_route_arg> ra,
 				  ptr<location> p,
 				  chord_node n,
 				  int rexmit_number);

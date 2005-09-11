@@ -381,7 +381,7 @@ accordion::accroute_hop_cb (ptr<recroute_route_arg> nra,
   }
 }
 
-void
+bool
 accordion::accroute_hop_timeout_cb ( ptr<recroute_route_arg> nra,
 				    ptr<location> p,
 				    chord_node n,
@@ -413,6 +413,7 @@ accordion::accroute_hop_timeout_cb ( ptr<recroute_route_arg> nra,
   acctrace << myID << ":accroute_hop_timeout_cb (" << nra->routeid << ", "
     << nra->x << " failed " << p->id () << " dropped" << "\n";
     */
+  return false;
 }
 
 void

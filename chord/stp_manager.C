@@ -141,36 +141,26 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
   }
 }
 
-void
+bool
 stp_manager::timeout (rpc_state *C)
 {
 
 
-  //run through the list of pending RPCs and bump
-  // the retransmit timers of any RPCs that are
-  // bound for the same destination.
-  // also: remove any RPCs that seem to be headed
-  //       for failed nodes from the window
+  //run through the list of pending RPCs and 
+  // remove any that are headed for the host
+  // that just timed out from the window.
+  // if the host is dead, this prevents a bunch
+  // of back-to-back RPCs for that host from
+  // clogging up the window
+  // if this was a congestion loss, we've 
+  // increased the window that we "deserve"
   rpc_state *O = pending.first;
   while (O) {
     if (O->loc->id () == C->loc->id () &&
-	O != C) {
-
-      if ((getusec () - O->sendtime) > 2000000000 && O->in_window) {
-	//this RPC is almost certainly destined for a dead host
-	// get it out of the window.
-
-	// leave it's retransmit timer alone so that it fails 
-	// quickly and the application can get on with business
-	O->in_window = false;
-	inflight--;
-      } else
-	// we've seen a timeout to this host, two possibilities:
-	// a) it's a random drop. 
-	// b) the host is down/going down
-	// in either case retransmitting the other RPCs to that host
-	// won't help. delay those retransmissions for a bit
-	O->b->reset_tmo ();       
+	O != C &&
+	O->in_window) {
+      O->in_window = false;
+      inflight--;
     }
     O = pending.next (O);
   }
@@ -182,15 +172,29 @@ stp_manager::timeout (rpc_state *C)
     inflight--;
   }
 
+  //if there are any RPCs destined for this host, make
+  // them fail right away. 
+  if (C->rexmits > MAX_REXMIT) {
+    rpc_state *O = pending.first;
+    while (O) {
+      if (O->loc->id () == C->loc->id () && O != C) 
+	O->b->timeout ();
+      O = pending.next (O);
+    }
+  }
+  
+  bool cancel = false;
   if (C->cb_tmo) {
     chord_node n;
     C->loc->fill_node (n);
-    (C->cb_tmo)(n, C->rexmits);
+    cancel = (C->cb_tmo)(n, C->rexmits);
   }
 
   C->rexmits++;
   if (C->from->id () != C->loc->id () && C->rexmits == 1)
     update_cwind (-1);
+
+  return cancel;
 }
 
 void
@@ -392,7 +396,7 @@ stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l,
   *sec = (long)(alat / 1000000);
   *nsec = ((long)alat % 1000000) * 1000;
   
-  if (*nsec < 0 || *sec < 0) {
+  if (*nsec < 0 || *sec < 0 || *sec > 1) {
     *sec = 1;
     *nsec = 0;
   }
@@ -534,7 +538,7 @@ void stp_manager::stats ()
 rpccb_chord *
 rpccb_chord::alloc (ptr<aclnt> c,
 		    aclnt_cb cb,
-		    cbv u_tmo,
+		    callback<bool>::ptr u_tmo,
 		    ptr<void> in,
 		    void *out,
 		    int procno,
@@ -646,10 +650,11 @@ rpccb_chord::timeout_cb (ptr<bool> del)
   if (*del) return;
 
   tmo = NULL;
+  bool cancel = false;
   if (utmo)
-    utmo ();
+    cancel = utmo ();
 
-  if (rexmits > MAX_REXMIT) {
+  if (rexmits > MAX_REXMIT || cancel) {
     timeout ();
     return;
   } else {
@@ -708,6 +713,7 @@ rpccb_chord::timeout_cb (ptr<bool> del)
 void
 rpccb_chord::finish_cb (aclnt_cb cb, ptr<bool> del, clnt_stat err) 
 {
+  if (*del) return;
   *del = true;
   cb (err);
 }

@@ -3,7 +3,7 @@
 
 class rpccb_chord : public rpccb_msgbuf {
  protected:
-  rpccb_chord (ref<aclnt> c, xdrsuio &x, aclnt_cb _cb, cbv u_tmo,
+  rpccb_chord (ref<aclnt> c, xdrsuio &x, aclnt_cb _cb, callback<bool>::ptr u_tmo,
 	       void *out, xdrproc_t outproc, const sockaddr *d, 
 	       ptr<bool> del, ptr<void> in, int procno) :
     rpccb_msgbuf (c, x, wrap (this, &rpccb_chord::finish_cb, _cb, del), out, 
@@ -13,7 +13,7 @@ class rpccb_chord : public rpccb_msgbuf {
   int rexmits;
   timecb_t *tmo;
   long sec, nsec;
-  cbv utmo;
+  callback<bool>::ptr utmo;
   ptr<bool> deleted;
   ptr<aclnt> c;
   int procno;
@@ -30,7 +30,7 @@ private:
   void user_rexmit ();
   static rpccb_chord *alloc (ptr<aclnt> c,
 			     aclnt_cb cb,
-			     cbv u_tmo,
+			     callback<bool>::ptr u_tmo,
 			     ptr<void> in,
 			     void *out,
 			     int procno,

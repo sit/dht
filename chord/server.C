@@ -598,12 +598,13 @@ vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno,
   }
 }
 
-void
+bool
 vnode_impl::tmo (cbtmo_t cb_tmo, int progno, 
 		 int procno, int args_len, chord_node n, int r)
 {
   track_rexmit (progno, procno, args_len);
-  if (cb_tmo) cb_tmo (n, r);
+  if (cb_tmo) return cb_tmo (n, r);
+  else return false;
 }
 
 void

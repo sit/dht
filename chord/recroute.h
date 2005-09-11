@@ -47,7 +47,7 @@ class recroute : public T {
 				const vec<ptr<location> > cs);
   void dorecroute_sendroute (recroute_route_arg *ra, ptr<location> p);
   
-  void recroute_hop_timeout_cb (ptr<recroute_route_arg> nra,
+  bool recroute_hop_timeout_cb (ptr<recroute_route_arg> nra,
 				ptr<location> p,
 				vec<chordID> failed,
 				chord_node n,

@@ -144,7 +144,7 @@ class vnode_impl : public vnode {
   void check_dead_node_cb (ptr<location> l, time_t nbackoff, chordstat s);
   void check_dead_node (ptr<location> l, time_t backoff);
 
-  void tmo (cbtmo_t cb_tmo, int progno,
+  bool tmo (cbtmo_t cb_tmo, int progno,
 	    int procno, int args_len, chord_node n, int r);
   
   // The RPCs

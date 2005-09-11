@@ -153,17 +153,22 @@ route_recchord::first_hop (cbhop_t cbi, ptr<chordID> guess)
   clock_gettime (CLOCK_REALTIME, &start_time_);
 }
 
-void
+bool
 route_recchord::timeout_cb (ptr<bool> del,
 			    ptr<recroute_route_arg> ra,
 			    ptr<location> p,
 			    chord_node n,
 			    int retries)
 {
-  if (*del) return;
+  if (*del) return false;
 
-  if (retries == 0) {
+  trace << v->my_ID () << ": first_hop (" << routeid_ << ", " << x
+	<< ") forwarding to "
+	<< p->id () << " TIMEOUT\n";
+  if (retries == 0 && failed_nodes.size () <= 3) {
     failed_nodes.push_back (p->id ());
+    ra->retries++;
+    // XXX maybe strange things happen if p was my succ?
     ptr<location> np = v->closestpred (x, failed_nodes);
     recroute_route_stat *res = New recroute_route_stat (RECROUTE_ACCEPTED);
     v->doRPC (np, recroute_program_1, RECROUTEPROC_ROUTE,
@@ -171,7 +176,8 @@ route_recchord::timeout_cb (ptr<bool> del,
 	      wrap (this, &route_recchord::first_hop_cb, deleted, ra, res, np),
 	      wrap (this, &route_recchord::timeout_cb, deleted, ra, np));  
   } 
-  // XXX are we leaking res here on timeouts?
+  // cancel resends of this RPC. Note that we only retry the RPC here now.
+  return true;
 }
 
 void
@@ -213,14 +219,6 @@ route_recchord::first_hop_cb (ptr<bool> del,
     return;
   }
 
-  ra->retries++;
-  failed_nodes.push_back (p->id ());
-  p = v->closestpred (x, failed_nodes);
-  recroute_route_stat *nres = New recroute_route_stat (RECROUTE_ACCEPTED);
-  v->doRPC (p, recroute_program_1, RECROUTEPROC_ROUTE,
-	    ra, nres,
-	    wrap (this, &route_recchord::first_hop_cb, del, ra, nres, p),
-	    wrap (this, &route_recchord::timeout_cb, deleted, ra, p));  
 }
 
 void

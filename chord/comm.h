@@ -251,7 +251,7 @@ class stp_manager : public rpc_manager {
   void ratecb ();
   void remove_from_sentq (long acked_seqno);
   void update_cwind (int acked);
-  void timeout (rpc_state *s);
+  bool timeout (rpc_state *s);
   void enqueue_rpc (RPC_delay_args *args);
   void rpc_done (long seqno);
   void reset_idle_timer ();

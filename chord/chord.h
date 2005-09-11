@@ -58,7 +58,7 @@ struct user_args;
 typedef vec<ptr<location> > route;
 class route_iterator;
 
-typedef callback<void, chord_node, int>::ptr cbtmo_t;
+typedef callback<bool, chord_node, int>::ptr cbtmo_t;
 typedef callback<void,ptr<vnode>,chordstat>::ref cbjoin_t;
 typedef callback<void,chord_node,chordstat>::ref cbchordID_t;
 typedef callback<void,vec<chord_node>,chordstat>::ref cbchordIDlist_t;

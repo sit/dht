@@ -24,7 +24,7 @@ class route_recchord : public route_iterator {
 		     ptr<location> p,
 		     clnt_stat status);
 
-  void timeout_cb (ptr<bool> del,
+  bool timeout_cb (ptr<bool> del,
 		   ptr<recroute_route_arg> ra,
 		   ptr<location> p,
 		   chord_node n,

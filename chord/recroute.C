@@ -403,28 +403,18 @@ recroute<T>::recroute_hop_cb (ptr<recroute_route_arg> nra,
     // retransmits.
     return;
   }
-  nra->retries++;
-  failed.push_back (p->id ());
-  p = closestpred (nra->x, failed);
 
-  rtrace << my_ID () << ": dorecroute (" << nra->routeid << ", "
-	 << nra->x << "): now forwarding to " << p->id () << "\n";
-  recroute_route_stat *nres = New recroute_route_stat (RECROUTE_ACCEPTED);
-  doRPC (p, recroute_program_1, RECROUTEPROC_ROUTE,
-	 nra, nres,
-	 wrap (this, &recroute<T>::recroute_hop_cb, nra, p, failed, nres),
-	 wrap (this, &recroute<T>::recroute_hop_timeout_cb, nra, p, failed));
 }
 
 template<class T>
-void
+bool
 recroute<T>::recroute_hop_timeout_cb (ptr<recroute_route_arg> nra,
 				      ptr<location> p,
 				      vec<chordID> failed,
 				      chord_node n,
 				      int rexmit_number)
 {
-  if (rexmit_number == 1) {
+  if (rexmit_number == 0 && failed.size () <= 3)  {
     nra->retries++;
     failed.push_back (p->id ());
     ptr<location> l = closestpred (nra->x, failed);
@@ -438,9 +428,11 @@ recroute<T>::recroute_hop_timeout_cb (ptr<recroute_route_arg> nra,
 	     nra, nres,
 	     wrap (this, &recroute<T>::recroute_hop_cb, nra, l, failed, nres),
 	     wrap (this, &recroute<T>::recroute_hop_timeout_cb, nra, p, failed));
+    } else {
+      return false;
     }
   }
-
+  return true;
 }
 template<class T>
 void
