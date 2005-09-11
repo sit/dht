@@ -234,14 +234,17 @@ dhashcli::fetch_frag (ptr<rcv_state> rs, ptr<dhblock> b)
   rs->nextsucc += 1;
 }
 
-void
+bool
 dhashcli::on_timeout (ptr<rcv_state> rs, 
 		      ptr<dhblock> b,
 		      chord_node dest,
 		      int retry_num) 
 {
-  if (retry_num == 1)
+  trace << clntnode->my_ID () << ": retrieve (" << rs->key
+	<< "): timeout " << retry_num << " on " << dest << "\n";
+  if (retry_num == 0)
     fetch_frag (rs, b);
+  return false;
 }
 
 void
@@ -281,6 +284,7 @@ dhashcli::retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
   int err = block_t->process_download (rs->key, block->data);
   if (err) {
     rs->errors++;
+    trace << myID << ": retrieve_verbose (" << rs->key << "): err \n";
     fetch_frag (rs, block_t);
   }
 
