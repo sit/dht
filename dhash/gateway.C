@@ -45,11 +45,13 @@
 // ------------------------------------------------------------------------
 // DHASHGATEWAY
 
-dhashgateway::dhashgateway (ptr<axprt_stream> x, ptr<chord> node)
+dhashgateway::dhashgateway (ptr<axprt_stream> x, 
+			    ptr<chord> node,
+			    ref<dhash> dh)
 {
   clntsrv = asrv::alloc (x, dhashgateway_program_1,
 	                 wrap (mkref (this), &dhashgateway::dispatch));
-  dhcli = New refcounted<dhashcli> (node->get_vnode (0));
+  dhcli = New refcounted<dhashcli> (node->get_vnode (0), dh);
 }
 
 dhashgateway::~dhashgateway ()

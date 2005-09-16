@@ -52,7 +52,7 @@ class dhblock_chash_srv : public dhblock_srv {
 			adb_status stat, chordID key, str d);
 
 public:
-  dhblock_chash_srv (ptr<vnode> node, str dbname, str dbext,
+  dhblock_chash_srv (ptr<vnode> node, ptr<dhashcli> cli, str dbname, str dbext,
       str desc);
   ~dhblock_chash_srv ();
 

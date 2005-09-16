@@ -31,10 +31,11 @@
 void store_res (str context, int stat);
 
 dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
+				      ptr<dhashcli> cli,
 				      str desc,
 				      str dbname,
 				      str dbext) :
-  dhblock_srv (node, desc, dbname, dbext),
+  dhblock_srv (node, cli, desc, dbname, dbext),
   cache_db (NULL),
   bsm (NULL),
   msrv (NULL),

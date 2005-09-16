@@ -139,21 +139,22 @@ dhash_impl::dhash_impl (ptr<vnode> node, str dbname) :
   host_node->addHandler (merklesync_program_1, 
 			 wrap(this, &dhash_impl::merkle_dispatch));
 
-  cli = New refcounted<dhashcli> (host_node);
+  //NULL since we won't use fetch
+  cli = New refcounted<dhashcli> (host_node, mkref(this));
 
   ptr<dhblock_srv> srv;
   str ext = strbuf () << host_node->my_ID () << ".c";
-  srv = New refcounted<dhblock_chash_srv> (node, "db file",
+  srv = New refcounted<dhblock_chash_srv> (node, cli, "db file",
       dbname, ext);
   blocksrv.insert (DHASH_CONTENTHASH, srv);
 
   ext = strbuf () << host_node->my_ID () << ".k";
-  srv = New refcounted<dhblock_keyhash_srv> (node, "keyhash db file",
+  srv = New refcounted<dhblock_keyhash_srv> (node, cli, "keyhash db file",
       dbname, ext);
   blocksrv.insert (DHASH_KEYHASH, srv);
 
   ext = strbuf () << host_node->my_ID () << ".n";
-  srv = New refcounted<dhblock_noauth_srv> (node, "noauth db file",
+  srv = New refcounted<dhblock_noauth_srv> (node, cli, "noauth db file",
       dbname, ext);
   blocksrv.insert (DHASH_NOAUTH, srv);
 
@@ -164,45 +165,34 @@ dhash_impl::dhash_impl (ptr<vnode> node, str dbname) :
 }
 
 
-dhash_fetchiter_res *
-dhash_impl::block_to_res (dhash_stat err, s_dhash_fetch_arg *arg, str val)
-{
-  dhash_fetchiter_res *res;
-  if (err) 
-    res = New dhash_fetchiter_res  (DHASH_NOENT);
-  else {
-    res = New dhash_fetchiter_res  (DHASH_COMPLETE);
 
-    int vlen = (int)val.len ();
-    if (arg->start < 0)
-      arg->start = 0;
-    if (arg->start > vlen)
-      arg->start = vlen;
-    
-    int n = (arg->len + arg->start < vlen) ? 
-      arg->len : vlen - arg->start;
-
-    res->compl_res->res.setsize (n);
-    res->compl_res->attr.size = vlen;
-    res->compl_res->offset = arg->start;
-    res->compl_res->source = host_node->my_ID ();
-    memcpy (res->compl_res->res.base (), (char *)val.cstr () + arg->start, n);
-    
-	
-    bytes_served += n;
-  }
-
-  return res;
-}
-
-
+/*
 void
-dhash_impl::fetchiter_sbp_gotdata_cb (user_args *sbp, s_dhash_fetch_arg *arg,
+dhash_impl::fetchiter_gotdata_cb (ptr<location> dst, blockID id, long nonce,
 				      str val, dhash_stat err)
 {
-  dhash_fetchiter_res *res = block_to_res (err, arg, val);
-  sbp->reply (res);
-  delete res;
+  //DDD initiate multiple RPCs to the requestor
+  cli->sendblock (dst, id, val, 
+		  wrap (this, &dhash_impl::fetchcomplete_done),
+		  nonce)
+}
+*/
+void
+dhash_impl::fetchcomplete_done (int nonce, chord_node sender,
+				dhash_stat err, bool present)
+{
+  if (err == DHASH_NOENT) { // block wasn't in db. notify sender.
+    ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
+    //fill in just enough fields so that it marshalls
+    // only nonce and type will be examined on the other end
+    arg->key = chordID (0);
+    arg->data.setsize (0);
+    arg->nonce = nonce;
+    arg->type = DHASH_NOENT_NOTIFY;
+    doRPC (sender, dhash_program_1, DHASHPROC_FETCHCOMPLETE, 
+	   arg, NULL, aclnt_cb_null);
+  }
+  
 }
 
 void
@@ -221,6 +211,25 @@ dhash_impl::merkle_dispatch (user_args *sbp)
     sbp->replyref (err);
 }
 
+
+long
+dhash_impl::register_fetch_callback (cbfetch cb) 
+{
+
+  fcb_state *fcb = New fcb_state (cb);
+  fetch_cbs.insert (fcb);  
+  return fcb->nonce;
+}
+
+void
+dhash_impl::unregister_fetch_callback (long nonce) 
+{
+  fcb_state *fcb = fetch_cbs[nonce];
+  fetch_cbs.remove (fcb);
+  delete fcb;
+};
+
+				       
 void
 dhash_impl::dispatch (user_args *sbp) 
 {
@@ -235,18 +244,42 @@ dhash_impl::dispatch (user_args *sbp)
     break;
   case DHASHPROC_FETCHITER:
     {
-      //DDD we're going to block the RPC during the fetch. fix later.
       s_dhash_fetch_arg *farg = sbp->template getarg<s_dhash_fetch_arg> ();
       blockID id (farg->key, farg->ctype);
 
-      if (farg->len > 0) {	
-        //fetch the key and return it, end of story
-        fetch (id, wrap (this, &dhash_impl::fetchiter_sbp_gotdata_cb, 
-			 sbp, farg));
-      } else {
-        dhash_fetchiter_res res (DHASH_NOENT);
-        sbp->reply (&res);
-      }
+      dhash_fetchiter_res res (DHASH_INPROGRESS);
+      chord_node from;
+      sbp->fill_from (&from);
+      long nonce = farg->nonce;
+
+      sbp->reply (&res);
+
+      //farg is garbage below this line ----- 
+
+      ptr<location> requestor = New refcounted<location> (from);
+      ptr<dhblock_srv> srv = blocksrv[id.ctype];
+      cli->sendblock (requestor, id, srv->get_db (),
+		      wrap (this, &dhash_impl::fetchcomplete_done,
+			    nonce, from),
+		      nonce);
+    }
+    break;
+  case DHASHPROC_FETCHCOMPLETE:
+    {
+      s_dhash_insertarg *sarg = sbp->template getarg<s_dhash_insertarg> ();
+      fcb_state *fcb = fetch_cbs[sarg->nonce];
+      if (fcb) {
+	if (sarg->type == DHASH_NOENT_NOTIFY) {
+	  (fcb->cb) (str (""), -1, -1);
+	} else {
+	  str data (sarg->data.base (), sarg->data.size ());
+	  (fcb->cb) (data, sarg->offset, sarg->attr.size);
+	}
+      } else
+	warn << "unexpected FCB for " << sarg->key << 
+	  " nonce: " << sarg->nonce << "\n";
+      
+      sbp->reply (NULL);
     }
     break;
   case DHASHPROC_STORE:
@@ -310,24 +343,6 @@ dhash_impl::storesvc_cb (user_args *sbp,
 
 // --- node to database transfers --- 
 
-void
-dhash_impl::fetch (blockID id, cbvalue cb) 
-{
-  ptr<dhblock_srv> srv = blocksrv[id.ctype];
-  assert (srv);
-  srv->fetch (id.ID, wrap (this, &dhash_impl::fetch_after_db, id, cb));
-}
-
-void
-dhash_impl::fetch_after_db (blockID id, cbvalue cb,
-			     adb_status stat, chordID k, str data)
-{
-  if (stat != ADB_OK) {
-    (*cb)(str(""), DHASH_NOENT);
-  } else {
-    (*cb)(data, DHASH_OK);
-  }
-}
 
 void 
 dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)

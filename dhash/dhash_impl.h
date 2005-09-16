@@ -54,10 +54,19 @@ struct store_state {
   bool iscomplete ();
 };
 
+struct fcb_state {
+  long nonce;
+  cbfetch cb;
+  ihash_entry <fcb_state> link;
 
-class dhash_impl : public dhash {
+  fcb_state (cbfetch cb) :  cb (cb) { while ((nonce = random ()) == 0);};
+};
+
+class dhash_impl : public dhash, public virtual refcount {
   
   qhash<dhash_ctype, ref<dhblock_srv> > blocksrv;
+  
+  ihash<long, fcb_state, &fcb_state::nonce, &fcb_state::link> fetch_cbs;
 
   ptr<vnode> host_node;
   ptr<dhashcli> cli;
@@ -112,6 +121,10 @@ class dhash_impl : public dhash {
 				dhash_stat s, ptr<dhash_block> b, route r);
 
   void merkle_dispatch (user_args *sbp);
+
+  void fetchcomplete_done (int nonce, chord_node sender,
+			   dhash_stat status, bool present);
+
   /* statistics */
   long bytes_stored;
   long keys_stored;
@@ -132,6 +145,10 @@ class dhash_impl : public dhash {
   
   void stop ();
   void start (bool randomize = false);
+
+  long register_fetch_callback (cbfetch cb);
+  void unregister_fetch_callback (long nonce);
+
 };
 
 #endif

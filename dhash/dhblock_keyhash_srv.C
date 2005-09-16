@@ -7,10 +7,11 @@
 #include <dhblock_keyhash_srv.h>
 
 dhblock_keyhash_srv::dhblock_keyhash_srv (ptr<vnode> node,
+					  ptr<dhashcli> cli,
 				          str desc,
 					  str dbname,
 					  str dbext) :
-  dhblock_replicated_srv (node, desc, dbname, dbext, DHASH_KEYHASH)
+  dhblock_replicated_srv (node, cli, desc, dbname, dbext, DHASH_KEYHASH)
 {
 }
 

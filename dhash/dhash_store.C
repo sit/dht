@@ -33,8 +33,7 @@ dhash_store::start (ptr<bool> p_deleted)
     char  *chunkdat = (char *)(data.cstr () + nstored);
     size_t chunkoff = nstored;
     npending++;
-    store (dest, bid, chunkdat, chunklen, chunkoff, 
-	   data.len (), blockno, ctype, store_type);
+    store (chunkdat, chunklen, chunkoff, data.len (), blockno);
     if (*p_deleted) return;
     nstored += chunklen;
     blockno++;
@@ -69,24 +68,22 @@ dhash_store::finish (ptr<bool> p_deleted,
 
 
 void 
-dhash_store::store (ptr<location> dest, blockID blockID, char *data, 
-		    size_t len, size_t off, size_t totsz, int num, 
-		    dhash_ctype ctype, 
-		    store_status store_type)
+dhash_store::store (char *data, size_t len, size_t off, size_t totsz, int num)
 {
   ref<dhash_storeres> res = New refcounted<dhash_storeres> (DHASH_OK);
   ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
-  arg->key     = blockID.ID;
-  arg->ctype   = blockID.ctype;
+  arg->key     = bid.ID;
+  arg->ctype   = bid.ctype;
   arg->data.setsize (len);
   memcpy (arg->data.base (), data, len);
   arg->offset  = off;
   arg->type    = store_type;
   arg->attr.size     = totsz;
-    
+  arg->nonce = nonce;
+
   bool stream = (totsz > 8000);
   clntnode->doRPC
-    (dest, dhash_program_1, DHASHPROC_STORE, arg, res,
+    (dest, dhash_program_1, procno, arg, res,
      wrap (this, &dhash_store::finish, deleted, res, num), NULL, stream);
     
 }

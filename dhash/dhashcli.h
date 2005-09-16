@@ -3,6 +3,7 @@
 
 #include <sys/types.h>
 #include "adb_prot.h"
+#include "dhash.h"
 
 // SFS includes
 #include <vec.h>
@@ -16,7 +17,6 @@ typedef	callback<void, dhash_stat, bool>::ref sendblockcb_t;
 // Forward declarations
 class adb;
 class vnode;
-class dhash;
 class dhash_block;
 class route_iterator;
 struct dhblock;
@@ -38,6 +38,7 @@ public:
     cb_ret callback;
 
     bool completed;
+
 
     void timemark () {
       timespec x;
@@ -79,6 +80,8 @@ public:
 private:
   ptr<vnode> clntnode;
   bool ordersucc_;
+  ptr<dhash> dh;
+
 
   void doassemble (ptr<rcv_state> rs, ptr<dhblock> block,
 		   vec<chord_node> succs);
@@ -115,7 +118,7 @@ private:
 			       ptr<dhash_block> blk);
 
   void sendblock_fetch_cb (ptr<location> dst, blockID bid_to_send,
-			   sendblockcb_t cb, adb_status stat,
+			   sendblockcb_t cb, int nonce, adb_status stat,
 			   chordID key, str data);
   void sendblock_cb (callback<void, dhash_stat, bool>::ref cb, 
 		     dhash_stat err, chordID dest, bool present);
@@ -126,7 +129,7 @@ private:
 		   int retry_num);
 
 public:
-  dhashcli (ptr<vnode> node);
+  dhashcli (ptr<vnode> node, ptr<dhash> dh);
 
   void assemble (blockID b, cb_ret cb, vec<chord_node> succs, route r);
   void retrieve (blockID blockID, cb_ret cb, 
@@ -138,11 +141,12 @@ public:
 	       ptr<chordID> guess = NULL);
 
   void sendblock (ptr<location> dst, blockID bid,
-		  ptr<adb> db, sendblockcb_t cb);
+		  ptr<adb> db, sendblockcb_t cb,
+		  int nonce = 0);
 
   //send a specific fragment (not the one in the DB)
   void sendblock (ptr<location> dst, blockID bid, str data,
-		  sendblockcb_t cb);
+		  sendblockcb_t cb, int nonce = 0);
 
   void lookup (chordID blockID, dhashcli_lookupcb_t cb);
 };

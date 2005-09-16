@@ -11,34 +11,37 @@
 // dhash_download -- downloads a block of a specific chord node.  That node
 //                   should already be in the location table.
 
-dhash_download::dhash_download (ptr<vnode> clntnode, chord_node source,
-				blockID blockID, char *data, u_int len,
-				u_int totsz, cbretrieve_t cb,
+dhash_download::dhash_download (ptr<vnode> clntnode, ptr<dhash> dh, 
+				chord_node source,
+				blockID blockID, cbretrieve_t cb,
 				cbtmo_t cb_tmo) :
-  clntnode (clntnode),
-  npending (0),
   error (false),
   source (source),
   blckID (blockID),
   cb (cb),
-  cb_tmo (cb_tmo),
   buffer (NULL),
   buf_len (0),
-  nextchunk (0),
-  numchunks (0),
-  totsz (totsz),
-  didrexmit (false),
-  start (getusec ())
+  dh (dh),
+  bytes_read (0)
+ 
 {
-  // the first chunk of data may be passed in
-  if (data) {
-    process_first_chunk (data, len, totsz);
-    check_finish ();
-  } else {
-    unsigned mtu = (clntnode->my_location ()->id () == source.x)
-      ? 8192 : dhblock::dhash_mtu ();
-    getchunk (0, mtu, wrap (this, &dhash_download::first_chunk_cb));
-  }
+
+  assert (dh);
+  ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
+  arg->key   = blckID.ID;
+  arg->ctype = blckID.ctype;
+
+  ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> ();
+
+  
+  arg->nonce = dh->register_fetch_callback (wrap (this, 
+						  &dhash_download::gotchunk));
+  nonce = arg->nonce;
+  clntnode->doRPC 
+    (source, dhash_program_1, DHASHPROC_FETCHITER, arg, res, 
+     wrap (this, &dhash_download::sent_request, res), cb_tmo);
+  
+  
 }
 
 dhash_download::~dhash_download ()
@@ -47,112 +50,60 @@ dhash_download::~dhash_download ()
     free (buffer);
     buffer = NULL;
   }
+  
+  dh->unregister_fetch_callback (nonce);
 }
 
+
 void
-dhash_download::getchunk (u_int start, u_int len, gotchunkcb_t cb)
+dhash_download::sent_request (ptr<dhash_fetchiter_res> res, clnt_stat err)
 {
-  ptr<s_dhash_fetch_arg> arg = New refcounted<s_dhash_fetch_arg>;
-  arg->key   = blckID.ID;
-  arg->ctype = blckID.ctype;
-  arg->start = start;
-  arg->len   = len;
-
-  npending++;
-  ptr<dhash_fetchiter_res> res = New refcounted<dhash_fetchiter_res> ();
-
-  bool stream = (totsz > 8000);
-  long seqno = clntnode->doRPC 
-    (source, dhash_program_1, DHASHPROC_FETCHITER, arg, res, 
-     wrap (this, &dhash_download::gotchunk, cb, res, numchunks++),
-     cb_tmo, stream);
-
-  seqnos.push_back (seqno);
+  if (err)
+    fail ("RPC error"); 
+  else if (res && res->status != DHASH_INPROGRESS) 
+    fail ("bad status");
+  else
+    ;
 }
   
-void
-dhash_download::gotchunk (gotchunkcb_t cb, ptr<dhash_fetchiter_res> res,
-			  int chunknum, clnt_stat err)
+
+void 
+dhash_download::gotchunk (str data, int offset, int totsz)
 {
-  (*cb) (res, chunknum, err);
-}
-
-void
-dhash_download::first_chunk_cb  (ptr<dhash_fetchiter_res> res, int chunknum,
-				 clnt_stat err)
-{
-  npending--;
-
-  if (err || (res && res->status != DHASH_COMPLETE))
-    fail (dhasherr2str (res->status));
-  else {
-    totsz   = res->compl_res->attr.size;
-    size_t datalen = res->compl_res->res.size ();
-    char  *data    = res->compl_res->res.base ();
-    process_first_chunk (data, datalen, totsz);
-  }
-  check_finish ();
-}
-
-void
-dhash_download::process_first_chunk (char *data, size_t datalen, size_t totsz)
-{
-  buf_len = totsz;
-  buffer = (char *)malloc (buf_len);
-
-  nextchunk++;
-  add_data (data, datalen, 0);
-
-  //issue the RPCs to get the other chunks
-  size_t nread = datalen;
-  while (nread < totsz) {
-    unsigned mtu = (clntnode->my_location ()->id () == source.x)
-      ? 8192 : dhblock::dhash_mtu ();
-    int length = MIN (mtu, totsz - nread);
-    getchunk (nread, length,
-	      wrap (this, &dhash_download::later_chunk_cb));
-    nread += length;
-  }
-}
-
-void
-dhash_download::later_chunk_cb (ptr<dhash_fetchiter_res> res, int chunknum,
-				clnt_stat err)
-{
-  npending--;
-    
-  if (err || (res && res->status != DHASH_COMPLETE))
-    fail (dhasherr2str (res->status));
-  else {
-
-    if (!didrexmit && (chunknum > nextchunk)) {
-      warn << "FAST retransmit: " << blckID << " chunk "
-	   << nextchunk << " being retransmitted.\n";
-      clntnode->resendRPC (seqnos[nextchunk]);
-      didrexmit = true;  // be conservative: only fast rexmit once per block
+  //first chunk
+  if (offset < 0) {
+    fail ("Block not found");
+  } else {
+    if (buf_len == 0) {
+      buf_len = totsz;
+      buffer = (char *)malloc (buf_len);
     }
-
-    nextchunk++;
-    add_data (res->compl_res->res.base (), res->compl_res->res.size (), 
-	      res->compl_res->offset);
+    add_data (data, offset);
   }
+  
   check_finish ();
 }
 
-void
-dhash_download::add_data (char *data, int len, int off)
+void 
+dhash_download::add_data (str sdata, int off)
 {
+  int len = sdata.len ();
+  const char *data = sdata.cstr ();
+
   if ((unsigned)(off + len) > (u_int)buf_len)
-    fail (strbuf ("bad chunk: off %d, len %d, block %d", 
+    fail (strbuf ("bad chunk: off %d, len %d, block %ld", 
 		  off, len, buf_len));
-  else
+  else {
     memcpy (buffer + off, data, len);
+    bytes_read += len;
+  }
 }
 
 void
 dhash_download::check_finish ()
 {
-  if (npending == 0) {
+  //XXX new finish condition
+  if (bytes_read == buf_len || error) { 
     ptr<dhash_block> block = NULL;
     /* got all chunks */
     if (!error)  {

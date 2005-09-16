@@ -23,11 +23,12 @@
 
 
 dhblock_replicated_srv::dhblock_replicated_srv (ptr<vnode> node,
+						ptr<dhashcli> cli,
 						str desc,
 						str dbname,
 						str dbext,
 						dhash_ctype ctype) :
-  dhblock_srv (node, desc, dbname, dbext),
+  dhblock_srv (node, cli, desc, dbname, dbext),
   ctype (ctype),
   nrpcsout (0),
   checkrep_tcb (NULL),

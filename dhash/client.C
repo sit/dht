@@ -93,8 +93,8 @@ dhashcli_config_init::dhashcli_config_init ()
 // ---------------------------------------------------------------------------
 // DHASHCLI
 
-dhashcli::dhashcli (ptr<vnode> node)
-  : clntnode (node), ordersucc_ (true)
+dhashcli::dhashcli (ptr<vnode> node, ptr<dhash> dh)
+  : clntnode (node), ordersucc_ (true), dh (dh)
 {
   int ordersucc = 1;
   Configurator::only ().get_int ("dhashcli.order_successors", ordersucc);
@@ -226,9 +226,8 @@ dhashcli::fetch_frag (ptr<rcv_state> rs, ptr<dhblock> b)
   
   rs->incoming_rpcs += 1;
 
-  dhash_download::execute (clntnode, rs->succs[i], 
+  dhash_download::execute (clntnode, dh, rs->succs[i], 
 			   blockID(rs->key.ID, rs->key.ctype),
-			   (char *)NULL, 0, 0, 
 			   wrap (this, &dhashcli::retrieve_fetch_cb, rs, i, b),
 			   wrap (this, &dhashcli::on_timeout, rs, b));
   rs->nextsucc += 1;
@@ -551,28 +550,29 @@ dhashcli::lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
 
 void
 dhashcli::sendblock (ptr<location> dst, blockID bid, str data,
-		     sendblockcb_t cb)
+		     sendblockcb_t cb, int nonce /* = 0 */)
 {
 
   dhash_store::execute 
     (clntnode, dst, bid, data,
      wrap (this, &dhashcli::sendblock_cb, cb),
-     DHASH_FRAGMENT); //XXX choose DHASH_STORE if appropriate (i.e. full replica)
+     DHASH_FRAGMENT,
+     nonce); //XXX choose DHASH_STORE if appropriate (i.e. full replica)
 }
 
 void
 dhashcli::sendblock (ptr<location> dst, blockID bid_to_send, ptr<adb> from_db,
-		     sendblockcb_t cb)
+		     sendblockcb_t cb, int nonce /* = 0 */)
 {
   
   from_db->fetch (bid_to_send.ID, 
 		  wrap (this, &dhashcli::sendblock_fetch_cb, dst, 
-			bid_to_send, cb));
+			bid_to_send, cb, nonce));
 }
 
 void
 dhashcli::sendblock_fetch_cb (ptr<location> dst, blockID bid_to_send,
-			      sendblockcb_t cb, adb_status stat,
+			      sendblockcb_t cb, int nonce, adb_status stat,
 			      chordID key, str data)
 {
   if (stat != ADB_OK) {
@@ -583,7 +583,8 @@ dhashcli::sendblock_fetch_cb (ptr<location> dst, blockID bid_to_send,
   dhash_store::execute 
     (clntnode, dst, bid_to_send, data,
      wrap (this, &dhashcli::sendblock_cb, cb),
-     get_store_status(bid_to_send.ctype)); //XXX store_status broken
+     get_store_status(bid_to_send.ctype), //XXX store_status broken
+     nonce); 
 }
 
 void

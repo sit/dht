@@ -41,7 +41,8 @@ protected:
   merkle_server * mserv () { return msrv; };
 
 public:
-  dhblock_replicated_srv (ptr<vnode> node, str dbname, str dbext, str desc,
+  dhblock_replicated_srv (ptr<vnode> node, ptr<dhashcli> cli,
+			  str dbname, str dbext, str desc,
                           dhash_ctype ctype);
   ~dhblock_replicated_srv ();
 

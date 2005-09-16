@@ -8,7 +8,9 @@ class dhblock_noauth_srv : public dhblock_replicated_srv
 {
 public:
   
-  dhblock_noauth_srv (ptr<vnode> node, str desc, str dbname, str dbext);
+  dhblock_noauth_srv (ptr<vnode> node, 
+		      ptr<dhashcli> cli,
+		      str desc, str dbname, str dbext);
 
   bool is_block_stale (str prev, str d) { return false; };
   void bsmupdate (user_args *sbp, dhash_bsmupdate_arg *arg);

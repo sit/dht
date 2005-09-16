@@ -18,9 +18,10 @@ public:
 		       blockID bid,
 		       str data, 
 		       cbclistore_t cb, 
-		       store_status store_type = DHASH_STORE)
+		       store_status store_type = DHASH_STORE,
+		       int nonce = 0)
   {
-    vNew dhash_store (clntnode, dest, bid, data, store_type, cb);
+    vNew dhash_store (clntnode, dest, bid, data, store_type, nonce, cb);
   }
 
 
@@ -34,6 +35,8 @@ protected:
   blockID bid;
   cbclistore_t cb;
   dhash_ctype ctype;
+  int procno;
+  u_int nonce;
   store_status store_type;
   ptr<vnode> clntnode;
 
@@ -44,13 +47,16 @@ protected:
   ptr<bool> deleted;
 
   dhash_store (ptr<vnode> clntnode, ptr<location> dest, blockID bid,
-               str _block, store_status store_type, 
+               str _block, store_status store_type, int nonce,
 	       cbclistore_t cb)
     : npending (0),
       error (false),
       status (DHASH_OK),
       dest (dest), data (_block), bid (bid), cb (cb),
-      ctype (bid.ctype), store_type (store_type),
+      ctype (bid.ctype), 
+      procno ((nonce > 0) ? DHASHPROC_FETCHCOMPLETE : DHASHPROC_STORE), 
+      nonce (nonce),
+      store_type (store_type),
       clntnode (clntnode), num_retries (0),
       dcb (NULL),
       present (false),
@@ -69,9 +75,7 @@ protected:
   void timed_out (ptr<bool> deleted);
   void start (ptr<bool> deleted);
   void finish (ptr<bool> deleted, ptr<dhash_storeres> res, int num, clnt_stat err);
-  void store (ptr<location> dest, blockID blockID, char *data, size_t len,
-	      size_t off, size_t totsz, int num, dhash_ctype ctype, 
-	      store_status store_type);  
+  void store (char *data, size_t len, size_t off, size_t totsz, int num);  
 
 };
 

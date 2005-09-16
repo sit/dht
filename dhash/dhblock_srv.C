@@ -9,16 +9,15 @@
 #include <merkle_misc.h>
 
 dhblock_srv::dhblock_srv (ptr<vnode> node,
+			  ptr<dhashcli> cli,
 		          str desc,
 			  str dbname,
 			  str dbext) :
   node (node),
   desc (desc),
   synctimer (NULL),
-  cli (NULL)
+  cli (cli)
 {
-  // XXX share cli with dhash object??
-  cli = New refcounted<dhashcli> (node);
 
   db = New refcounted<adb> (dbname, dbext);
   warn << "opened " << dbname << " with space " << dbext << "\n";

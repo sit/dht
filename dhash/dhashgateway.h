@@ -20,6 +20,6 @@ class dhashgateway : public virtual refcount
                     route path);
   
 public:
-  dhashgateway (ptr<axprt_stream> x, ptr<chord> clnt);
+  dhashgateway (ptr<axprt_stream> x, ptr<chord> clnt, ref<dhash> dh);
   ~dhashgateway ();
 };

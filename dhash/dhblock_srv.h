@@ -25,7 +25,8 @@ class dhblock_srv {
   ptr<dhashcli> cli;
 
  public:
-  dhblock_srv (ptr<vnode> node, str desc, str dbname, str dbext);
+  dhblock_srv (ptr<vnode> node, ptr<dhashcli> cli,
+	       str desc, str dbname, str dbext);
   virtual ~dhblock_srv ();
 
   virtual void start (bool randomize);
@@ -38,7 +39,7 @@ class dhblock_srv {
 
   virtual void store (chordID k, str d, cbi cb) = 0;
   virtual void fetch (chordID k, cb_fetch cb);
-
+  virtual ptr<adb> get_db () { return db; };
   virtual void offer (user_args *sbp, dhash_offer_arg *arg);
   virtual void bsmupdate (user_args *sbp, dhash_bsmupdate_arg *arg);
 

@@ -47,9 +47,11 @@ dhblock_noauth_srv::get_database_key (chordID key)
 }
 
 
-dhblock_noauth_srv::dhblock_noauth_srv (ptr<vnode> node, str desc, 
+dhblock_noauth_srv::dhblock_noauth_srv (ptr<vnode> node, 
+					ptr<dhashcli> cli,
+					str desc, 
 					str dbname, str dbext) :
-  dhblock_replicated_srv (node, desc, dbname, dbext, DHASH_NOAUTH)
+  dhblock_replicated_srv (node, cli, desc, dbname, dbext, DHASH_NOAUTH)
 {
 
   // merkle state, don't populate from db
