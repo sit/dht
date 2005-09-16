@@ -299,7 +299,7 @@ gateway_accept (ref<axprt_stream> x)
 {
   // constructor of dhashgateway object calls mkref to maintain a
   // reference to itself until the program is gone.
-  vNew refcounted<dhashgateway> (x, chordnode);
+  vNew refcounted<dhashgateway> (x, chordnode, dh[0]);
 }
 
 typedef callback<void, ref<axprt_stream> >::ptr acceptercb_t;
