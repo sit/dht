@@ -22,9 +22,10 @@ void
 res (int i, int error)
 {
   if (error) warn << "error was " << error << "\n";
-  if (i < 100)
+  if (i < 100) {
+    warn << "store: " << i << "\n";
     db->store (bigint(i + 1), str ("foo"), wrap (res, i+1));
-  else
+  }else
     db->fetch (bigint(16), wrap (res2));
 }
 

@@ -7,7 +7,8 @@ enum store_status {
   DHASH_STORE = 0,
   DHASH_CACHE = 1,
   DHASH_FRAGMENT = 2,
-  DHASH_REPLICA = 3
+  DHASH_REPLICA = 3,
+  DHASH_NOENT_NOTIFY = 4
 };
 
 struct dhash_valueattr {
@@ -28,13 +29,13 @@ struct s_dhash_insertarg {
   store_status type;
   dhash_valueattr attr;
   bool last; /* used by the merkle code only */
+  int32_t nonce; /* used only if this is a fetch complete */
 };
 
 struct s_dhash_fetch_arg {
   chordID key;
   dhash_ctype ctype;
-  int32_t start;
-  int32_t len;
+  int32_t nonce;
 };
 
 struct dhash_pred {
@@ -56,16 +57,15 @@ union dhash_storeres switch (dhash_stat status) {
    void;
 };
 
-struct dhash_fetchiter_complete_res {
+struct dhash_fetchcomplete_res {
   dhash_value res;
   int32_t offset;
   dhash_valueattr attr;
-  chordID source;
 };
 
 union dhash_fetchiter_res switch (dhash_stat status) {
- case DHASH_COMPLETE:
-   dhash_fetchiter_complete_res compl_res;
+ case DHASH_INPROGRESS:
+   void;
  case DHASH_CONTINUE:
    void;
  case DHASH_NOENT:
@@ -165,5 +165,10 @@ program DHASH_PROGRAM {
      */
     void
     DHASHPROC_BSMUPDATE (dhash_bsmupdate_arg) = 5;
+
+    /* RPC back to fetch initiator with data */
+    void
+    DHASHPROC_FETCHCOMPLETE (s_dhash_insertarg) = 6;
+
   } = 1;
 } = 344449;
