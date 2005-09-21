@@ -5,6 +5,7 @@
 #include <amisc.h>
 
 #define MAX_INT 0x7fffffff
+const int modelnet_on (getenv("MODELNET") ? 1 : 0 );
 
 bool
 in_vector (const vec<chordID> &v, chordID N)
@@ -91,6 +92,8 @@ make_chord_node (const chord_node_wire &nl)
   chord_node n;
   struct in_addr x;
   x.s_addr = htonl (nl.machine_order_ipv4_addr);
+  if (modelnet_on)
+    x.s_addr = x.s_addr & 0xff7fffff; //JY: clear the modelnet bits
   n.r.hostname = inet_ntoa (x);
   n.r.port     = nl.machine_order_port_vnnum >> 16;
   n.vnode_num  = nl.machine_order_port_vnnum & 0xFFFF;
