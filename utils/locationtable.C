@@ -154,18 +154,8 @@ locationtable::realinsert (ref<location> l)
   if (loc != NULL) {
     // Try to dampen node becoming alive so it only happens once
     // a minute.
-    if (!loc->alive ()) {
-      loc->update_age ();
-      if (l->age () < loc->age ()) {
-	loc->update (l);
-	loc->set_alive (true);
-      } else 
-	locinfo << "locationtable::insert: ignoring stale data for " << loc << "\n";
-    } else {
-      loctrace << "update " << l->id () << " " << l->address () << " "
-	<< l->vnode () << "\n";
-      loc->update (l);
-    }
+    //jy: i'm ignoring dampening cause i already keep track of age?
+    loc->update (l);
     return loc;
   } else {
     locinfo << "insert " << l << "\n";
