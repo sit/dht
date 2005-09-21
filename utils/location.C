@@ -45,7 +45,7 @@ location::location (const chordID &n,
     knownup_ (k),
     age_ (a),
     budget_ (b),
-    isme_ (m),
+    isme_ (m)
 {
   coords_ = coords;
   init ();
@@ -63,7 +63,7 @@ location::location (const chord_node &node)
     knownup_ (node.knownup),
     age_ (node.age),
     budget_ (node.budget),
-    isme_ (false),
+    isme_ (false)
 {
   coords_.set (node);
   init ();
