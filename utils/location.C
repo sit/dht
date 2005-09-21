@@ -42,10 +42,10 @@ location::location (const chordID &n,
     alive_ (true),
     dead_time_ (0),
     nrpc_ (0),
-    knownup_(k),
-    age_(a),
-    budget_(b),
-    isme_(m)
+    knownup_ (k),
+    age_ (a),
+    budget_ (b),
+    isme_ (m),
 {
   coords_ = coords;
   init ();
@@ -60,10 +60,10 @@ location::location (const chord_node &node)
     alive_ (true),
     dead_time_ (0),
     nrpc_ (0),
-    knownup_(node.knownup),
-    age_(node.age),
-    budget_(node.budget),
-    isme_(false)
+    knownup_ (node.knownup),
+    age_ (node.age),
+    budget_ (node.budget),
+    isme_ (false),
 {
   coords_.set (node);
   init ();
@@ -75,31 +75,59 @@ location::~location () {
 void
 location::update_knownup () 
 {
-  knownup_ = (timenow - updatetime_); 
-  assert(isme_);
+  if ((timenow > 0) && (updatetime_ > 0))
+    knownup_ = (timenow - updatetime_); 
+  else if ((timenow > 0) && (!updatetime_))
+    updatetime_ = timenow;
+  if (knownup_ < 30)
+    knownup_ = 30;
+  assert(isme_ && !age_);
 }
 
-void
-location::update_age ()
+time_t
+location::age ()
 {
   if (!isme_) {
     // timenow is updated by libasync core.C
-    age_ += (timenow - updatetime_); 
-    updatetime_ = timenow;
+    if ((timenow > 0) && (updatetime_ > 0)) {
+      return (timenow - updatetime_+age_); 
+    }else if ((timenow > 0) && (!updatetime_))
+      updatetime_ = timenow;
   }
+  return age_;
 }
 
 void
 location::update (ptr<location> l)
 {
-  update_age ();
   // Prefer data that is newer than our own data
-  if (l->age () < (age_ + 10)) {
-    age_ = l->age ();
-    knownup_ = l->knownup ();
-    budget_ = l-> budget ();
-    coords_.set (l->coords ());
-  }
+  if ((timenow > 0) && (updatetime_ > 0)) {
+    if (!isme_ && (l->age ()< ((timenow - updatetime_) + age_))) {
+      age_ = l->age ();
+      updatetime_ = timenow;
+      knownup_ = l->knownup ();
+      budget_ = l-> budget ();
+      coords_.set (l->coords ());
+      set_alive (true);
+    }
+  } else if ((timenow > 0) && (!updatetime_))
+    updatetime_ = timenow;
+}
+
+void
+location::update (chord_node n)
+{
+  if ((timenow > 0) && (updatetime_ > 0)) {
+    if (!isme_ && n.age < ((timenow - updatetime_) + age_)) {
+      age_ = n.age;
+      updatetime_ = timenow;
+      knownup_ = n.knownup;
+      budget_ = n.budget;
+      coords_.set (n);
+      set_alive (true);
+    }
+  } else if ((timenow > 0) && (!updatetime_))
+    updatetime_ = timenow;
 }
 
 void
@@ -110,12 +138,12 @@ location::fill_node (chord_node &data)
   data.vnode_num = vnode_;
 
   //for Accordion
+  data.age = age ();
   if (isme_)
     update_knownup ();
-  else
-    update_age ();
+  else if (!data.age)
+    data.age = 1; //second-hand routing info has age at least 1
   data.knownup = knownup_;
-  data.age = age_;
   data.budget = budget_;
 
   coords_.fill_node (data);
@@ -129,12 +157,12 @@ location::fill_node (chord_node_wire &data)
   data.machine_order_port_vnnum = (ntohs (saddr_.sin_port) << 16) | vnode_;
 
   //for Accordion
+  data.age = age ();
   if (isme_)
     update_knownup ();
-  else
-    update_age ();
+  else if (!data.age)
+    data.age = 1; //second-hand routing info has age at least 1
   data.knownup = knownup_;
-  data.age = age_;
   data.budget = budget_;
  
   coords_.fill_node (data);
@@ -154,11 +182,12 @@ location::set_alive (bool alive)
 {
   if (!alive && alive_) {
     dead_time_ = timenow;
-  }
+  } 
   // Setting age is ok if we only call set_alive after direct comm
   // with this location.
   age_ = 0;
   alive_ = alive;
+  updatetime_ = timenow;
 }
 
 void

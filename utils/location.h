@@ -50,12 +50,14 @@ class location {
   // jy: for Accordion
   time_t knownup () const { return knownup_;}
   void update_knownup ();
-  time_t age () const { return age_;}
+  time_t age ();
+  time_t init_age () { return age_;}
   time_t updatetime () { return updatetime_;}
   int32_t budget () const { return budget_;}
   void set_budget (int32_t b) { budget_ = b;}
   void update_age ();
   void update ( ptr<location> l);
+  void update ( chord_node n);
 
 
   void fill_node (chord_node &data);
