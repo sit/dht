@@ -622,7 +622,7 @@ vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc,
       locations->insert (l);
       l->set_alive (false);
     }
-    if (!l->alive ()) {
+    if (!l->alive () && checkdead_int > 0) {
       // benjie: no longer alive, put it on the dead_nodes list so
       // we can try to contact it periodically
       unsigned i=0;
@@ -630,11 +630,8 @@ vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc,
 	if (dead_nodes[i]->id () == l->id ())
           break;
       if (i == dead_nodes.size ()) {
-        int t;
-        assert (Configurator::only ().get_int ("chord.checkdead_interval", t));
-        assert (t > 0);
         dead_nodes.push_back (l);
-	delaycb (t, wrap (this, &vnode_impl::check_dead_node, l, t));
+	delaycb (checkdead_int, wrap (this, &vnode_impl::check_dead_node, l, checkdead_int));
       }
     }
     cb (err);

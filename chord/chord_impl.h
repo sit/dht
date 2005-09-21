@@ -77,6 +77,7 @@ class vnode_impl : public vnode {
 		    bool stop);
  private:
   int myindex;
+  int checkdead_int;
 
   ihash<unsigned long, 
     dispatch_record, 

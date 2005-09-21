@@ -108,6 +108,8 @@ vnode_impl::vnode_impl (ref<chord> _chordnode,
   ndogetsucclist = 0;
   ndogetsucc_ext = 0;
   ndogetpred_ext = 0;
+
+  assert (Configurator::only ().get_int ("chord.checkdead_interval", checkdead_int));
 }
 
 vnode_impl::~vnode_impl ()
@@ -282,7 +284,9 @@ vnode_impl::join_getsucc_cb (ptr<location> n,
     // Just insert a possible predecessor and successor.
     size_t i = route->resok->nlist.size ();
     for (size_t j = 0; j < i; j++) {
-      warn << my_ID () << " adding " << make_chordID(route->resok->nlist[j]) << " as an initial node\n";
+      warn << my_ID () << " adding " << make_chordID(route->resok->nlist[j]) 
+	<< "," << route->resok->nlist[j].knownup << "," << route->resok->nlist[j].age 
+	<< " as an initial node\n";
       if (make_chordID (route->resok->nlist[j]) != my_ID ()) 
 	  locations->insert (make_chord_node (route->resok->nlist[j]));
     }
