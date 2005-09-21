@@ -127,7 +127,6 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
     inflight++;
     C->sendtime = getusec ();
     C->b->send (sec, nsec);
-    seqno++;
     nsent++;
     
     if (_fake_seqno) 
@@ -137,7 +136,7 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
     
 
     user_rexmit_table.insert (C);
-    return seqno;
+    return seqno++;
   }
 }
 
