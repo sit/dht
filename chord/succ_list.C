@@ -166,7 +166,7 @@ succ_list::stabilize_getsucclist_cb (ptr<location> s, vec<chord_node> nlist,
   unsigned int newnsucc = nlist.size () - 1; // drop last guy.
   while ((i < curnsucc) && (j < newnsucc)) {    
     if (succlist[i]->id () == nlist[j].x) {
-      succlist[i]->set_coords (nlist[j]);
+      succlist[i]->update (nlist[j]);
       i++; j++; continue;
     }
     if (between (myID, nlist[j].x, succlist[i]->id ())) {
@@ -190,7 +190,9 @@ succ_list::stabilize_getsucclist_cb (ptr<location> s, vec<chord_node> nlist,
       } else {
 	stable_succlist = false;
 	warnx << myID << ": stabilize_succlist: received new successor "
-	      << nlist[j].x << " from " << s << "\n";
+	      << nlist[j].x << "," << nlist[j].knownup << "," 
+	      << nlist[j].age << " from " << (s->id ()>>144) << "," << s->knownup () 
+	      << "," << s->age () << "\n";
       }
       j++;
       continue;
