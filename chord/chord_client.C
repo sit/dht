@@ -143,7 +143,7 @@ chord::chord (str host, int port,
     warnx << gettime () << ": creating new vnode: " << newID << "\n";
     Coord coords;
     ptr<location> l = locations->insert (newID, myname, myport,
-					 i, coords, 1, 0, 1, true);
+					 i, coords, 30, 0, 1, true);
     assert (l);
     locations->pin (newID);
 
@@ -157,10 +157,12 @@ chord::chord (str host, int port,
 int
 chord::initxprt (int myp, int type, int *fd)
 {
-  *fd = inetsocket (type, myp);
+  in_addr my_addr;
+  inet_aton (myname.cstr (), &my_addr);
+  *fd = inetsocket (type, myp, ntohl (my_addr.s_addr));
   if (*fd < 0)
-    fatal ("binding %s port %d: %m\n",
-	   (type == SOCK_DGRAM ? "UDP" : "TCP"), myp);
+    fatal ("binding %s addr %s port %d: %m\n",
+	   (type == SOCK_DGRAM ? "UDP" : "TCP"), myname.cstr (), myp);
   
   if (myp == 0) {
     struct sockaddr_in addr;
@@ -228,6 +230,9 @@ chord::join (str wellknownhost, int wellknownport, bool failok)
   wkn.r.port = wellknownport ? wellknownport : myport;
   wkn.x = make_chordID (wkn.r.hostname, wkn.r.port);
   wkn.vnode_num = 0;
+  //make up info about the age and knownup for this entry
+  wkn.age = 60;
+  wkn.knownup = 600;
 
   wkn.coords.setsize (NCOORD + USING_HT);
   // Make up some random initial information for this other node.
