@@ -509,8 +509,7 @@ main (int argc, char **argv)
 
   myport = 0;
   // ensure enough room for fingers and successors.
-  int max_loccache;
-  Configurator::only ().get_int ("locationtable.maxcache", max_loccache);
+  int max_loccache = 0;
   int max_vnodes = 1;
 
   str wellknownhost;
@@ -666,6 +665,8 @@ main (int argc, char **argv)
     usage ();
   }
 
+  if (!max_loccache) 
+    Configurator::only ().get_int ("locationtable.maxcache", max_loccache);
   // Override cf file stuff
   max_loccache = max_loccache * (vnodes + 1);
 
