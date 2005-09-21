@@ -2,8 +2,8 @@
 %#include "recroute_prot.h"
 
 struct accordion_fillgap_arg {
-  chord_node_wire src;
-  chordID end;
+  chord_node_wire end;
+  unsigned para; //sender's parallelism, used to determine the freshness of the replied routing entries
 };
 
 program ACCORDION_PROGRAM {
