@@ -15,15 +15,13 @@ route_accordion::first_hop (cbhop_t cbi, ptr<chordID> guess)
   ptr<recroute_route_arg> ra = New refcounted<recroute_route_arg> ();
 
   ra->routeid = arouteid_;
+  ra->succs_desired = desired_;
   v->my_location ()->fill_node (ra->origin);
+  assert (ra->origin.knownup < 36000 && ra->origin.knownup > 0);
   ra->x = x;
   ra->retries = 0;
-  ra->succs_desired = desired_/2;
-  if (!ra->succs_desired) 
-    ra->succs_desired = 1;
-  ra->retries = 0x8000000; //first bit signifies this is the primary path
-  trace << v->my_ID () << ": new route_accordion::first_hop: desired = "
-	<< desired_ << "\n";
+  trace << (v->my_ID ()>>144) << ": new route_accordion::first_hop: key " 
+    << (x>>144) << " desired = " << desired_ << "\n";
 
   vnode *vp = v;
   ((accordion *) vp)->doaccroute (NULL, ra);

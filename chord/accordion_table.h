@@ -4,27 +4,21 @@
 #include "stabilize.h"
 #include "accordion.h"
 
-class accordion_table : public stabilizable {
+class accordion_table {
 
 protected:
   ptr<accordion> myvnode;
   ptr<locationtable> locations;
-
   chordID myID;
-
   accordion_table(ptr<accordion> v, ptr<locationtable> l);
 
 public:
-  virtual bool backoff_stabilizing () { return false; }
-  virtual void do_backoff () { explore_table(); }
-  virtual bool isstable () { return false; }
+  void start ();
 
   void explore_table();
   void del_node(const chordID x);
-  vec<ptr<location> > get_fingers (ptr<location> src, chordID end);
-  vec<ptr<location> > nexthops (const chordID &x, unsigned p);
-
-  void fill_gap_nodelistres (chord_nodelistres *res, ptr<location> src, chordID end);
+  vec<ptr<location> > get_fingers (ptr<location> src, chordID end, unsigned p);
+  vec<ptr<location> > nexthops (const chordID &x, unsigned p, vec<ptr<location> > tried);
 
   void fill_gap_cb(ptr<location> l, vec<chord_node> nlist, chordstat err);
 
@@ -34,9 +28,13 @@ public:
 
 private:
   chordID mingap;
+  int nout;
   
-  ptr<location> biggest_gap(chordID &end);
-  ptr<location> random_nbr(chordID &end);
+  vec<ptr<location> > biggest_gap(unsigned p);
+  vec<ptr<location> > random_nbr(unsigned p);
+
+  unsigned d_sec;
+  unsigned d_msec;
 
 };
 #endif
