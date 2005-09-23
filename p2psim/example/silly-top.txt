@@ -1,4 +1,4 @@
-topology Euclidean
+topology Euclidean 1024
 failure_model NullFailureModel
 
 1 43,42
