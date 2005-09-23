@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include "adb_prot.h"
 #include "dhash.h"
+#include "dhblock_srv.h"
 
 // SFS includes
 #include <vec.h>
@@ -141,7 +142,7 @@ public:
 	       ptr<chordID> guess = NULL);
 
   void sendblock (ptr<location> dst, blockID bid,
-		  ptr<adb> db, sendblockcb_t cb,
+		  ptr<dhblock_srv> db, sendblockcb_t cb,
 		  int nonce = 0);
 
   //send a specific fragment (not the one in the DB)

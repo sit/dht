@@ -16,10 +16,10 @@
 #define trace   modlogger ("pmaint", modlogger::TRACE)
 
 pmaint::pmaint (dhashcli *cli, ptr<vnode> host_node, 
-		ptr<adb> db) : 
+		ptr<dhblock_srv> srv) : 
   cli (cli),  
   host_node (host_node),
-  db (db),
+  srv (srv),
   pmaint_searching (true),
   pmaint_next_key (0),
   active_cb (NULL)
@@ -50,6 +50,7 @@ pmaint::pmaint_next ()
 {
  
   if (pmaint_searching) {
+    ptr<adb> db = srv->get_db ();
     db->getkeys (pmaint_next_key, wrap (this, &pmaint::pmaint_gotkey));
   } else 
     info << host_node->my_ID () << " in offer phase, delaying\n";
@@ -236,7 +237,7 @@ pmaint::pmaint_handoff (chord_node dst, bigint key, cbi cb)
   blockID bid (key, DHASH_CONTENTHASH);
 
   trace << host_node->my_ID () << " sending " << key << " to " << dst.x << "\n";
-  cli->sendblock (dstloc, bid, db, 
+  cli->sendblock (dstloc, bid, srv, 
 		  wrap (this, &pmaint::pmaint_handoff_cb, key, cb));
 }
 

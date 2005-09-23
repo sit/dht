@@ -10,13 +10,12 @@
 #include <ihash.h>
 #include <location.h>
 
-#include "libadb.h"
-
+#include <libadb.h>
 
 class pmaint {
 
 public:
-  pmaint (dhashcli *cli, ptr<vnode> host_node, ptr<adb> db);
+  pmaint (dhashcli *cli, ptr<vnode> host_node, ptr<dhblock_srv> srv);
 
   void start ();
   void stop ();
@@ -31,7 +30,7 @@ private:
   //helpers from parent class
   dhashcli *cli;
   ptr<vnode> host_node;
-  ptr<adb> db;
+  ptr<dhblock_srv> srv;
 
   //state
   bool pmaint_searching;

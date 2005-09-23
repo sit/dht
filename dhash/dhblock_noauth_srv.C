@@ -111,7 +111,6 @@ dhblock_noauth_srv::store_after_fetch_cb (str new_data, cbi cb, adb_status err,
   if (err != ADB_OK) 
     old_data = "";
   
-
   str dprep = merge_data (dbkey, new_data, old_data);
 
   if (dprep != old_data) { //new data added something
@@ -206,7 +205,7 @@ dhblock_noauth_srv::bsmupdate (user_args *sbp, dhash_bsmupdate_arg *arg)
       if (!arg->local) {
 	//send our block to from
 	warn << node->my_ID () << " sending " << dbkey << " to " << from->id () << "\n";
-	cli->sendblock (from,  blockID (dbkey, DHASH_NOAUTH), db,
+	cli->sendblock (from,  blockID (dbkey, DHASH_NOAUTH), mkref(this),
 			wrap (this, &dhblock_noauth_srv::repair_send_cb));
       } else {
 	warn << "getting " << dbkey << " from " << from << "\n";

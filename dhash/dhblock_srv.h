@@ -13,7 +13,7 @@ struct dhash_bsmupdate_arg;
 struct merkle_server;
 
 /** This class serves as the parent for new block storage types */
-class dhblock_srv {
+class dhblock_srv : virtual public refcount {
  protected:
   ptr<adb> db;
   const ptr<vnode> node;

@@ -561,11 +561,12 @@ dhashcli::sendblock (ptr<location> dst, blockID bid, str data,
 }
 
 void
-dhashcli::sendblock (ptr<location> dst, blockID bid_to_send, ptr<adb> from_db,
+dhashcli::sendblock (ptr<location> dst, blockID bid_to_send, 
+		     ptr<dhblock_srv> srv,
 		     sendblockcb_t cb, int nonce /* = 0 */)
 {
   
-  from_db->fetch (bid_to_send.ID, 
+  srv->fetch (bid_to_send.ID, 
 		  wrap (this, &dhashcli::sendblock_fetch_cb, dst, 
 			bid_to_send, cb, nonce));
 }

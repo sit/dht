@@ -53,7 +53,7 @@ dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
 
   bsm = New refcounted<block_status_manager> (node->my_ID ());
 
-  pmaint_obj = New pmaint (cli, node, db); 
+  pmaint_obj = New pmaint (cli, node, mkref(this)); 
 
   // database for caching whole blocks 
   cache_db = New refcounted<adb> (dbname, ".c");

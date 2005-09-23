@@ -258,7 +258,7 @@ dhash_impl::dispatch (user_args *sbp)
 
       ptr<location> requestor = New refcounted<location> (from);
       ptr<dhblock_srv> srv = blocksrv[id.ctype];
-      cli->sendblock (requestor, id, srv->get_db (),
+      cli->sendblock (requestor, id, srv,
 		      wrap (this, &dhash_impl::fetchcomplete_done,
 			    nonce, from),
 		      nonce);
