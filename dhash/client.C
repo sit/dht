@@ -199,6 +199,7 @@ dhashcli::doassemble (ptr<rcv_state> rs, ptr<dhblock> block,
 void
 dhashcli::fetch_frag (ptr<rcv_state> rs, ptr<dhblock> b)
 {
+  if (rs->completed) return;
   register size_t i = rs->nextsucc;
 
   chordID myID = clntnode->my_ID ();
