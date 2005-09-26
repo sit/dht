@@ -11,7 +11,7 @@ mttr   = 172218  # time steps to repair
 mttf   = 891887  # time steps to failure
 sd     = mttf/2
 
-pc     = 0.00
+pc     = 0.01
 
 stop_time = 86400 * 7 * 26
 if len (sys.argv) > 1:
@@ -41,11 +41,13 @@ for i in xrange(0,initial_nodes):
     add_event (random_interval (86400, sd/2), "join", nnode)
 nnode = long(events[0].args)
 
-for t in xrange(86400,2*86400,300):
-    ni = random_interval (10, 5)
-    while ni > 0:
-	add_event (t, "insert", nnode, random_id (), 256*1024)
+total_insert = 4000
+for t in xrange(86400,21*86400,300):
+    ni = random_interval (50, 5)
+    while total_insert > 0 and ni > 0:
+	add_event (t, "insert", nnode, random_id (), 8*1024)
 	ni -= 1
+	total_insert -= 1
             
 ev = events.pop (0)
 for t in xrange(0,stop_time):
