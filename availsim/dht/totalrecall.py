@@ -333,6 +333,16 @@ class dhash_replica (totalrecall_base):
     def read_pieces (my):
 	return 1
 
+class dhash_replica_oracle (dhash_replica):
+    """Just act the same but we know we need do nothing on transient"""
+    def fail_node (my, t, id):
+	try:
+	    n = my.allnodes[id]
+	except KeyError:
+	    return
+	newevs = chord.fail_node (my, t, id)
+	return newevs
+
 class totalrecall_lazy_fragments (totalrecall_base):
     """Should read the paper and figure how many fragments it makes"""
     def insert_pieces (my, size):
