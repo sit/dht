@@ -347,3 +347,25 @@ accordion_table::get_fingers (ptr<location> src, chordID end, unsigned p)
   return fs;
 }
 
+void
+accordion_table::fill_nodelistresext (chord_nodelistextres *res)
+{
+  unsigned p = myvnode->get_para ();
+  double to_thres = p > 1? (1-(exp(log(1-TIMEOUT_THRES)/(double)p))):TIMEOUT_THRES;
+  double ti;
+  unsigned size = 0;
+
+  ptr<location> cur = locations->closestsuccloc (myID+1);
+  while (cur->id () != myID) {
+    if (cur->alive ()) {
+      bool pinned = locations->pinned (cur->id ());  
+      ti = (double) cur->knownup () / (double) (cur->knownup () + cur->age ());
+      if (ti > to_thres || pinned || cur->age () < MINTIMEOUT) {
+	res->resok->nlist.setsize (size + 1);
+	cur->fill_node_ext (res->resok->nlist[size]);
+	size++;
+      }
+    }
+    cur = locations->closestsuccloc (cur->id () + 1);
+  }
+}

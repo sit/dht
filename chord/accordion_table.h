@@ -24,7 +24,7 @@ public:
 
   //XXX i do not really use these funnctions
   void fill_nodelistres (chord_nodelistres *res) { assert(0);}
-  void fill_nodelistresext (chord_nodelistextres *res) {assert(0);}
+  void fill_nodelistresext (chord_nodelistextres *res);
 
 private:
   chordID mingap;

@@ -137,9 +137,14 @@ accordion::dispatch (user_args *a)
   }
 
   //grab the src
-  chord_node srcn;
-  a->fill_from (&srcn);
-  ptr<location> src = locations->insert (srcn);
+  ptr<location> src;
+  if (a->procno == ACCORDIONPROC_FILLGAP 
+      || a->procno == ACCORDIONPROC_LOOKUP
+      || a->procno == ACCORDIONPROC_LOOKUP_COMPLETE) {
+    chord_node srcn;
+    a->fill_from (&srcn);
+    src = locations->insert (srcn);
+  }
 
   switch (a->procno) {
   case ACCORDIONPROC_NULL:
