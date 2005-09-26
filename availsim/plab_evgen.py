@@ -85,7 +85,7 @@ for line in fh.readlines ():
     if e == 'join':
 	count += 1
 	livenodes[ip] = 1
-    elif count > 0 and (e == 'fail' or e == 'crash'):
+    elif ip in livenodes and count > 0 and (e == 'fail' or e == 'crash'):
 	count -= 1
 	del livenodes[ip]
     if count > nodesforjoin:
