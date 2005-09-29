@@ -17,6 +17,7 @@ my @indats = ();
 my $xrange;
 my $yrange;
 my @graphlabels = ();
+my @graphpts = ();
 my @hulllabelcmds = ();
 my $title;
 my $xop;
@@ -30,6 +31,7 @@ my $grid = 0;
 my $rtmgraph = 0;
 my $fontsize = 26;
 my $linewidth = 1;
+my $pointsize = 1;
 my $keypos = "top";
 
 sub usage {
@@ -68,6 +70,7 @@ make-graph.pl [options]
     --label <filename>        How to label different the dat files
 				 May be specified more than once
 				 Must correspond (in order) to the datfiles
+    --pt <filename>		What is the point type for the dat files
     --title <title>	      Title for the graph
     --plottype <type>         Type of plot.  Defaults to "points" (or "lines" 
 				for --convex), also accepts "lines" and 
@@ -86,6 +89,7 @@ make-graph.pl [options]
 			         "LOOKUP_RATES:success".
     --fontsize <size>         How big is the font?  Default=26.
     --linewidth <size>        How fat are the lines?  Default=1.
+    --pointsize <size>        How fat are the points?  Default=1.
     --rtmgraph                Only valid with --param and --convex.  Holds all
                                  parameters but --param constant to values of
 				 points on the convex hull, and shows the
@@ -112,10 +116,10 @@ my $con_cmd = "$script_dir/find_convexhull.py";
 # First parse options
 my %options;
 &GetOptions( \%options, "help|?", "x=s", "y=s@", "epsfile=s", "colorepsfile=s","pngfile=s",
-	     "param=s", "paramname=s", "datfile=s@", "label=s@", 
+	     "param=s", "paramname=s", "datfile=s@", "label=s@", "pt=s@",
 	     "xrange=s", "yrange=s", "xlabel=s", "ylabel=s@", "title=s", 
 	     "convex:s", "plottype=s", "keypos=s","grid", "rtmgraph", "hulllabel:s",
-	     "overallconvex:s", "fontsize=s", "linewidth=s", "extend" )
+	     "overallconvex:s", "fontsize=s", "linewidth=s", "pointsize=s","extend" )
     or &usage;
 
 if( $options{"help"} ) {
@@ -252,6 +256,14 @@ if( $#graphlabels > $#indats ) {
     print STDERR "More labels than datfiles!\n";
     &usage();
 }
+if( defined $options{"pt"} ) {
+      @graphpts= @{$options{"pt"}};
+}
+if( $#graphpts> $#indats ) {
+      print STDERR "More labels than datfiles!\n";
+          &usage();
+}
+
 if( defined $options{"title"} ) {
     $title = $options{"title"};
 }
@@ -278,9 +290,13 @@ if( defined $options{"fontsize"} ) {
 if( defined $options{"linewidth"} ) {
     $linewidth = $options{"linewidth"};
 }
+if (defined $options{"pointsize"}) {
+  $pointsize = $options{"pointsize"};
+}
 
 #figure out label issues
 my %labelhash = ();
+my %pthash = ();
 for( my $i = 0; $i <= $#indats; $i++ ) {
 
     my $datfile = $indats[$i];
@@ -289,7 +305,9 @@ for( my $i = 0; $i <= $#indats; $i++ ) {
     } else {
 	$labelhash{$datfile} = $datfile;
     }
-
+    if (defined $graphpts[$i]) {
+      $pthash{$indats[$i]} = $graphpts[$i];
+    }
 }
 
 my @statlabels;
@@ -1189,7 +1207,20 @@ foreach my $file (@iterfiles) {
 	    defined $labelhash{"$file.overall"} ) {
 	    print GP " lw 6";
 	} else {
-	    print GP " lw $linewidth";
+	    print GP " lw $linewidth ";
+	    if ($type eq "lines") {
+	    }else {
+	      print GP "ps $pointsize";
+	    }
+	    my $pt = $pthash{$indats[$i]};
+	    if (defined ($pt)) {
+	      print GP " pt $pt";
+	    }else {
+	      $pt = $graphpts[$i];
+	      if (defined ($pt)) {
+		print GP " pt $pt";
+	      }
+	    }
 	}
 
 	if( @convexfiles ) {
@@ -1283,16 +1314,18 @@ foreach my $file (@iterfiles) {
 		    
 		    $oldypos = "$oldypos$newyop";
 		}
-
-		my $type_num = ($k+($j-1)*($#ystat+1)+1);
+		my $type_num = $pthash{$indats[$j-1]};
+		if (!defined($type_num)) {
+		  $type_num = ($k+($j-1)*($#ystat+1)+1);
+		}
 		if( $type ne "points" ) {
 		    print GP ", \"$datfile\" using " . 
 			"($xparen\$$oldxpos):($yparen[$k]\$$oldypos) " . 
-			    "$t with $type lt $type_num lw $linewidth";
+			    "$t with $type lt $type_num lw $linewidth ps $pointsize";
 		} else {
 		    print GP ", \"$datfile\" using " . 
 			"($xparen\$$oldxpos):($yparen[$k]\$$oldypos) " . 
-			    "$t with $type lt $type_num pt $type_num";
+			    "$t with $type lt $type_num pt $type_num ps $pointsize";
 		}
 
 	    }
