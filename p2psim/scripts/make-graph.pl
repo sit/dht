@@ -1171,7 +1171,9 @@ foreach my $file (@iterfiles) {
 	    if( $labelhash{$indats[$1]} ne "" ) {
 		$prefix = $labelhash{$indats[$1]} . "$y:";
 	    }
-	    $t = "t \"" . $prefix . "$paramname=$2\"";
+	    my $paramnameval = $2;
+	    $paramnameval =~ s/000/s/g;
+	    $t = "t \"" . $prefix . "$paramname=$paramnameval\"";
 	} elsif( defined $options{"overallconvex"} and 
 		 defined $labelhash{"$file.overall"} ) {
 	    $t = "t \"" . $labelhash{"$file.overall"} . "$y\"";

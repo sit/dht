@@ -141,17 +141,19 @@ Accordion::~Accordion()
 	<< i.value() << endl;
       record_lookup_stat(_me.ip, _me.ip, now()-i.value(), false, false, 0, 0, 0);
     }
-    if (ids.size() == 0)  {
+    if (ids.size() == 0) {
       Node::print_stats();
-      printf("<-----STATS----->\n");
-      sort(rtable_sz.begin(),rtable_sz.end());
-      uint totalrtable = 0;
       uint rsz = rtable_sz.size();
-      for (uint i = 0; i < rsz; i++) 
-	totalrtable += rtable_sz[i];
-      printf("RTABLE:: 10p:%u 50p:%u 90p:%u avg:%.2f\n", rtable_sz[(uint)(0.1*rsz)], rtable_sz[(uint)(0.5*rsz)],
-	  rtable_sz[(uint)(0.9*rsz)], (double)totalrtable/(double)rsz);
-      printf("<-----ENDSTATS----->\n");
+      if (rsz > 10) {
+	printf("<-----STATS----->\n");
+	sort(rtable_sz.begin(),rtable_sz.end());
+	uint totalrtable = 0;
+	for (uint i = 0; i < rsz; i++) 
+	  totalrtable += rtable_sz[i];
+	printf("RTABLE:: 10p:%u 50p:%u 90p:%u avg:%.2f\n", rtable_sz[(uint)(0.1*rsz)], rtable_sz[(uint)(0.5*rsz)],
+	    rtable_sz[(uint)(0.9*rsz)], (double)totalrtable/(double)rsz);
+	printf("<-----ENDSTATS----->\n");
+      }
     }
   }
   delete loctable;

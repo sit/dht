@@ -1,26 +1,48 @@
 #!/usr/bin/perl -w
 
 use strict;
+use Getopt::Long;
 
-# check for args file first
+my %options;
+&GetOptions( \%options, "args=s", "update=s");
+
 my $argsfile;
-if( $ARGV[0] eq "--args" ) {
-    shift(@ARGV);
-    $argsfile = shift(@ARGV);
-}
-my @logs;
-my $logfile;
-if ($ARGV[0] eq "--logs") {
-    shift(@ARGV);
-    $logfile = shift(@ARGV);
-    open LOGS,"$logfile" or die "cannot open logs $logfile\n";
-    @logs = <LOGS>;
-    close LOGS;
-}else{
-    @logs = @ARGV;
+if ($options{"args"}) {
+  $argsfile = $options{"args"};
 }
 
-my @stats = qw( BW_PER_TYPE BW_TOTALS BW_PERNODE BW_PERNODE_IN BW_SPE1NODE BW_SPE2NODE BW_SPE3NODE BW_SPE1NODE_IN BW_SPE2NODE_IN BW_SPE3NODE_IN LOOKUP_RATES CORRECT_LOOKUPS RTABLE
+my @logs;
+if ($options{"logs"}) {
+  open LOGS, $options{"logs"} or die "cannot open logs $options{\"logs\"}\n";
+  @logs = <LOGS>;
+  close LOGS;
+}else{
+  @logs = <STDIN>;
+}
+
+my %exist;
+my $oldheader;
+if ($options{"update"}) {
+   my $updatef = $options{"update"};
+   open FILE, $options{"update"} or die "cannot open file $options{\"update\"}\n";
+   $oldheader = <FILE>;
+   my $line;
+   while (<FILE>) {
+     chop;
+     $line = $_;
+     if (/^#/) 	{
+      s/^#\s+//;
+      $exist{$line} = <FILE>;
+     }else{
+       die "wrong existing file format $_\n";
+     }
+   }
+}
+
+#my @stats = qw( BW_PER_TYPE BW_TOTALS BW_PERNODE BW_PERNODE_IN BW_SPE1NODE BW_SPE2NODE BW_SPE3NODE BW_SPE1NODE_IN BW_SPE2NODE_IN BW_SPE3NODE_IN LOOKUP_RATES CORRECT_LOOKUPS RTABLE
+#		INCORRECT_LOOKUPS FAILED_LOOKUPS OVERALL_LOOKUPS 
+#		TIMEOUTS_PER_LOOKUP SLICELEADER_BW);
+my @stats = qw( BW_PER_TYPE BW_TOTALS LOOKUP_RATES CORRECT_LOOKUPS RTABLE
 		INCORRECT_LOOKUPS FAILED_LOOKUPS OVERALL_LOOKUPS 
 		TIMEOUTS_PER_LOOKUP SLICELEADER_BW);
 
@@ -31,10 +53,10 @@ my %stats_used = ();
 foreach my $log (@logs) {
 
     chomp $log;
-    if( !( -f $log ) ) {
-	print STDERR "$log is not a file, skipping.\n";
-	next;
-    }
+#if( !( -f $log ) ) {
+#	print STDERR "($log) is not a file, skipping!\n";
+#	next;
+#    }
 
     open( LOG, "<$log" ) or die( "Couldn't open $log" );
     #print STDERR "$log\n";
@@ -52,7 +74,6 @@ foreach my $log (@logs) {
 	my @s = split( /\./, $logname[$i] );
 	$h .=  $s[0] . " ";
     }
-    print STDERR "SHIT $h\n";
 
     while( <LOG> ) {
 
@@ -84,7 +105,6 @@ foreach my $log (@logs) {
 	    if (!defined($allheader{$h})) {
 	      push @headers, $h;
 	      $allheader{$h} = 1;
-	      print STDERR "pushing $h\n";
 	    }
 	    for( my $i = 0; $i <= $#stats_found; $i++ ) {
 		my $s = $stats_found[$i];
@@ -99,10 +119,11 @@ foreach my $log (@logs) {
 }
 
 # now sort all the stats and print the header
+my $newheader;
 my @final_stats = sort(keys(%stats_used));
-print "# ";
+$newheader = "# ";
 for( my $i = 0; $i <= $#final_stats; $i++ ) {
-    print "$i)$final_stats[$i] ";
+    $newheader .= "$i)$final_stats[$i] ";
 }
 
 if( defined $argsfile ) {
@@ -119,7 +140,7 @@ if( defined $argsfile ) {
 	my @args = split( /\s+/ );
 	my $argname = shift(@args);
 	
-	print "param$i)$argname ";
+	$newheader .= "param$i)$argname ";
 	$i++;
     }
 
@@ -127,9 +148,20 @@ if( defined $argsfile ) {
 
 }
 
-print "\n";
+$newheader .= "\n";
+
+if (defined($oldheader)) {
+  if (!($newheader eq $oldheader)) {
+    die "headers do not match. how can i merge??\n new($newheader)\nold($oldheader)\n";
+  }
+}else {
+  print "$newheader";
+}
+
 foreach my $h (@headers) {
-    
+   
+  if (defined($exist{$h})) {
+  }else{
     print "$h\n";
     foreach my $s (@final_stats) {
 	if( defined $stats{"$h$s"} ) {
@@ -139,5 +171,6 @@ foreach my $h (@headers) {
 	}
     }
     print "\n";
+  }
 
 }
