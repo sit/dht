@@ -82,15 +82,6 @@ for line in fh.readlines ():
 	firsttime = t
     t = t - firsttime
 
-    if e == 'join':
-	count += 1
-	livenodes[ip] = 1
-    elif ip in livenodes and count > 0 and (e == 'fail' or e == 'crash'):
-	count -= 1
-	del livenodes[ip]
-    if count > nodesforjoin:
-	insertok = 1
-
     if t != lasttime:
 	if maxblocks > 0 and insertok > 0:
 	    for nt in xrange(lasttime+1,t-1):
@@ -102,4 +93,14 @@ for line in fh.readlines ():
 		    ni -= 1
 		    maxblocks -= 1
 	lasttime = t
+
+    if e == 'join':
+	count += 1
+	livenodes[ip] = 1
+    elif ip in livenodes and count > 0 and (e == 'fail' or e == 'crash'):
+	count -= 1
+	del livenodes[ip]
+    if count > nodesforjoin:
+	insertok = 1
+
     print t, e, ip
