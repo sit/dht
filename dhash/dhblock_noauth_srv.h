@@ -21,19 +21,23 @@ public:
   static chordID get_database_key (chordID key);
 private:
 
+  qhash<chordID, vec<cbv> *, hashID> _paused_stores;
+
   void iterate_cb (adb_status stat, vec<chordID> keys);  
   void iterate_fetch_cb (adb_status stat, chordID key, str data);
   str merge_data (chordID key, str new_data, str old_data);
 
-  void repair_retrieve_cb (chordID dbkey,  
+  void repair_retrieve_cb (blockID dbkey,  
 			   dhash_stat err, 
 			   ptr<dhash_block> b, 
 			   route r);
 
   void repair_send_cb (dhash_stat err, bool something);
+  bool repair (blockID k, ptr<location> to);
   void store_after_fetch_cb (str new_data, cbi cb, adb_status err,
 			     chordID dbkey, str old_data);
   void after_delete (chordID key, str data, cbi cb, int err);
+  void finish_store (chordID key);
 };
 
 #endif

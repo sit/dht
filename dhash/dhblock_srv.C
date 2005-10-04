@@ -16,7 +16,8 @@ dhblock_srv::dhblock_srv (ptr<vnode> node,
   node (node),
   desc (desc),
   synctimer (NULL),
-  cli (cli)
+  cli (cli),
+  repair_outstanding (0)
 {
 
   db = New refcounted<adb> (dbname, dbext);
@@ -99,4 +100,42 @@ void
 dhblock_srv::bsmupdate (user_args *sbp, dhash_bsmupdate_arg *arg)
 {
   sbp->replyref (NULL);
+}
+
+
+// Handling repair queuing:
+
+void
+dhblock_srv::repair_done ()
+{
+  repair_outstanding--;
+  while ((repair_outstanding <= REPAIR_OUTSTANDING_MAX)
+	 && (repair_q.size () > 0)) {
+    repair_state *s = repair_q.first ();
+    assert (s);
+    repair_q.remove (s);
+    repair (s->key, s->where);
+    delete s;
+  }
+}
+
+bool
+dhblock_srv::repair (blockID k, ptr<location> to)
+{
+
+  assert (repair_outstanding >= 0);
+  // throttle the block downloads
+  if (repair_outstanding > REPAIR_OUTSTANDING_MAX) {
+    if (repair_q[k.ID] == NULL) {
+      repair_state *s = New repair_state (k, to);
+      repair_q.insert (s);
+    }
+    return false;
+  }
+
+  // Be very careful about maintaining this counter.
+  // Trust the subclass to call repair_done whenever a branch finishes.
+  repair_outstanding++;
+  return true;
+
 }

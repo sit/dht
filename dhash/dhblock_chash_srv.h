@@ -7,18 +7,8 @@ class merkle_tree;
 class merkle_server;
 class block_status_manager;
 
-struct repair_state {
-  ihash_entry <repair_state> link;
-  bigint hashkey;
-  const blockID key;
-  const ptr<location> where;
-  repair_state (blockID key, ptr<location> w) :
-    hashkey (key.ID), key (key), where (w) {};
-};
-
 class dhblock_chash_srv : public dhblock_srv {
   // blocks that we need fetch
-  enum { REPAIR_OUTSTANDING_MAX = 15 };
   ptr<adb> cache_db;
 
   ptr<block_status_manager> bsm;
@@ -31,13 +21,9 @@ class dhblock_chash_srv : public dhblock_srv {
   /* Called by merkle_syncer to notify of blocks we are succ to */
   void missing (ptr<location> from, bigint key, bool local);
 
-  u_int32_t repair_outstanding;
-  ihash<bigint, repair_state, &repair_state::hashkey, &repair_state::link, hashID> repair_q;
-
   timecb_t *repair_tcb;
   void repair_timer ();
-  void repair_flush_q ();
-  void repair (blockID k, ptr<location> to);
+  bool repair (blockID k, ptr<location> to);
 
   void sync_cb ();
 

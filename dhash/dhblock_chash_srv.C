@@ -41,7 +41,6 @@ dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
   msrv (NULL),
   mtree (NULL),
   pmaint_obj (NULL),
-  repair_outstanding (0),
   repair_tcb (NULL)
 {
 
@@ -169,10 +168,8 @@ dhblock_chash_srv::repair_timer ()
   repair_tcb = delaycb (dhash::reptm (),
       wrap (this, &dhblock_chash_srv::repair_timer));
 
-  if (repair_q.size () > 0) {
-    repair_flush_q ();
-    return;
-  }
+  // We do not need to check the repair queue here, since every possible
+  // branch out from repair will check it once the repair is done -- strib
 
   vec<ptr<location> > nmsuccs = node->succs ();
   //don't assume we are holding the block
@@ -199,40 +196,35 @@ dhblock_chash_srv::repair_timer ()
   } while (b != first && b != 0);
 }
 
-void
-dhblock_chash_srv::repair_flush_q ()
-{
-  while ((repair_outstanding <= REPAIR_OUTSTANDING_MAX)
-	 && (repair_q.size () > 0)) {
-    repair_state *s = repair_q.first ();
-    assert (s);
-    repair_q.remove (s);
-    repair (s->key, s->where);
-    delete s;
-  }
-}
-
-void
+bool
 dhblock_chash_srv::repair (blockID k, ptr<location> to)
 {
-  assert (repair_outstanding >= 0);
-  // throttle the block downloads
-  if (repair_outstanding > REPAIR_OUTSTANDING_MAX) {
-    if (repair_q[k.ID] == NULL) {
-      repair_state *s = New repair_state (k, to);
-      repair_q.insert (s);
-    }
-    return;
-  }
+
 
   // Be very careful about maintaining this counter.
   // There are many branches and hence many possible termination
-  // cases for a repair; the end of each branch must decrement!
-  repair_outstanding++;
+  // cases for a repair; the end of each branch must call return_done!
+  if (!dhblock_srv::repair(k, to)) {
+    return false;
+  }
+
+  /**
+  // This is the sequence of calls I found; all paths must end in repair_done
+  //                       repair
+  //                         |
+  //                  repair_cache_cb
+  //                   /          \
+  //               send_frag <--- repair_retrieve_cb
+  //              /         \                   |
+  //    repair_store_cb   send_frag_cb        DONE
+  //          |                |
+  //        DONE             DONE
+  */
 
   //check the cache database
   cache_db->fetch (k.ID, wrap (this, &dhblock_chash_srv::repair_cache_cb,
 			       k, to));
+  return true;
 }
 
 void
@@ -251,6 +243,7 @@ void
 dhblock_chash_srv::repair_store_cb (chordID key, ptr<location> to, 
 				      int stat)
 {
+  repair_done ();
   if (stat != ADB_OK) {
     warning << "dhblock_chash_srv database store error: "
 	    << stat << "\n";
@@ -275,7 +268,6 @@ dhblock_chash_srv::send_frag (blockID key, str block, ptr<location> to)
   if (to == node->my_location ()) {
     db->store (key.ID, frag, wrap (this, &dhblock_chash_srv::repair_store_cb, key.ID, to));
     bsm->unmissing (node->my_location (), key.ID);
-    repair_outstanding--;
   } else {
     cli->sendblock (to, key, frag, 
 		    wrap (this, &dhblock_chash_srv::send_frag_cb, to, key));
@@ -286,7 +278,7 @@ void
 dhblock_chash_srv::send_frag_cb (ptr<location> to, blockID k,
                           dhash_stat err, bool present)
 {
-  repair_outstanding--;
+  repair_done ();
   if (!err) {
     bsm->unmissing (to, k.ID);
     info << "repair: " << node->my_ID ()
@@ -309,7 +301,7 @@ dhblock_chash_srv::repair_retrieve_cb (blockID k, ptr<location> to,
   if (err) {
     trace << "retrieve missing block " << k << " failed: " << err << "\n";
     /* XXX need to do something here? */
-    repair_outstanding--;
+    repair_done ();
   } else {
     assert (b);
 
@@ -318,7 +310,6 @@ dhblock_chash_srv::repair_retrieve_cb (blockID k, ptr<location> to,
 
     send_frag (k, b->data, to);
   }
-  repair_flush_q ();
 }
 
 void

@@ -98,9 +98,43 @@ void
 dhblock_noauth_srv::store (chordID key, str new_data, cbi cb)
 {
 
-  db->fetch (get_database_key (key), 
-	     wrap (this, &dhblock_noauth_srv::store_after_fetch_cb, 
-		   new_data, cb));
+  chordID dbKey = get_database_key (key);
+
+  if( _paused_stores[dbKey] != NULL ) {
+    // someone is already using this key, so just add ourselves to the
+    // list of waiters
+    vec<cbv> *waiters = *(_paused_stores[dbKey]);
+    waiters->push_back (wrap (db, &adb::fetch, dbKey,
+			      wrap (this, 
+				    &dhblock_noauth_srv::store_after_fetch_cb, 
+				    new_data, cb)));
+    return;
+  } else {
+    // We must clear this out before calling cb on all possible paths
+    vec<cbv> *waiters = New vec<cbv> ();
+    _paused_stores.insert (dbKey, waiters);
+    db->fetch (dbKey, 
+	       wrap (this, &dhblock_noauth_srv::store_after_fetch_cb, 
+		     new_data, cb));
+  }
+
+}
+
+void
+dhblock_noauth_srv::finish_store (chordID key)
+{
+
+  assert (_paused_stores[key] != NULL);
+  vec<cbv> *waiters = *(_paused_stores[key]);
+
+  if (waiters->size () > 0) {
+    cbv cb = waiters->pop_front ();
+    (*cb) ();
+  } else {
+    _paused_stores.remove (key);
+    delete waiters;
+  }
+
 }
 
 void
@@ -119,14 +153,17 @@ dhblock_noauth_srv::store_after_fetch_cb (str new_data, cbi cb, adb_status err,
     //put the key in the merkle tree; kick out the old key
     merkle_hash mkey;
     if (old_data.len ()) {
-      mkey = to_merkle_hash(dhblock_noauth_srv::get_merkle_key (dbkey, old_data));
+      mkey = to_merkle_hash(dhblock_noauth_srv::get_merkle_key (dbkey, 
+								old_data));
       mtree->remove (mkey);
       db->remove (kdb, wrap (this, &dhblock_noauth_srv::after_delete, 
 			     dbkey, dprep, cb));
     } else
       after_delete (dbkey, dprep, cb, ADB_OK);
-  } else
+  } else {
+    finish_store (dbkey);
     cb (ADB_OK);
+  }
 }
 
 void
@@ -143,7 +180,8 @@ dhblock_noauth_srv::after_delete (chordID key, str data, cbi cb,
        << " U " << key << " " << data.len ()  << "\n";
 
   db->store (key, data, cb); 
- 
+  finish_store (key); 
+
 }
 
 
@@ -204,14 +242,10 @@ dhblock_noauth_srv::bsmupdate (user_args *sbp, dhash_bsmupdate_arg *arg)
       chordID dbkey = dhblock_noauth_srv::get_database_key (arg->key);
       if (!arg->local) {
 	//send our block to from
-	warn << node->my_ID () << " sending " << dbkey << " to " << from->id () << "\n";
-	cli->sendblock (from,  blockID (dbkey, DHASH_NOAUTH), mkref(this),
-			wrap (this, &dhblock_noauth_srv::repair_send_cb));
+	repair (blockID (dbkey, DHASH_NOAUTH), from);
       } else {
-	warn << "getting " << dbkey << " from " << from << "\n";
 	// get his block and call store?
-	cli->retrieve (blockID (dbkey, DHASH_NOAUTH), 
-		       wrap (this, &dhblock_noauth_srv::repair_retrieve_cb,dbkey));
+	repair (blockID (dbkey, DHASH_NOAUTH), NULL);
 
       }
     } else
@@ -220,11 +254,40 @@ dhblock_noauth_srv::bsmupdate (user_args *sbp, dhash_bsmupdate_arg *arg)
   sbp->reply (NULL);
 }
 
+bool
+dhblock_noauth_srv::repair (blockID k, ptr<location> to)
+{
+
+  // Be very careful about maintaining this counter.
+  // There are many branches and hence many possible termination
+  // cases for a repair; the end of each branch must call return_done!
+  if (!dhblock_srv::repair(k, to)) {
+    return false;
+  }
+
+  if( to == NULL ) {
+    //warn << "getting " << k << " from " << "\n";
+    cli->retrieve (k, 
+		   wrap (this, &dhblock_noauth_srv::repair_retrieve_cb,k));
+  } else {
+    cli->sendblock (to,  k, mkref(this),
+		    wrap (this, &dhblock_noauth_srv::repair_send_cb));
+
+  }
+
+  return true;
+
+}
+
 void
 dhblock_noauth_srv::repair_send_cb (dhash_stat err, bool something)
 {
+
+  repair_done ();
+
   if (err) 
     warn << "error sending block\n";
+
 }
 
 void
@@ -234,15 +297,18 @@ cbi_ignore (int err)
 }
 
 void
-dhblock_noauth_srv::repair_retrieve_cb (chordID dbkey,  
+dhblock_noauth_srv::repair_retrieve_cb (blockID key,  
 					dhash_stat err, 
 					ptr<dhash_block> b, 
 					route r) 
 {
+
+  repair_done ();
+
   if (err) {
-    warn << "noauth: retrieve failed for repair of " << dbkey << "\n";
+    warn << "noauth: retrieve failed for repair of " << key.ID << "\n";
     return;
   }
   
-  dhblock_noauth_srv::store (dbkey, b->data, wrap (cbi_ignore));
+  dhblock_noauth_srv::store (key.ID, b->data, wrap (cbi_ignore));
 }
