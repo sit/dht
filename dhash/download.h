@@ -18,6 +18,9 @@ private:
   ptr<dhash> dh;
   unsigned long bytes_read;
 
+  bool fetch_acked;
+  bool called_cb;
+
   dhash_download (ptr<vnode> clntnode, ptr<dhash> dh,
 		  chord_node source,
 		  blockID blockID, cbretrieve_t cb,

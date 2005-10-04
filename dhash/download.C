@@ -22,7 +22,9 @@ dhash_download::dhash_download (ptr<vnode> clntnode, ptr<dhash> dh,
   buffer (NULL),
   buf_len (0),
   dh (dh),
-  bytes_read (0)
+  bytes_read (0),
+  fetch_acked (false),
+  called_cb (false)
  
 {
 
@@ -58,12 +60,23 @@ dhash_download::~dhash_download ()
 void
 dhash_download::sent_request (ptr<dhash_fetchiter_res> res, clnt_stat err)
 {
-  if (err)
+
+  assert (!fetch_acked);
+  fetch_acked = true;
+
+  if (err) {
     fail ("RPC error"); 
-  else if (res && res->status != DHASH_INPROGRESS) 
+  } else if (res && res->status != DHASH_INPROGRESS) {
     fail ("bad status");
-  else
+  } else
     ;
+
+  // don't call check_finish before gotchunk has finished, unless gotchunk
+  // will never be called.  otherwise you'll have issues with
+  // buf_len == bytes_read == 0
+  if (called_cb || error) {
+    check_finish ();
+  }
 }
   
 
@@ -112,8 +125,18 @@ dhash_download::check_finish ()
       block->hops   = 0;
       block->errors = 0;
     }
-    (*cb) (block);
-    delete this;
+    if (!called_cb) {
+      (*cb) (block);
+      called_cb = true;
+    }
+    // If the fetch has been acked (sent_request has been called), then we're
+    // good to delete, because either (a) gotchunk has not been called yet,
+    // and sent_request got an error, so it never will get called, or 
+    // (b) gotchunk was called and is either finished or gave an error,
+    // in either case we're done (otherwise we wouldn't be in this block)
+    if( fetch_acked ) {
+      delete this;
+    }
   }
 }
 
