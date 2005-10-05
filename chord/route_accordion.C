@@ -17,7 +17,6 @@ route_accordion::first_hop (cbhop_t cbi, ptr<chordID> guess)
   ra->routeid = arouteid_;
   ra->succs_desired = desired_;
   v->my_location ()->fill_node (ra->origin);
-  assert (ra->origin.knownup < 36000 && ra->origin.knownup > 0);
   ra->x = x;
   ra->retries = 0;
   trace << (v->my_ID ()>>144) << ": new route_accordion::first_hop: key " 

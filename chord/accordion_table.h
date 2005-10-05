@@ -23,7 +23,6 @@ public:
   void fill_gap_cb(ptr<location> l, vec<chord_node> nlist, chordstat err);
 
   //XXX i do not really use these funnctions
-  void fill_nodelistres (chord_nodelistres *res) { assert(0);}
   void fill_nodelistresext (chord_nodelistextres *res);
 
 private:
