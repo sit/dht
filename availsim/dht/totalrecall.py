@@ -341,6 +341,32 @@ class dhash_replica_oracle (dhash_replica):
 	except KeyError:
 	    return
 	newevs = chord.fail_node (my, t, id)
+
+	blocks = n.blocks.keys ()
+	needed = my.read_pieces ()
+	for b in blocks:
+	    # 1. Partition the nodes in the inodes into live/dead to
+	    #    calculate available redundancy factor, $f$.
+	    # 2. Produce new redundancy if $f$ < short term, produce
+	    #    enough long term redundancy and store on _new_
+	    #    random nodes.  No point in remembering the old ones
+	    #    because they haven gone for a while.  Maybe see Sec6.2.
+	    #    XXX the failure that triggered this repair though
+	    #        may be short term, but too bad, we can't tell.
+	    livenodes, deadnodes = [], []
+	    hosts = my.inodes[b]
+	    for n in hosts:
+		if n.alive and b in n.blocks:
+		    livenodes.append (n)
+		else:
+		    deadnodes.append (n)
+	    my.available[b] = len (livenodes)
+	    if len (livenodes) < needed:
+		if b not in my.unavailable_time:
+		    my.unavailable_time[b] = t
+		    # print "# LOST", b
+		continue
+
 	return newevs
 
 class totalrecall_lazy_fragments (totalrecall_base):
