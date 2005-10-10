@@ -75,7 +75,7 @@ dhashgateway::dispatch (svccb *sbp)
 
   case DHASHPROC_INSERT:
     {
-      dhash_insert_arg *arg = sbp->template getarg<dhash_insert_arg> ();
+      dhash_insert_arg *arg = sbp->Xtmpl getarg<dhash_insert_arg> ();
 
       ref<dhash_block> block =
 	New refcounted<dhash_block> (arg->block.base (), arg->len, arg->ctype);
@@ -93,7 +93,7 @@ dhashgateway::dispatch (svccb *sbp)
     
   case DHASHPROC_RETRIEVE:
     {
-      dhash_retrieve_arg *arg = sbp->template getarg<dhash_retrieve_arg> ();
+      dhash_retrieve_arg *arg = sbp->Xtmpl getarg<dhash_retrieve_arg> ();
         
       ptr<chordID> guess = NULL;
       if (arg->options & DHASHCLIENT_GUESS_SUPPLIED)

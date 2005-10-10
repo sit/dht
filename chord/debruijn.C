@@ -214,7 +214,7 @@ debruijn::dispatch (user_args *sbp)
   case DEBRUIJNPROC_ROUTE:
     {
       debruijn_arg *da = 
-	sbp->template getarg<debruijn_arg> ();
+	sbp->Xtmpl getarg<debruijn_arg> ();
       dodebruijn (sbp, da);
     }
     break;

@@ -55,7 +55,6 @@ adb::adb (str sock_name, str name) : name_space (name)
     fatal ("adb_connect: Error connecting to %s: %s\n",
 	   sock_name.cstr (), strerror (errno));
   }
-
   c = aclnt::alloc (axprt_unix::alloc (fd, 1024*1025),
 		    adb_program_1);
 

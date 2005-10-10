@@ -104,7 +104,7 @@ struct user_args {
   void replyref (const int &res);
   
   dorpc_arg * transport_header () 
-    { return sbp->template getarg<dorpc_arg> (); };
+    { return sbp->Xtmpl getarg<dorpc_arg> (); };
 
   void fill_from (chord_node *from);
   

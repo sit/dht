@@ -1,7 +1,7 @@
 #include "libadb.h"
 
 void res (int, int);
-void res2 (adb_status, chordID, str);
+void res2 (int, adb_status, chordID, str);
 void res3 (adb_status stat, vec<chordID> keys);
 
 adb *db;
@@ -11,10 +11,11 @@ main (int argc, char **argv)
 {
   
   db = New adb (argv[1], argv[2]);
-  if (argv[3][0] == 's')
-    db->store (bigint(1), str ("foo"), wrap (res, 1));
-  else
-    res2 (ADB_OK, 0, "");
+  for (int i = 0; i < atoi(argv[4]); i++) 
+    if (argv[3][0] == 's')
+      db->store (bigint(1 + i*1000), str ("foo"), wrap (res, 1 + i*1000));
+    else
+      db->fetch (bigint(1 + i+1000), wrap (res2, 1 + i*1000));
   amain ();
 }
 
@@ -22,18 +23,18 @@ void
 res (int i, int error)
 {
   if (error) warn << "error was " << error << "\n";
-  if (i < 100) {
+  if (i % 1000 < 100) {
     warn << "store: " << i << "\n";
     db->store (bigint(i + 1), str ("foo"), wrap (res, i+1));
-  }else
-    db->fetch (bigint(16), wrap (res2));
+  }
 }
 
 void
-res2 (adb_status stat, chordID key, str data)
+res2 (int i, adb_status stat, chordID key, str data)
 {
-  if (stat) warn << stat << " " << key << " " << data << "\n";
-  db->getkeys (0, wrap (res3));
+  warn << "fetch: " << i << " " << key << " " << data << "\n";
+  if (i % 1000 < 100) 
+    db->fetch (bigint(1 + i), wrap (res2, 1 + i));
 }
 
 void

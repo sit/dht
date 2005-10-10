@@ -163,7 +163,7 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
 
   case LSDCTL_SETTRACELEVEL:
     {
-      int *lvl = sbp->template getarg<int> ();
+      int *lvl = sbp->Xtmpl getarg<int> ();
       info << "Setting new maxprio to " << *lvl << "\n";
       modlogger::setmaxprio (*lvl); /* XXX should validate this value! */
       sbp->reply (NULL);
@@ -171,7 +171,7 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
     break;
   case LSDCTL_SETSTABILIZE:
     {
-      bool *s = sbp->template getarg<bool> ();
+      bool *s = sbp->Xtmpl getarg<bool> ();
       if (*s)
 	chordnode->stabilize ();
       else
@@ -182,7 +182,7 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
     break;
   case LSDCTL_SETREPLICATE:
     {
-      lsdctl_setreplicate_arg *a = sbp->template getarg<lsdctl_setreplicate_arg> ();
+      lsdctl_setreplicate_arg *a = sbp->Xtmpl getarg<lsdctl_setreplicate_arg> ();
       if (a->enable) {
 	for (unsigned int i = 0; i < chordnode->num_vnodes (); i++)
 	  dh[i]->start (a->randomize);
@@ -211,7 +211,7 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
     break;
   case LSDCTL_GETRPCSTATS:
     {
-      bool *clear = sbp->template getarg<bool> ();
+      bool *clear = sbp->Xtmpl getarg<bool> ();
       
       ptr<lsdctl_rpcstatlist> sl = New refcounted<lsdctl_rpcstatlist> ();
       
@@ -261,7 +261,7 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
     break;
   case LSDCTL_GETDHASHSTATS:
     {
-      lsdctl_getdhashstats_arg *arg = sbp->template getarg<lsdctl_getdhashstats_arg> ();
+      lsdctl_getdhashstats_arg *arg = sbp->Xtmpl getarg<lsdctl_getdhashstats_arg> ();
       ptr<lsdctl_dhashstats> ds = New refcounted<lsdctl_dhashstats> ();
       if (arg->vnode < vnodes) {
 	vec<dstat> stats = dh[arg->vnode]->stats ();

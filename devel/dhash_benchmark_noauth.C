@@ -88,6 +88,10 @@ store (dhashclient *dhash, char *key, char *value)
 		 value, strlen(value) + 1, 
 		 wrap (store_cb, getusec ()), NULL, DHASH_NOAUTH);
 
+  dhash->insert (compute_hash (key, strlen(key)), 
+		 value, strlen(value) + 1, 
+		 wrap (store_cb, getusec ()), NULL, DHASH_NOAUTH);
+
   while (out == 0) acheck ();
   return 0;
 }

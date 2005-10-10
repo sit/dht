@@ -199,7 +199,7 @@ void
 dhash_impl::merkle_dispatch (user_args *sbp)
 {
   merkle_stat err (MERKLE_ERR);
-  dhash_ctype *ctype = sbp->template getarg<dhash_ctype> ();
+  dhash_ctype *ctype = sbp->Xtmpl getarg<dhash_ctype> ();
   ptr<dhblock_srv> srv = blocksrv[*ctype];
   if (srv) {
     merkle_server *msrv = srv->mserv ();
@@ -244,7 +244,7 @@ dhash_impl::dispatch (user_args *sbp)
     break;
   case DHASHPROC_FETCHITER:
     {
-      s_dhash_fetch_arg *farg = sbp->template getarg<s_dhash_fetch_arg> ();
+      s_dhash_fetch_arg *farg = sbp->Xtmpl getarg<s_dhash_fetch_arg> ();
       blockID id (farg->key, farg->ctype);
 
       dhash_fetchiter_res res (DHASH_INPROGRESS);
@@ -266,7 +266,7 @@ dhash_impl::dispatch (user_args *sbp)
     break;
   case DHASHPROC_FETCHCOMPLETE:
     {
-      s_dhash_insertarg *sarg = sbp->template getarg<s_dhash_insertarg> ();
+      s_dhash_insertarg *sarg = sbp->Xtmpl getarg<s_dhash_insertarg> ();
       fcb_state *fcb = fetch_cbs[sarg->nonce];
       if (fcb) {
 	if (sarg->type == DHASH_NOENT_NOTIFY) {
@@ -284,7 +284,7 @@ dhash_impl::dispatch (user_args *sbp)
     break;
   case DHASHPROC_STORE:
     {
-      s_dhash_insertarg *sarg = sbp->template getarg<s_dhash_insertarg> ();
+      s_dhash_insertarg *sarg = sbp->Xtmpl getarg<s_dhash_insertarg> ();
       // What to do about retries??
       // e.g. checking if we're responsible (or continuing a partial)
       store (sarg, 
@@ -293,7 +293,7 @@ dhash_impl::dispatch (user_args *sbp)
     break;
   case DHASHPROC_OFFER:
     {
-      dhash_offer_arg *arg = sbp->template getarg<dhash_offer_arg> ();
+      dhash_offer_arg *arg = sbp->Xtmpl getarg<dhash_offer_arg> ();
       dhash_ctype ctype = DHASH_CONTENTHASH; // XXX
 
       ptr<dhblock_srv> srv = blocksrv[ctype];
@@ -306,7 +306,7 @@ dhash_impl::dispatch (user_args *sbp)
     break;
   case DHASHPROC_BSMUPDATE:
     {
-      dhash_bsmupdate_arg *arg = sbp->template getarg<dhash_bsmupdate_arg> ();
+      dhash_bsmupdate_arg *arg = sbp->Xtmpl getarg<dhash_bsmupdate_arg> ();
       ptr<dhblock_srv> srv = blocksrv[arg->ctype];
       if (!srv) {
 	sbp->reply (NULL);

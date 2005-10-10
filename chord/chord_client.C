@@ -335,7 +335,7 @@ chord::dispatch (ptr<asrv> s, svccb *sbp)
   }
   (*nrcv)++;
   
-  dorpc_arg *arg = sbp->template getarg<dorpc_arg> ();
+  dorpc_arg *arg = sbp->Xtmpl getarg<dorpc_arg> ();
 
   switch (sbp->proc ()) {
   case TRANSPORTPROC_NULL:

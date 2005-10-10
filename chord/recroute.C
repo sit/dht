@@ -89,7 +89,7 @@ recroute<T>::sweeper ()
     }
     r = rn;
   }
-  rtrace << my_ID () << ": sweeper: swept " << swept  << "/" << started
+  rtrace << this->my_ID () << ": sweeper: swept " << swept  << "/" << started
 	 << " started routers (" << total <<" total).\n";
   sweep_cb = delaycb (maxtime.tv_sec, wrap (this, &recroute<T>::sweeper));
 }
@@ -110,13 +110,13 @@ recroute<T>::dispatch (user_args *a)
   case RECROUTEPROC_ROUTE:
     {
       // go off and do recursive next hop and pass it on.
-      recroute_route_arg *ra = a->template getarg<recroute_route_arg> ();
+      recroute_route_arg *ra = a->Xtmpl getarg<recroute_route_arg> ();
       dorecroute (a, ra);
     }
     break;
   case RECROUTEPROC_PENULTIMATE:
     {
-      recroute_penult_arg *ra = a->template getarg<recroute_penult_arg> ();
+      recroute_penult_arg *ra = a->Xtmpl getarg<recroute_penult_arg> ();
       dopenult (a, ra);
     }
     break;
@@ -125,7 +125,7 @@ recroute<T>::dispatch (user_args *a)
       // Try to see if this is one of ours.
       // If so, we'll need to pass things back up to whoever called us.
       recroute_complete_arg *ca =
-	a->template getarg<recroute_complete_arg> ();
+	a->Xtmpl getarg<recroute_complete_arg> ();
       docomplete (a, ca);
     }
     break;
@@ -141,18 +141,18 @@ recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
 {
   recroute_route_stat rstat (RECROUTE_ACCEPTED);
 
-  chordID myID = my_ID ();
+  chordID myID = this->my_ID ();
   strbuf header;
 
   header << myID << ": dorecroute (" << ra->routeid << ", " << ra->x << "): ";
   
   rtrace << header << "starting; desired = " << ra->succs_desired << "\n";
   
-  vec<ptr<location> > cs = succs ();
+  vec<ptr<location> > cs = this->succs ();
   u_long m = ra->succs_desired;
   
   vec<chordID> failed;
-  ptr<location> p = closestpred (ra->x, failed); // the next best guess
+  ptr<location> p = this->closestpred (ra->x, failed); // the next best guess
 
   // Update best guess or complete, depending, if successor is in our
   // successor list.
@@ -193,7 +193,7 @@ recroute<T>::dorecroute (user_args *sbp, recroute_route_arg *ra)
       strbuf distbuf;
       distbuf << "going to choose a distance from ";
       for (size_t i = start; i < cs.size (); i++) {
-	float dist = Coord::distance_f (my_location ()->coords (),
+	float dist = Coord::distance_f (this->my_location ()->coords (),
 					cs[i]->coords ());
 	distbuf << cs[i]->id () << "(" << (int)dist << ") ";
 	if (mindist < 0 || dist < mindist) {
@@ -233,7 +233,7 @@ recroute<T>::dorecroute_sendpenult (recroute_route_arg *ra,
 {
   // Construct a new recroute_route_arg.
   chord_node_wire me;
-  my_location ()->fill_node (me);
+  this->my_location ()->fill_node (me);
   
   ptr<recroute_penult_arg> nra = New refcounted<recroute_penult_arg> ();
   // XXX this is obnoxious
@@ -259,7 +259,7 @@ recroute<T>::dorecroute_sendpenult (recroute_route_arg *ra,
     cs[i]->fill_node (nra->successors[i]);
   }
 			    
-  rtrace << my_ID () << ": dorecroute (" << ra->routeid << ", "
+  rtrace << this->my_ID () << ": dorecroute (" << ra->routeid << ", "
 	 << ra->x << "): penultforwarding to " << nexthop->id () << "\n";
 
   vec<chordID> failed;
@@ -281,7 +281,7 @@ recroute<T>::dorecroute_sendpenult_cb (ptr<recroute_penult_arg> nra,
     // Go back to wherever we were going to go in the first place.
     // ra->retries++;
     // dorecroute_sendroute (ra, p);
-    rtrace << my_ID () << ": dorecroute (" << nra->routeid << ", "
+    rtrace << this->my_ID () << ": dorecroute (" << nra->routeid << ", "
 	   << nra->x << ": er. failure.....\n";
     return;
   }
@@ -293,11 +293,11 @@ recroute<T>::dorecroute_sendcomplete (recroute_route_arg *ra,
 				      const vec<ptr<location> > cs)
 {
   chord_node_wire me;
-  my_location ()->fill_node (me);
+  this->my_location ()->fill_node (me);
   
   // If complete (i.e. we have enough here to satisfy request),
   // send off a complete RPC.
-  rtrace << my_ID () << ": dorecroute (" << ra->routeid << ", " << ra->x
+  rtrace << this->my_ID () << ": dorecroute (" << ra->routeid << ", " << ra->x
 	 << "): complete.\n";
 
   ptr<recroute_complete_arg> ca = New refcounted<recroute_complete_arg> ();
@@ -318,7 +318,7 @@ recroute<T>::dorecroute_sendcomplete (recroute_route_arg *ra,
 
   ca->retries = ra->retries;
   
-  ptr<location> l = locations->lookup_or_create (make_chord_node (ra->origin));
+  ptr<location> l = this->locations->lookup_or_create (make_chord_node (ra->origin));
   doRPC (l, recroute_program_1, RECROUTEPROC_COMPLETE,
 	 ca, NULL,
 	 wrap (this, &recroute<T>::recroute_sent_complete_cb));
@@ -332,7 +332,7 @@ recroute<T>::dorecroute_sendroute (recroute_route_arg *ra, ptr<location> p)
 {
   // Construct a new recroute_route_arg.
   chord_node_wire me;
-  my_location ()->fill_node (me);
+  this->my_location ()->fill_node (me);
   
   ptr<recroute_route_arg> nra = New refcounted<recroute_route_arg> ();
   *nra = *ra;
@@ -342,10 +342,10 @@ recroute<T>::dorecroute_sendroute (recroute_route_arg *ra, ptr<location> p)
   }
   nra->path[ra->path.size ()] = me;
   
-  if (p->id () != my_ID ()) {
+  if (p->id () != this->my_ID ()) {
     recroute_route_stat *res = New recroute_route_stat (RECROUTE_ACCEPTED);
     
-    rtrace << my_ID () << ": dorecroute (" << ra->routeid << ", "
+    rtrace << this->my_ID () << ": dorecroute (" << ra->routeid << ", "
 	   << ra->x << "): forwarding to " << p->id () << "\n";
 
     vec<chordID> failed;
@@ -358,7 +358,7 @@ recroute<T>::dorecroute_sendroute (recroute_route_arg *ra, ptr<location> p)
     //    since I'm sending a bunch of crazy parallel lookups and we're
     //    guessing that maybe another one will succeed.
     //    worst case: the lookup fails when the sweeper goes off.
-    rtrace << my_ID () << " next hop is me. dropping\n";
+    rtrace << this->my_ID () << " next hop is me. dropping\n";
   }
 }
 
@@ -372,17 +372,17 @@ recroute<T>::recroute_hop_cb (ptr<recroute_route_arg> nra,
 {
   if (!status && *res == RECROUTE_ACCEPTED) {
     delete res; res = NULL;
-    rtrace << my_ID () << ": dorecroute (" << nra->routeid << ", "
+    rtrace << this->my_ID () << ": dorecroute (" << nra->routeid << ", "
 	   << nra->x << "): message accepted\n";
     return;
   }
-  rtrace << my_ID () << ": dorecroute (" << nra->routeid << ", " << nra->x
+  rtrace << this->my_ID () << ": dorecroute (" << nra->routeid << ", " << nra->x
 	 << ") forwarding to "
 	 << p->id () << " failed (" << status << "," << *res << ").\n";
 
   delete res;
   if (failed.size () > 3) {    // XXX hardcoded constant
-    rtrace << my_ID () << ": dorecroute (" << nra->routeid << ", " << nra->x
+    rtrace << this->my_ID () << ": dorecroute (" << nra->routeid << ", " << nra->x
 	   << ") failed too often. Discarding.\n";
     
     
@@ -395,7 +395,7 @@ recroute<T>::recroute_hop_cb (ptr<recroute_route_arg> nra,
     ca->retries = nra->retries;
     ca->path    = nra->path;
 
-    ptr<location> o = locations->lookup_or_create (make_chord_node (nra->origin));
+    ptr<location> o = this->locations->lookup_or_create (make_chord_node (nra->origin));
     doRPC (o, recroute_program_1, RECROUTEPROC_COMPLETE,
 	   ca, NULL,
 	   wrap (this, &recroute<T>::recroute_sent_complete_cb));
@@ -417,11 +417,11 @@ recroute<T>::recroute_hop_timeout_cb (ptr<recroute_route_arg> nra,
   if (rexmit_number == 0 && failed.size () <= 3)  {
     nra->retries++;
     failed.push_back (p->id ());
-    ptr<location> l = closestpred (nra->x, failed);
+    ptr<location> l = this->closestpred (nra->x, failed);
 
-    if (l->id () != my_ID ()) {
+    if (l->id () != this->my_ID ()) {
       
-      rtrace << my_ID () << ": dorecroute (" << nra->routeid << ", "
+      rtrace << this->my_ID () << ": dorecroute (" << nra->routeid << ", "
 	     << nra->x << "): TIMEOUT now forwarding to " << l->id () << "\n";
       recroute_route_stat *nres = New recroute_route_stat (RECROUTE_ACCEPTED);
       doRPC (p, recroute_program_1, RECROUTEPROC_ROUTE,
@@ -439,7 +439,7 @@ void
 recroute<T>::recroute_sent_complete_cb (clnt_stat status)
 {
   if (status)
-    rwarning << my_ID () << ": recroute_complete lost, status " << status << ".\n";
+    rwarning << this->my_ID () << ": recroute_complete lost, status " << status << ".\n";
   // We're not going to do anything more clever about this. It's dropped. Fini.
 }
 
@@ -449,9 +449,9 @@ void
 recroute<T>::dopenult (user_args *sbp, recroute_penult_arg *ra)
 {
   chord_node_wire me;
-  my_location ()->fill_node (me);
+  this->my_location ()->fill_node (me);
   
-  rtrace << my_ID () << ": dopenult (" << ra->routeid << ", " << ra->x
+  rtrace << this->my_ID () << ": dopenult (" << ra->routeid << ", " << ra->x
 	 << "): complete.\n";
 
   ptr<recroute_complete_arg> ca = New refcounted<recroute_complete_arg> ();
@@ -465,13 +465,13 @@ recroute<T>::dopenult (user_args *sbp, recroute_penult_arg *ra)
   ca->retries = ra->retries;
 
   u_long m = ra->succs_desired;
-  vec<ptr<location> > cs = succs ();
+  vec<ptr<location> > cs = this->succs ();
 
   if (ra->successors.size () + cs.size () < m) {
     warn << "misdirected PENULT: " << ra->successors.size () << " + " << cs.size () << " < " << m << "\n";
     ca->body.set_status (RECROUTE_ROUTE_FAILED);
     ca->body.rfbody->failed_stat = RECROUTE_ROUTE_FAILED;
-    my_location ()->fill_node(ca->body.rfbody->failed_hop);
+    this->my_location ()->fill_node(ca->body.rfbody->failed_hop);
   } else {
     ca->body.set_status (RECROUTE_ROUTE_OK);
 
@@ -483,7 +483,7 @@ recroute<T>::dopenult (user_args *sbp, recroute_penult_arg *ra)
       //    rtrace << my_ID () << ": dopenult (" << ra->routeid
       //           << " filling " << i << "\n";
       ca->body.robody->successors[i] = ra->successors[i];
-      if (foo.x == my_ID ()) {
+      if (foo.x == this->my_ID ()) {
 	lastind = i;
 	// rtrace << my_ID () << ": dopenult (" << ra->routeid << "): i'm at "
 	//        << i << "\n";
@@ -504,7 +504,7 @@ recroute<T>::dopenult (user_args *sbp, recroute_penult_arg *ra)
     ca->retries = ra->retries;
   }
   
-  ptr<location> l = locations->lookup_or_create (make_chord_node (ra->origin));
+  ptr<location> l = this->locations->lookup_or_create (make_chord_node (ra->origin));
   doRPC (l, recroute_program_1, RECROUTEPROC_COMPLETE,
 	 ca, NULL,
 	 wrap (this, &recroute<T>::recroute_sent_complete_cb));
@@ -519,12 +519,12 @@ template<class T>
 void
 recroute<T>::docomplete (user_args *sbp, recroute_complete_arg *ca)
 {
-  rtrace << my_ID () << ": docomplete: routeid " << ca->routeid
+  rtrace << this->my_ID () << ": docomplete: routeid " << ca->routeid
 	 << " has returned! retries: " << ca->retries << "\n";
   route_recchord *router = routers[ca->routeid];
   if (!router) {
     chord_node src; sbp->fill_from (&src);
-    rtrace << my_ID () << ": docomplete: unknown routeid " << ca->routeid
+    rtrace << this->my_ID () << ": docomplete: unknown routeid " << ca->routeid
 		       << " from host " << src << "\n";
     sbp->reply (NULL);
     return;
@@ -556,7 +556,7 @@ recroute<T>::find_succlist (const chordID &x, u_long m, cbroute_t cb,
 {
   route_recchord *ri = static_cast<route_recchord *> (produce_iterator_ptr (x));
   if (shave) {
-    rtrace << my_ID () << ": find_succlist (" << x << ", " << m
+    rtrace << this->my_ID () << ": find_succlist (" << x << ", " << m
 	   << ") is shaving.\n";
     ri->set_desired (m);
   }

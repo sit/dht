@@ -38,7 +38,7 @@ halt ()
 void
 do_store (ptr<dbfe> db, svccb *sbp)
 {
-  adb_storearg *arg = sbp->template getarg<adb_storearg> ();
+  adb_storearg *arg = sbp->Xtmpl getarg<adb_storearg> ();
 
   ref<dbrec> d = New refcounted<dbrec> (arg->data.base (), arg->data.size ());
   ref<dbrec> k = id_to_dbrec (arg->key, arg->name);
@@ -50,7 +50,7 @@ do_store (ptr<dbfe> db, svccb *sbp)
 void
 do_fetch (ptr<dbfe> db, svccb *sbp)
 {
-  adb_fetcharg *arg = sbp->template getarg<adb_fetcharg> ();
+  adb_fetcharg *arg = sbp->Xtmpl getarg<adb_fetcharg> ();
  
   ref<dbrec> k = id_to_dbrec (arg->key, arg->name);
   ptr<dbrec> dbres = db->lookup (k);
@@ -71,7 +71,7 @@ do_fetch (ptr<dbfe> db, svccb *sbp)
 void
 do_getkeys (ptr<dbfe> db, svccb *sbp)
 {
-  adb_getkeysarg *arg = sbp->template getarg<adb_getkeysarg> ();
+  adb_getkeysarg *arg = sbp->Xtmpl getarg<adb_getkeysarg> ();
   
   
   ptr<dbEnumeration> iter = db->enumerate ();
@@ -99,7 +99,7 @@ do_getkeys (ptr<dbfe> db, svccb *sbp)
 void
 do_delete (ptr<dbfe> db, svccb *sbp)
 {
-  adb_deletearg *arg = sbp->template getarg<adb_deletearg> ();
+  adb_deletearg *arg = sbp->Xtmpl getarg<adb_deletearg> ();
 
   ref<dbrec> k = id_to_dbrec (arg->key, arg->name);
   db->del (k);

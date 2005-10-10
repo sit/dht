@@ -139,13 +139,13 @@ vnode_impl::dispatch (user_args *a)
     break;
   case CHORDPROC_NOTIFY:
     {
-      chord_nodearg *na = a->template getarg<chord_nodearg> ();
+      chord_nodearg *na = a->Xtmpl getarg<chord_nodearg> ();
       donotify (a, na);
     }
     break;
   case CHORDPROC_ALERT:
     {
-      chord_nodearg *na = a->template getarg<chord_nodearg> ();
+      chord_nodearg *na = a->Xtmpl getarg<chord_nodearg> ();
       doalert (a, na);
     }
     break;
@@ -161,7 +161,7 @@ vnode_impl::dispatch (user_args *a)
     break;
   case CHORDPROC_TESTRANGE_FINDCLOSESTPRED:
     {
-      chord_testandfindarg *fa = a->template getarg<chord_testandfindarg> ();
+      chord_testandfindarg *fa = a->Xtmpl getarg<chord_testandfindarg> ();
       doroute (a, fa);
     }
     break;
@@ -177,7 +177,7 @@ vnode_impl::dispatch (user_args *a)
     break;
   case CHORDPROC_FINDROUTE:
     {
-      chord_findarg *fa = a->template getarg<chord_findarg> ();
+      chord_findarg *fa = a->Xtmpl getarg<chord_findarg> ();
       dofindroute (a, fa);
     }
     break;

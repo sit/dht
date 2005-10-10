@@ -249,11 +249,11 @@ pmaint::pmaint_handoff_cb (bigint key,
 {
 
   if (err) {
-    cb (PMAINT_HANDOFF_ERROR); //error
+    cb ((int)PMAINT_HANDOFF_ERROR); //error
   } else if (!present) {
-    cb (PMAINT_HANDOFF_NOTPRESENT); //ok, not present
+    cb ((int)PMAINT_HANDOFF_NOTPRESENT); //ok, not present
   } else { 
-    cb (PMAINT_HANDOFF_PRESENT); //ok, present
+    cb ((int)PMAINT_HANDOFF_PRESENT); //ok, present
   }
   
 }

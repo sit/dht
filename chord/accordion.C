@@ -152,20 +152,20 @@ accordion::dispatch (user_args *a)
     break;
   case ACCORDIONPROC_FILLGAP:
     {
-      accordion_fillgap_arg *ra = a->template getarg<accordion_fillgap_arg> ();
+      accordion_fillgap_arg *ra = a->Xtmpl getarg<accordion_fillgap_arg> ();
       dofillgap (a,ra, src);
     }
     break;
   case ACCORDIONPROC_LOOKUP:
     {
-      recroute_route_arg *ra = a->template getarg<recroute_route_arg> ();
+      recroute_route_arg *ra = a->Xtmpl getarg<recroute_route_arg> ();
       doaccroute (a,ra);
     }
     break;
   case ACCORDIONPROC_LOOKUP_COMPLETE:
     {
       recroute_complete_arg *ca = 
-	a->template getarg<recroute_complete_arg> ();
+	a->Xtmpl getarg<recroute_complete_arg> ();
       docomplete (a, ca, src);
     }
     break;

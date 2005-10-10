@@ -27,7 +27,7 @@ merkle_server::dispatch (user_args *sbp)
   case MERKLESYNC_SENDNODE:
     // request a node of the merkle tree
     {
-      sendnode_arg *arg = sbp->template getarg<sendnode_arg> ();
+      sendnode_arg *arg = sbp->Xtmpl getarg<sendnode_arg> ();
       merkle_rpc_node *rnode = &arg->node;
       merkle_node *lnode;
       u_int lnode_depth;
@@ -56,7 +56,7 @@ merkle_server::dispatch (user_args *sbp)
      
   case MERKLESYNC_GETKEYS:
     {
-      getkeys_arg *arg = sbp->template getarg<getkeys_arg> ();
+      getkeys_arg *arg = sbp->Xtmpl getarg<getkeys_arg> ();
 
       //get the first 65 keys in the range. We'll return 64, but we get
       // 65 so we can tell if we got them all
