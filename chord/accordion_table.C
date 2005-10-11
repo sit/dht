@@ -166,6 +166,7 @@ void
 accordion_table::del_node (const chordID x)
 {
   ptr<location> l = locations->lookup (x);
+  attrace << (myID>>144) << " deleting nbr " << (x>>144) << "\n";
   l->set_alive (false);
 }
 

@@ -511,13 +511,19 @@ accordion::docomplete (user_args *sbp, recroute_complete_arg *ca, ptr<location> 
     sbp->reply (NULL);
     return;
   }
-  acctrace << (myID>>144)  << ": docomplete: key " << (router->key () >>144)
-    << " routeid " << ca->routeid << " num_succ " << ca->body.robody->successors.size ()   
-    << " has returned from " << (src->id ()>>144) << " retries: " << (ca->retries&0x7fffffff) << "\n";
+  strbuf s;
+  s << (myID>>144)  << ": docomplete: key " << (router->key () >>144)
+    << " routeid " << ca->routeid << " num_succ " <<  ca->body.robody->successors.size ()
+    << " returned from " << (src->id ()>>144) << " retries: " << (ca->retries&0x7fffffff);
 
+  chord_node n;
   for (size_t i = 0; i < ca->body.robody->successors.size (); i++) {
-    locations->insert (make_chord_node (ca->body.robody->successors[i]));
+    n = make_chord_node (ca->body.robody->successors[i]);
+    locations->insert (n);
+    if (i == 0) 
+      s << " succ " << (n.x>>144);
   }
+  acctrace << s << "\n";
   routers.remove (router);
   router->handle_complete (sbp, ca);
 }
