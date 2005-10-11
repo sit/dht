@@ -36,6 +36,7 @@
 #include <sys/time.h>
 
 static bigint *IDs;
+static bool *done;
 static void **data;
 str control_socket;
 static FILE *outfile;
@@ -45,6 +46,7 @@ unsigned int datasize;
 ptr<axprt_stream> xprt;
 int fconnected = 0;
 int out = 0;
+int totalnum = 0;
 int MAX_OPS_OUT = 1024;
 
 int bps = 0;
@@ -92,9 +94,11 @@ prepare_test_data (int num)
 {
   IDs = New chordID[num];
   data = (void **)malloc(sizeof(void *)*num);
+  done = (bool *)malloc (sizeof (bool) * num);
   for (int i = 0; i < num; i++) {
     data[i] = malloc(datasize);
     IDs[i] = make_block(data[i], i);
+    done[i] = false;
   }
 }
 
@@ -109,9 +113,9 @@ store_cb (u_int64_t start, dhash_stat status, ptr<insert_info> i)
     s << "store_cb: " << i->key << " " << status << "\n";
   } else {
     bps++;
-    s << i->key << " / " << (getusec () - start)/1000 << " /";
+    s << (i->key>>144) << " / " << (getusec () - start)/1000 << " /";
     for (size_t j = 0; j < i->path.size (); j++)
-      s << " " << i->path[j];
+      s << " " << (i->path[j]>>144);
     s << "\n";
   }
   str buf (s);
@@ -143,6 +147,7 @@ void
 fetch_cb (int i, struct timeval start, dhash_stat stat, ptr<dhash_block> blk, vec<chordID> path)
 {
   out--;
+  done[i] = true;
 
   if (!blk) {
     strbuf buf;
@@ -160,7 +165,7 @@ fetch_cb (int i, struct timeval start, dhash_stat stat, ptr<dhash_block> blk, ve
     sprintf (estr, "%f", elapsed);
 
     bps++;
-    buf << IDs[i] << " " << estr;
+    buf << (IDs[i]>>144) << " " << estr;
     buf << " /";
     for (u_int i = 0; i < blk->times.size (); i++)
       buf << " " << blk->times[i];
@@ -169,7 +174,7 @@ fetch_cb (int i, struct timeval start, dhash_stat stat, ptr<dhash_block> blk, ve
     buf << " " << blk->hops << " " <<  blk->errors
 	<< " " << blk->retries << " ";
     for (u_int i=0; i < path.size (); i++) {
-      buf << path[i] << " ";
+      buf << (path[i]>>144) << " ";
     }
     
     buf << "\n";
@@ -207,6 +212,10 @@ usage (char *progname)
 void
 cleanup (void)
 {
+  for (int i = 0; i < totalnum; i++) {
+    if (!done[i]) 
+      warn << (IDs[i]>>144) << " not done " << "\n";
+  }
   if (outfile) {
     fclose (outfile);
   }
@@ -230,6 +239,7 @@ connected (dhashclient *dhash, int argc, char **argv)
 
   fconnected = 1;
   int num = atoi(argv[3]);
+  totalnum = num;
   datasize = atoi(argv[4]);
 
   char *output = argv[5];

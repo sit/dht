@@ -5,6 +5,7 @@
 
 #include <chord_types.h>
 #include <chord_prot.h>
+#include <accordion_prot.h>
 #include <fingers_prot.h>
 #include <merkle_sync_prot.h>
 #include <misc_utils.h>
@@ -18,6 +19,7 @@ char *usage = "Usage: nodeq [-l] [-r] host port vnode\n";
 int outstanding = 0;
 bool do_reverse_lookup = false;
 bool do_listkeys = false;
+bool do_accordion = false;
 
 struct node {
   int i;
@@ -50,6 +52,9 @@ printlist (str desc, vec<ptr<node> > &lst)
 	 << h << " "
 	 << z.r.port << " "
 	 << z.vnode_num << " "
+	 << z.knownup << " "
+	 << z.age << " "
+	 << z. budget << " "
 	 << lst[i]->y.a_lat << " "
 	 << lst[i]->y.a_var << " "
 	 << lst[i]->y.nrpc << " "
@@ -128,7 +133,12 @@ print_fingers (const chord_node &dst)
 {
   ptr<chordID> ga = New refcounted<chordID> (dst.x);
   chord_nodelistextres *lst = New chord_nodelistextres ();
-  doRPC (dst, fingers_program_1, FINGERSPROC_GETFINGERS_EXT,
+  if (do_accordion) 
+    doRPC (dst, accordion_program_1, ACCORDIONPROC_GETFINGERS_EXT,
+	 ga, lst,
+	 wrap (processreslist_cb, "fingers", &fingers, lst));
+  else 
+    doRPC (dst, fingers_program_1, FINGERSPROC_GETFINGERS_EXT,
 	 ga, lst,
 	 wrap (processreslist_cb, "fingers", &fingers, lst));
   outstanding++;
@@ -196,13 +206,16 @@ int
 main (int argc, char *argv[])
 {
   int ch;
-  while ((ch = getopt (argc, argv, "rl")) != -1)
+  while ((ch = getopt (argc, argv, "rlm")) != -1)
     switch (ch) {
     case 'r':
       do_reverse_lookup = true;
       break;
     case 'l':
       do_listkeys = true;
+      break;
+    case 'm':
+      do_accordion = true;
       break;
     default:
       fatal << usage;
