@@ -29,9 +29,14 @@ cleanup ()
 }
 
 static void
-halt ()
+halt (ptr<dbfe> db)
 {
   warn << "Exiting on command.\n";
+  // sync database and close it
+  if (db != NULL) {
+    db->sync ();
+    db->closedb ();
+  }
   exit (0);
 }
 
@@ -172,7 +177,7 @@ accept_cb (int lfd, ptr<dbfe> db)
 void
 usage ()
 {
-  warnx << "Usage: adbd -d db -S sock\n";
+  warnx << "Usage: adbd -d db -S sock [-tD]\n";
   exit (0);
 }
 
@@ -184,20 +189,20 @@ main (int argc, char **argv)
   char ch;
   str db_name = "/var/tmp/db";
   dbsock = "/tmp/db-sock";
-
-  sigcb (SIGHUP, wrap (&halt));
-  sigcb (SIGINT, wrap (&halt));
-  sigcb (SIGTERM, wrap (&halt));
+  int dbenv = 1;
 
   bool do_daemonize (false);
 
-  while ((ch = getopt (argc, argv, "Dd:S:"))!=-1)
+  while ((ch = getopt (argc, argv, "Dd:S:t"))!=-1)
     switch (ch) {
     case 'D':
       do_daemonize = true;
       break;
     case 'd':
       db_name = optarg;
+      break;
+    case 't':
+      dbenv = 0;
       break;
     case 'S':
       dbsock = optarg;
@@ -215,7 +220,7 @@ main (int argc, char **argv)
   dbOptions opts;
   opts.addOption ("opt_cachesize", 1000);
   opts.addOption ("opt_nodesize", 4096);
-  opts.addOption ("opt_dbenv", 1);
+  opts.addOption ("opt_dbenv", dbenv);
 
   ptr<dbfe> db = New refcounted<dbfe> ();
   if (int err = db->opendb (const_cast <char *> (db_name.cstr ()), opts))
@@ -223,6 +228,10 @@ main (int argc, char **argv)
     warn << "DBFE open returned: " << strerror (err) << " for " << db_name << "\n";
     exit (-1);\
   }
+
+  sigcb (SIGHUP, wrap (&halt, db));
+  sigcb (SIGINT, wrap (&halt, db));
+  sigcb (SIGTERM, wrap (&halt, db));
 
   //setup the asrv
   listen_unix (dbsock, db);
