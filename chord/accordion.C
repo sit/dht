@@ -447,7 +447,7 @@ accordion::accroute_hop_timeout_cb (long *seqp, u_int64_t t, ptr<recroute_route_
   acctrace << (myID>>144) << ": accroute_hop_TIMEOUT_cb key " << (nra->x>>144) << " next " 
     << p->id () << " seqno " << (*seqp) << " rex " << rexmit_number << "\n";
   if (rexmit_number == 0) {
-    fingers_->del_node (p->id ()); //jy: should just record loss
+    fingers_->del_node (p->id ()); 
     if (!ss || ss->outstanding == 1 || (!(nra->retries & 0x80000000))) {
       nra->retries += (now - t);
       vec<ptr<location> > nexts = fingers_->nexthops (nra->x, 1, ss->tried);
@@ -505,6 +505,10 @@ void
 accordion::docomplete (user_args *sbp, recroute_complete_arg *ca, ptr<location> src)
 {
   route_accordion *router = routers[ca->routeid];
+  sentinfo* ss = sent[ca->routeid];
+  if (ss)
+    ss->outstanding = 0;
+
   if (!router) {
     acctrace << (myID>>144) << ": docomplete: unknown routeid " 
       << ca->routeid << " from host " << (src->id ()>>144) << "\n";

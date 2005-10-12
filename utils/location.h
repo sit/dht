@@ -58,6 +58,8 @@ class location {
   void update_age ();
   void update ( ptr<location> l);
   void update ( chord_node n);
+  void set_loss ();
+  char get_loss ();
 
 
   void fill_node (chord_node &data);
@@ -74,6 +76,8 @@ class location {
   void inc_nrpc () { nrpc_++; }
 
   bool isme_;
+  char losses_;
+
 };
 
 const strbuf &strbuf_cat (const strbuf &sb, const ref<location> l);

@@ -45,7 +45,8 @@ location::location (const chordID &n,
     knownup_ (k),
     age_ (a),
     budget_ (b),
-    isme_ (m)
+    isme_ (m),
+    losses_ (0)
 {
   coords_ = coords;
   init ();
@@ -63,7 +64,8 @@ location::location (const chord_node &node)
     knownup_ (node.knownup),
     age_ (node.age),
     budget_ (node.budget),
-    isme_ (false)
+    isme_ (false),
+    losses_ (0)
 {
   coords_.set (node);
   init ();
@@ -105,6 +107,10 @@ location::update (ptr<location> l)
     if (!isme_ && (l->age ()< ((timenow - updatetime_) + age_))) {
       age_ = l->age ();
       updatetime_ = timenow;
+      if (l->knownup ()< knownup_) //assume this is a new start
+	losses_ = 0;
+      else if (losses_ > 0)
+	losses_ --;
       knownup_ = l->knownup ();
       budget_ = l-> budget ();
       coords_.set (l->coords ());
@@ -121,6 +127,10 @@ location::update (chord_node n)
     if (!isme_ && n.age < ((timenow - updatetime_) + age_)) {
       age_ = n.age;
       updatetime_ = timenow;
+      if (n.knownup < knownup_) //assume this is a new start
+	losses_ = 0;
+      else 
+	losses_ = get_loss ();
       knownup_ = n.knownup;
       budget_ = n.budget;
       coords_.set (n);
@@ -177,12 +187,50 @@ location::fill_node_ext (chord_node_ext &data)
   data.nrpc  = nrpc_;
 }
 
+char
+location::get_loss ()
+{
+  if (!alive_) return 0;
+
+  if (!dead_time_) 
+    dead_time_ = timenow;
+  else {
+    time_t intval = timenow - dead_time_;
+    int tt = intval/5;
+    while (tt > 0) {
+      losses_ = losses_ >> 1;
+      dead_time_ += 5;
+      tt--;
+    }
+  }
+  return losses_;
+}
+
+void
+location::set_loss ()
+{
+  if (alive_) { 
+    losses_ = get_loss () + 1;
+    if (losses_ > 4) {
+      //too many losses have happened, node is declared dead
+      set_alive (false);
+      return;
+    }
+  } 
+  updatetime_ = timenow;
+  age_ = 0;
+}
+
 void
 location::set_alive (bool alive)
 {
   if (!alive && alive_) {
     dead_time_ = timenow;
   } 
+  if (!alive && isme_) {
+    trace << " set_alive yo me not dead " << (n_>>144) << "\n";
+    return;
+  }
   // Setting age is ok if we only call set_alive after direct comm
   // with this location.
   age_ = 0;

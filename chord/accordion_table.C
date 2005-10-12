@@ -167,7 +167,8 @@ accordion_table::del_node (const chordID x)
 {
   ptr<location> l = locations->lookup (x);
   attrace << (myID>>144) << " deleting nbr " << (x>>144) << "\n";
-  l->set_alive (false);
+  //l->set_alive (false);
+  l->set_loss ();
 }
 
 vec<ptr<location> >
@@ -175,7 +176,8 @@ accordion_table::nexthops (const chordID &x, unsigned p, vec<ptr<location> > tri
 {
   ptr<location> cur;
   cur = locations->closestpredloc (x);
-  attrace << (myID>>144) << " key " << (x>>144) << " wow " << (cur->id ()>>144) << "\n";
+  attrace << (myID>>144) << " key " << (x>>144) << " wow " << (cur->id ()>>144) << " age " 
+    << cur->age () << " knownup " << cur->knownup () << " loss " << cur->get_loss () << "\n";
   chordID mypred = locations->closestpredloc (myID - 1)->id ();
   chordID mysuccdist = locations->closestsuccloc (myID + 1)->id ();
   mysuccdist = (mysuccdist >> 143);
@@ -201,6 +203,7 @@ accordion_table::nexthops (const chordID &x, unsigned p, vec<ptr<location> > tri
     float ti = (float) cur->knownup () 
       / (float) (cur->knownup () + cur->age ());
     bool pinned = locations->pinned (cur->id ());
+    char loss = cur->get_loss ();
     if (cur->alive ()) {
       while (tti > 0) {
 	if (betweenrightincl (myID, tried[tti]->id (), cur->id ()))
@@ -209,7 +212,8 @@ accordion_table::nexthops (const chordID &x, unsigned p, vec<ptr<location> > tri
       }
       if (tti > 0 && tried[tti]->id () == cur->id ())
 	break;
-      bool good = ((ti > to_thres) || (cur->age ()< MINTIMEOUT) || pinned);
+      bool good = (!loss
+	  && ((ti > to_thres) || (cur->age ()< MINTIMEOUT) || pinned));
       i++;
       dist = (dist >> 144);
       if (i == 1) {
@@ -223,7 +227,8 @@ accordion_table::nexthops (const chordID &x, unsigned p, vec<ptr<location> > tri
 	<< " budget " << cur->budget () << " dist " << dist
 	<< " ndist " << ((int)(ndist*100))
 	<< " knownup " << cur->knownup () << " age " << cur->age () 
-	<< " ti " << (int(100*ti)) << " good " << (good?1:0) << "\n";
+	<< " ti " << (int(100*ti)) << " good " << (good?1:0) << " loss " 
+	<< loss << "\n";
       delay = ndist * coord_d / cur->budget ();
       unsigned j = ds.size();
       ds.setsize (j+1);
@@ -238,8 +243,10 @@ accordion_table::nexthops (const chordID &x, unsigned p, vec<ptr<location> > tri
       }
       if (good)
 	ts[j] = 1.0;
-      else
+      else {
 	ts[j] = ti;
+	ts[j] = ts[j]/(loss+1);
+      }
       ds[j] = delay;
       fs[j] = cur;
       j = fs.size ();
