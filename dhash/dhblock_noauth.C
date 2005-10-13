@@ -46,7 +46,7 @@ dhblock_noauth::marshal_block (str data)
 str
 dhblock_noauth::marshal_block (vec<str> data)
 {
-  noauth_block *newblock = New noauth_block ();
+  ptr<noauth_block> newblock = New refcounted<noauth_block> ();
   newblock->blocks.setsize (data.size ());
   for (unsigned int i = 0; i < data.size (); i++) {
     newblock->blocks[i].data.setsize (data[i].len ());
