@@ -110,13 +110,13 @@ recroute<T>::dispatch (user_args *a)
   case RECROUTEPROC_ROUTE:
     {
       // go off and do recursive next hop and pass it on.
-      recroute_route_arg *ra = a->Xtmpl getarg<recroute_route_arg> ();
+      recroute_route_arg *ra = a->template getarg<recroute_route_arg> ();
       dorecroute (a, ra);
     }
     break;
   case RECROUTEPROC_PENULTIMATE:
     {
-      recroute_penult_arg *ra = a->Xtmpl getarg<recroute_penult_arg> ();
+      recroute_penult_arg *ra = a->template getarg<recroute_penult_arg> ();
       dopenult (a, ra);
     }
     break;
@@ -125,7 +125,7 @@ recroute<T>::dispatch (user_args *a)
       // Try to see if this is one of ours.
       // If so, we'll need to pass things back up to whoever called us.
       recroute_complete_arg *ca =
-	a->Xtmpl getarg<recroute_complete_arg> ();
+	a->template getarg<recroute_complete_arg> ();
       docomplete (a, ca);
     }
     break;

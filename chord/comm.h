@@ -118,7 +118,7 @@ struct hostinfo {
 
 // Default implementation, udp aclnt
 class rpc_manager {
-  static const float GAIN = 0.2;
+  static const float GAIN;
   virtual void doRPCcb (aclnt_cb realcb, ptr<location> l, u_int64_t sent,
 			clnt_stat err);
   

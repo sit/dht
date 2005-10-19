@@ -453,7 +453,7 @@ dump_cb (GtkWidget *widget, gpointer data)
 						  0,0,
 						  -1, -1);
   
-  gdk_pixbuf_save (pbuf, "vis.jpeg", "jpeg", NULL, "quality", "100", NULL);
+  gdk_pixbuf_save (pbuf, "vis.jpeg", "jpeg", NULL, "quality", "100", (void *) NULL);
 }
 
 void

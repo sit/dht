@@ -401,59 +401,6 @@ stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l,
   }
 }
 
-void
-rpc_manager::update_latency (ptr<location> from, ptr<location> l, u_int64_t lat)
-{
-  nrpc++;
-
-  //update global latency
-  float err = (lat - a_lat);
-  a_lat = a_lat + GAIN*err;
-  if (err < 0) err = -err;
-  a_var = a_var + GAIN*(err - a_var);
-
-  //update per-host latency
-  hostinfo *h = lookup_host (l->address ());
-  if (h) {
-    h->nrpc++;
-    if (h->a_lat == 0 && h->a_var == 0)
-      h->a_lat = lat;
-    else {
-      err = (lat - h->a_lat);
-      h->a_lat = h->a_lat + GAIN*err;
-      if (err < 0) err = -err;
-      h->a_var = h->a_var + GAIN*(err - h->a_var);
-    }
-    if (lat > h->maxdelay) h->maxdelay = lat;
-
-    // Copy info over to just this location
-    l->inc_nrpc ();
-    l->set_distance (h->a_lat);
-    l->set_variance (h->a_var);
-  }
-
-  //do the coordinate variance if available
-  if (from && l && from->coords ().size () > 0 && l->coords ().size () > 0) {
-    float predicted = Coord::distance_f (from->coords (), l->coords ());
-    float sample_err = (lat - predicted);
-    
-
-    /*    
-    warn << "To " << l->id () << " " << (int)sample_err << " " << (int)lat 
-	 << " " << (int)predicted << " " 
-	 << (int)c_err << " " << (int)c_var << " " 
-	 << (int)(c_err_rel*1000) << "\n";
-    */
-    
-    if (sample_err < 0) sample_err = -sample_err;
-    float rel_err = sample_err/lat;
-
-    c_err = (c_err*49 + sample_err)/50;
-    c_err_rel = (c_err_rel*49 + rel_err)/50;
-    c_var = c_var + GAIN*(sample_err - c_var);
-   }
-}
-
 void stp_manager::stats ()
 {
   char buf[1024];

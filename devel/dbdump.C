@@ -2,7 +2,7 @@
 #include <aios.h>
 #include <dbfe.h>
 
-enum {
+enum dumpmode_t {
     MODE_ENV = 1,
     MODE_OLD = 2
 } modes;
@@ -12,7 +12,7 @@ static char *usage = "usage: dbdump [-k] <-e|-o> <dbfile>\n";
 int
 main (int argc, char *argv[])
 {
-  int mode = MODE_ENV;
+  dumpmode_t mode = MODE_ENV;
   bool keytranslate = false;
 
   int ch;
