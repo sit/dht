@@ -54,6 +54,7 @@
 //
 
 #include <dhash_common.h>
+#include <dhblock_keyhash.h>
 #include "chordcd.h"
 #include "rxx.h"
 #include "arpc.h"
@@ -122,7 +123,7 @@ chord_server::getroot_fh (cbfh_t rfh_cb, ptr<sfsro_data> d)
     (*rfh_cb) (NULL);
   } else {
     warn << "Mounted filesystem.\n";
-    warn << "  start     : " << ctime(&(time_t)d->fsinfo->start);
+    warn << "  start     : " << ctime((time_t *)&(d->fsinfo->start));
     warn << "  duration  : " << d->fsinfo->duration  << " seconds \n";
     warn << "  blocksize : " << d->fsinfo->blocksize << "\n";
     this->rootdirID = d->fsinfo->rootfh;
@@ -156,14 +157,14 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
   switch(sbp->proc()) {
   case NFSPROC3_READLINK:
     {
-    nfs_fh3 *nfh = sbp->template getarg<nfs_fh3> ();
+    nfs_fh3 *nfh = sbp->Xtmpl getarg<nfs_fh3> ();
     chordID fh = nfsfh_to_chordid (nfh);
     fetch_data (false, fh, wrap (this, &chord_server::readlink_inode_cb, sbp, fh));
     }
     break;
   case NFSPROC3_GETATTR: 
     {
-      nfs_fh3 *nfh = sbp->template getarg<nfs_fh3> ();
+      nfs_fh3 *nfh = sbp->Xtmpl getarg<nfs_fh3> ();
       chordID fh = nfsfh_to_chordid (nfh);
       fetch_data (false, fh, wrap (this, &chord_server::getattr_inode_cb, sbp, fh));
     }
@@ -195,7 +196,7 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
     break;
   case NFSPROC3_ACCESS:
     {
-      access3args *aa = sbp->template getarg<access3args> ();
+      access3args *aa = sbp->Xtmpl getarg<access3args> ();
       nfs_fh3 *nfh = &(aa->object);
       chordID fh = nfsfh_to_chordid (nfh);
       fetch_data (false, fh, wrap (this, &chord_server::access_inode_cb, sbp, fh));
@@ -203,7 +204,7 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
     break;
   case NFSPROC3_LOOKUP: 
     {
-      diropargs3 *dirop = sbp->template getarg<diropargs3> ();
+      diropargs3 *dirop = sbp->Xtmpl getarg<diropargs3> ();
 
       nfs_fh3 *nfh = &(dirop->dir);
       chordID fh = nfsfh_to_chordid (nfh);
@@ -212,7 +213,7 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
     break;
   case NFSPROC3_READDIR:
     {
-      readdir3args *readdirop = sbp->template getarg<readdir3args> ();
+      readdir3args *readdirop = sbp->Xtmpl getarg<readdir3args> ();
       nfs_fh3 *nfh = &(readdirop->dir);
       chordID fh = nfsfh_to_chordid (nfh);
       fetch_data (false, fh, wrap (this, &chord_server::readdir_inode_cb, sbp, fh));
@@ -220,7 +221,7 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
     break;
   case NFSPROC3_READDIRPLUS:
     {
-      readdirplus3args *readdirop = sbp->template getarg<readdirplus3args> ();
+      readdirplus3args *readdirop = sbp->Xtmpl getarg<readdirplus3args> ();
       nfs_fh3 *nfh = &(readdirop->dir);
       chordID fh = nfsfh_to_chordid (nfh);
       fetch_data (false, fh, wrap (this, &chord_server::readdirp_inode_cb, sbp, fh));
@@ -228,7 +229,7 @@ chord_server::dispatch (ref<nfsserv> ns, nfscall *sbp)
     break;
   case NFSPROC3_READ:
     {
-      read3args *ra = sbp->template getarg<read3args> ();
+      read3args *ra = sbp->Xtmpl getarg<read3args> ();
       nfs_fh3 *nfh = &(ra->file);
       chordID fh = nfsfh_to_chordid (nfh);
       fetch_data (false, fh, wrap (this, &chord_server::read_inode_cb, sbp, fh));
@@ -297,7 +298,7 @@ chord_server::access_inode_cb (nfscall *sbp, chordID ID, ptr<sfsro_data> data)
   else if (data->type != SFSRO_INODE) 
     sbp->error (NFS3ERR_IO);    
   else {
-    access3args *aa = sbp->template getarg<access3args> ();
+    access3args *aa = sbp->Xtmpl getarg<access3args> ();
     uint32 access_req = aa->access;
     access3res nfsres (NFS3_OK);
     
@@ -343,7 +344,7 @@ chord_server::lookup_inode_cb (nfscall *sbp, chordID ID, ptr<sfsro_data> data)
   else if (data->inode->type != SFSRODIR && data->inode->type != SFSRODIR_OPAQ)
     sbp->error (NFS3ERR_NOTDIR);
   else {
-    diropargs3 *dirop = sbp->template getarg<diropargs3> ();
+    diropargs3 *dirop = sbp->Xtmpl getarg<diropargs3> ();
     lookup (data, ID, dirop->name,
 	    wrap (this, &chord_server::lookup_lookup_cb, sbp, data, ID));
   }
@@ -355,7 +356,7 @@ chord_server::lookup_lookup_cb (nfscall *sbp, ptr<sfsro_data> dirdata, chordID d
 				ptr<sfsro_data> data, chordID dataID, nfsstat3 status)
 {
   if (status == NFS3_OK) {
-    lookup3res *nfsres = sbp->template getres<lookup3res> ();
+    lookup3res *nfsres = sbp->Xtmpl getres<lookup3res> ();
     nfsres->set_status (NFS3_OK);
     nfsres->resok->dir_attributes.set_present (true);
 
@@ -387,7 +388,7 @@ chord_server::readdir_inode_cb (nfscall *sbp, chordID dataID, ptr<sfsro_data> da
   else if (data->inode->type != SFSRODIR && data->inode->type != SFSRODIR_OPAQ)
     sbp->error (NFS3ERR_NOTDIR);
   else {
-    readdir3args *nfsargs = sbp->template getarg<readdir3args> ();
+    readdir3args *nfsargs = sbp->Xtmpl getarg<readdir3args> ();
     uint32 blockno = nfsargs->cookie >> 32;
     read_file_data (false, blockno, data->inode->reg, 
 		    wrap (this, &chord_server::readdir_fetch_dirdata_cb,
@@ -407,7 +408,7 @@ chord_server::readdir_fetch_dirdata_cb (nfscall *sbp,
   } else if (dirblk->type != SFSRO_DIRBLK) {
       sbp->error (NFS3ERR_IO);
   } else {
-    readdir3args *nfsargs = sbp->template getarg<readdir3args> ();
+    readdir3args *nfsargs = sbp->Xtmpl getarg<readdir3args> ();
     uint32 blockno = nfsargs->cookie >> 32;
     uint32 entryno = (uint32)nfsargs->cookie;
     sfsro_directory *dir = dirblk->dir;
@@ -469,9 +470,9 @@ chord_server::readdirp_fetch_dir_data (nfscall *sbp, ptr<sfsro_data> dirdata,
 				       ptr<sfsro_data> data) 
 {
   sfsro_directory *dir = data->dir;
-  readdirplus3args *readdirop = sbp->template getarg<readdirplus3args> ();
+  readdirplus3args *readdirop = sbp->Xtmpl getarg<readdirplus3args> ();
   
-  readdirplus3res *nfsres = sbp->template getres<readdirplus3res> ();
+  readdirplus3res *nfsres = sbp->Xtmpl getres<readdirplus3res> ();
   rpc_clear (*nfsres);
   nfsres->set_status (NFS3_OK);
   nfsres->resok->dir_attributes.set_present (true);
@@ -513,7 +514,7 @@ chord_server::readdirp_fetch_dir_data (nfscall *sbp, ptr<sfsro_data> dirdata,
 void
 chord_server::read_inode_cb (nfscall *sbp, chordID ID, ptr<sfsro_data> data)
 {
-  read3args *ra = sbp->template getarg<read3args> ();
+  read3args *ra = sbp->Xtmpl getarg<read3args> ();
 
   if (!data) 
     sbp->error (NFS3ERR_STALE);
@@ -565,7 +566,7 @@ chord_server::read_data_cb (nfscall *sbp, ptr<sfsro_data> inode, chordID inodeID
     char *buf = data->data->base();
     size_t size = data->data->size();
 
-    read3args *ra = sbp->template getarg<read3args> ();
+    read3args *ra = sbp->Xtmpl getarg<read3args> ();
     read3res nfsres (NFS3_OK);
     
     fattr3 fa = ro2nfsattr(inode->inode);
@@ -1016,7 +1017,7 @@ chord_server::fetch_data_cb (chordID ID, dhash_ctype ct, cbdata_t cb,
     case DHASH_CONTENTHASH:
       {
 	data = New refcounted<sfsro_data>;
-	xdrmem x (blk->data, blk->len, XDR_DECODE);
+	xdrmem x (blk->data, blk->data.len (), XDR_DECODE);
 	if (xdr_sfsro_data (x.xdrp (), data)) {
 	  data_cache.insert (ID, data);
 	} else {
