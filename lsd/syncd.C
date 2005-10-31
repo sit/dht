@@ -1,18 +1,63 @@
 #include <arpc.h>
 #include <crypt.h>
-#include <configurator.h>
 #include <id_utils.h>
 #include <syncer.h>
 #include <location.h>
 #include <locationtable.h>
 #include <modlogger.h>
-#include "dhash_types.h"
+#include <dhash_types.h>
 #include <dhash_common.h>
-#include <dhblock.h>
+
+#include <lsdctl_prot.h>
 
 static char *logfname;
 
 static vec<syncer *> syncers;
+
+static ptr<aclnt>
+lsdctl_connect (str sockname)
+{
+  int fd = unixsocket_connect (sockname);
+  if (fd < 0) {
+    fatal ("lsdctl_connect: Error connecting to %s: %s\n",
+	   sockname.cstr (), strerror (errno));
+  }
+
+  ptr<aclnt> c = aclnt::alloc (axprt_unix::alloc (fd, 10*1024),
+			       lsdctl_prog_1);
+  return c;
+}
+
+static void
+start (ptr<lsdctl_lsdparameters> p, clnt_stat err)
+{
+  if (err)
+    fatal << "Couldn't connect to local lsd to get sync parameters: "
+	  << err << "\n";
+
+  ptr<locationtable> locations = New refcounted<locationtable> (1024);
+  
+  chord_node ret;
+  bzero (&ret, sizeof (ret));
+  for (u_int i = 0; i < 3; i++)
+    ret.coords.push_back (0);
+  ret.r.hostname = p->addr.hostname;
+  ret.r.port = p->addr.port;
+  for (int i = 0; i < p->nvnodes; i++) {
+    ret.vnode_num = i;
+    ret.x = make_chordID (ret.r.hostname, ret.r.port, i);
+    ptr<location> n = New refcounted<location> (ret);
+
+    //dbname format: ID.".c"
+    str dbname = strbuf () << ret.x << ".c";
+    syncer *s = New syncer (locations, n, p->adbdsock, dbname, DHASH_CONTENTHASH);
+    syncers.push_back (s);
+    
+    dbname = strbuf () << ret.x << ".n";
+    s = New syncer (locations, n, p->adbdsock, dbname, DHASH_NOAUTH, p->nreplica, p->nreplica);
+    syncers.push_back (s);
+  }
+}
 
 static void
 halt ()
@@ -46,81 +91,37 @@ start_logs ()
 static void
 usage () 
 {
-  warnx << "Usage: " << progname << " -j hostname:port\n"
+  warnx << "Usage: " << progname 
+	<< "\t[-C lsd-ctlsock]\n"
         << "\t[-L logfilename]\n"
-        << "\t[-v <number of vnodes>]\n"
-        << "\t[-d <dbprefix>]\n"
-	<< "\t[-e <efrags>]\n"
-	<< "\t[-c <dfrags>]\n";
+	<< "\t[-t]\n";
   exit (1);
 }
 
 int 
 main (int argc, char **argv) 
 {
-  str db_name = "/tmp/db-sock";
-  int vnodes = 1;
-  int efrags = 0, dfrags = 0;
+  str lsdsock = "/tmp/lsdctl-sock";
   char ch;
-
-  chord_node host;
-  host.r.port = 0;
 
   setprogname (argv[0]);
   random_init ();
   
-  while ((ch = getopt (argc, argv, "d:j:L:v:tc:e:"))!=-1)
+  while ((ch = getopt (argc, argv, "C:L:t"))!=-1)
     switch (ch) {
-    case 'c':
-      dfrags = atoi  (optarg);
+    case 'C':
+      lsdsock = optarg;
       break;
-    case 'e':
-      efrags = atoi (optarg);
-      break;
-    case 'd':
-      db_name = optarg;
-      break;
-    case 'j':
-      {
-	char *bs_port = strchr (optarg, ':');
-	if (!bs_port) usage ();
-	char *sep = bs_port;
-	*bs_port = 0;
-	bs_port++;
-	if (inet_addr (optarg) == INADDR_NONE) {
-	  //yep, this blocks
-	  struct hostent *h = gethostbyname (optarg);
-	  if (!h) {
-	    warn << "Invalid address or hostname: " << optarg << "\n";
-	    usage ();
-	  }
-	  struct in_addr *ptr = (struct in_addr *)h->h_addr;
-	  host.r.hostname = inet_ntoa (*ptr);
-	}
-	else
-	  host.r.hostname = optarg;
-	host.r.port = atoi (bs_port);
-	
-	*sep = ':'; // restore optarg for argv printing later.
-	break;
-      }
     case 'L':
       logfname = optarg;
-      break;
-    case 'v':
-      vnodes = atoi (optarg);
       break;
     case 't':
       modlogger::setmaxprio (modlogger::TRACE);
       break;
-     
     default:
       usage ();
       break;
     }
-
-  if (! (host.r.port > 0))
-    usage ();
 
   start_logs ();
 
@@ -128,35 +129,10 @@ main (int argc, char **argv)
   sigcb(SIGINT, wrap (&halt));
   sigcb(SIGTERM, wrap (&halt));
 
-  ptr<locationtable> locations = New refcounted<locationtable> (1024);
-
-  // HACK!  To get dhash.replica, must force dhblock.o to be linked...
-  (void) dhblock::dhash_mtu ();
-  
-  chord_node ret;
-  bzero (&ret, sizeof (ret));
-  for (u_int i = 0; i < 3; i++)
-    ret.coords.push_back (0);
-  ret.r.hostname = host.r.hostname;
-  ret.r.port = host.r.port;
-  for (int i = 0; i < vnodes; i++) {
-    ret.vnode_num = i;
-    ret.x = make_chordID (ret.r.hostname, ret.r.port, i);
-    ptr<location> n = New refcounted<location> (ret);
-
-    //dbname format: ID.".c"
-    str dbname = strbuf () << ret.x << ".c";
-    // XXX don't hard-code this
-    vNew syncer (locations, n, db_name, dbname, DHASH_CONTENTHASH);
-    
-    int v = -1;
-    Configurator::only ().get_int ("dhash.replica", v);
-    dbname = strbuf () << ret.x << ".n";
-    syncer *s = New syncer (locations, n, db_name, dbname, DHASH_NOAUTH, v, v);
-    syncers.push_back (s);
-  }
-
-  // XXX check if lsd is running
+  ptr<aclnt> c = lsdctl_connect (lsdsock);
+  ptr<lsdctl_lsdparameters> p = New refcounted<lsdctl_lsdparameters> ();
+  c->timedcall (5, LSDCTL_GETLSDPARAMETERS, NULL, p,
+		wrap (&start, p));
 
   amain ();
 }

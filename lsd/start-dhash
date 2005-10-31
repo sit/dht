@@ -1,0 +1,192 @@
+#!/usr/bin/perl -w
+#
+# start daemons necessary to run dhash: adbd, lsd, syncd
+#
+use strict;
+$ENV{'POSIXLY_CORRECT'} = 1;
+use Getopt::Long qw(:config pass_through);
+use File::Basename;
+use Pod::Usage;
+use POSIX qw/:sys_wait_h SIGINT/;
+
+sub spawn {
+    my $rundir = shift;
+    my $rprog  = shift;
+    my @args   = @_;
+    my $prog = basename ($rprog);
+    mkdir $rundir, 0755 unless -d $rundir;
+
+    # XXX should test pid < 0
+    my $pid;
+    if ($pid = fork ()) {
+	print "RUNNING: $rprog @args\n";
+	open (PID, "> $rundir/pid.$prog")
+	    || die "open pid: $!\n";
+	print PID "$pid"; close (PID);
+	return $pid;
+    } else {
+	# Don't disassociate with setsid so that ctrl-c will kill
+	chdir $rundir or die "Couldn't chdir $rundir: $!\n";
+	close (STDIN);
+	open (STDIN, "< /dev/null")
+	    || die "Couldn't re-open STDIN: $!\n";
+	open (STDOUT, "> log.$prog")
+	    || die "Couldn't re-open STDOUT: $!\n";
+	open (STDERR, ">&STDOUT")
+	    || die "Couldn't dup STDOUT to STDERR: $!\n";
+	exec { $rprog } @args
+	    or die "Couldn't exec: $!\n";
+	exit (1);
+    }
+}
+
+my $help = 0;
+my $root = "dhash-$ENV{USER}";
+my $bindir = $ENV{DHASH_RUNINPLACE} || "";
+GetOptions (
+    "help|?"      => \$help,
+    "root|r=s"    => \$root,
+    "bindir=s"      => \$bindir,
+);
+pod2usage(0) if $help;
+
+# Find binaries
+my $LSD   = "lsd";
+my $ADBD  = "adbd";
+my $SYNCD = "syncd";
+if (length($bindir)) {
+    if ($bindir !~ /^\//) {
+	use File::Spec;
+	$bindir = File::Spec->rel2abs ($bindir);
+    }
+    if (! -d $bindir) {
+	die "$bindir: $!\n";
+    }
+    if (-x "$bindir/bin/lsd") {
+	# e.g. bindir=/usr
+	$bindir = "$bindir/bin";
+    }
+    if (-x "$bindir/lsd/lsd") {
+	# e.g. bindir is top of builddir
+	$LSD    = "$bindir/lsd/lsd";
+	$ADBD   = "$bindir/utils/adbd";
+	$SYNCD  = "$bindir/lsd/syncd";
+    } elsif (-x "$bindir/lsd" and ! -d _) {
+	# e.g. bindir=/usr/bin
+	$LSD    = "$bindir/lsd";
+	$ADBD   = "$bindir/adbd";
+	$SYNCD  = "$bindir/syncd";
+    } 
+    for ($LSD, $ADBD, $SYNCD) {
+	if (! (-f $_ && -x _)) {
+	    die "Unable to find executable $_\n";
+	}
+    }
+}
+
+# Be ready to pass on signals
+my $signaled = -1;
+$SIG{INT} = sub { $signaled = SIGINT; };
+
+# Try to allow core dump files
+eval "use BSD::Resource; setrlimit (RLIMIT_CORE, -1, -1);";
+
+my %PID = ();
+$PID{adbd}  = spawn ($root, $ADBD, "adbd",
+		     "-d", "./db",
+		     "-S", "./adbd-sock");
+sleep 5; # Figure out way to wait until adbd is ready
+$PID{lsd}   = spawn ($root, $LSD, "lsd",
+		     "-d", "./adbd-sock", 
+		     "-S", "./dhash-sock",
+		     "-C", "./lsd-sock",
+		     @ARGV);
+# Should wait until lsd is stabilized or something to start.
+sleep 5; 
+$PID{syncd} = spawn ($root, $SYNCD, "syncd",
+		     "-C", "./lsd-sock");
+
+# Keep this process running until kids come home.
+my $killers  = 0;
+my $abnormal = 0;
+while (keys %PID) {
+    sleep 1;
+    if ($signaled >= 0) {
+	# Pass on the signal to children.
+	for (keys %PID) { kill $signaled, $PID{$_}; }
+    }
+    my $kid = waitpid (-1, WNOHANG);
+    next unless $kid > 0;
+    for (keys %PID) {
+	next unless $kid == $PID{$_};
+
+	delete $PID{$_};
+	print "REAPED $_ ($kid): exited";
+	if (WIFEXITED ($?) and WEXITSTATUS ($?) == 0) {
+	    print " normally\n";
+	} else {
+	    $abnormal++;
+	    print " with status ", WEXITSTATUS ($?)
+		if (WIFEXITED ($?) and WEXITSTATUS ($?) > 0);
+	    print " on signal ", WTERMSIG ($?) if WIFSIGNALED ($?);
+	    print "\n";
+	} 
+	last;
+    }
+    if (length keys %PID == 1) {
+	# Only one kid left, probably not worth living any more
+	for (keys %PID) {
+	    my $signal = ($killers++ > 2 ? 9 : 15);
+	    kill $signal, $PID{$_};
+	}
+    }
+}
+exit ($abnormal > 0);
+
+__END__
+
+=head1 NAME
+
+start-dhash - Automatically starting and sandboxing Chord/DHash
+
+=head1 SYNOPSIS
+
+start-dhash [start-dhash options] [lsd options]
+
+  Options: 
+    --help		Show brief usage message 
+    --root dir		Sandbox Chord/DHash into <dir>
+    --bindir dir	Directory of where to find binaries 
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<--help>
+
+Print a brief help message and exit.
+
+=item B<--root> dir
+
+Place databases, control sockets (and log files) inside the specified
+directory dir.  For best performance, this should be on a local filesystem.
+
+=item B<--bindir> dir
+
+Search for binaries inside the specified directory.  This may be
+something like /usr, /usr/bin or a build directory; each of these
+possibilities is considered.  Otherwise, the default is to search
+the path for binaries.
+
+=head1 LSD OPTIONS
+
+Any other options for lsd (and potentially for its helper programs)
+can be included on the command line and are passed through as 
+appropriate.
+
+=head1 DESCRIPTION
+
+This script handles starting the various Chord/DHash daemons in the 
+right order and places all relevant files in the specified directory.
+
+=cut

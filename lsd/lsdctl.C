@@ -20,6 +20,7 @@ void lsdctl_getloctab (int argc, char *argv[]);
 void lsdctl_getrpcstats (int argc, char *argv[]);
 void lsdctl_getmyids (int argc, char *argv[]);
 void lsdctl_getdhashstats (int argc, char *argv[]);
+void lsdctl_getlsdparameters (int argc, char *argv[]);
 
 struct modevec {
   const char *name;
@@ -36,6 +37,7 @@ const modevec modes[] = {
   { "rpcstats", lsdctl_getrpcstats, "rpcstats [-rf]" },
   { "myids", lsdctl_getmyids, "myids" },
   { "dhashstats", lsdctl_getdhashstats, "dhashstats [-l] [vnodenum]" },
+  { "lsdparams", lsdctl_getlsdparameters, "lsdparams" },
   { NULL, NULL, NULL }
 };
 
@@ -349,6 +351,35 @@ lsdctl_getdhashstats (int argc, char *argv[])
   ptr<lsdctl_dhashstats> ds = New refcounted <lsdctl_dhashstats> ();
   c->timedcall (opt_timeout, LSDCTL_GETDHASHSTATS, a, ds,
 		wrap (&lsdctl_getdhashstats_cb, a, ds));
+}
+
+void
+lsdctl_getlsdparameters_cb (ptr<lsdctl_lsdparameters> p, clnt_stat err)
+{
+  if (err)
+    fatal << "lsdctl_getlsdparameters: " << err << "\n";
+
+  strbuf out;
+  out << "nvnodes  " << p->nvnodes << "\n";
+  out << "adbdsock " << p->adbdsock << "\n";
+  out << "efrags   " << p->efrags << "\n";
+  out << "dfrags   " << p->dfrags << "\n";
+  out << "nreplica " << p->nreplica << "\n";
+  out << "addr     " << p->addr.hostname << ":" << p->addr.port << "\n";
+
+  make_sync (1);
+  out.tosuio ()->output (1);
+  exit (0);
+}
+
+void
+lsdctl_getlsdparameters (int argc, char *argv[])
+{
+  // Ignore arguments
+  ptr<aclnt> c = lsdctl_connect (control_socket);
+  ptr<lsdctl_lsdparameters> p = New refcounted<lsdctl_lsdparameters> ();
+  c->timedcall (opt_timeout, LSDCTL_GETLSDPARAMETERS, NULL, p,
+	        wrap (&lsdctl_getlsdparameters_cb, p));
 }
 
 

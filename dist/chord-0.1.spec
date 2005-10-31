@@ -69,6 +69,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/nodeq
 %{_bindir}/nodeq-filter
 %{_bindir}/sfsrodb
+%{_bindir}/start-dhash
 %{_bindir}/syncd
 %{_bindir}/usenet
 %{_bindir}/udbctl

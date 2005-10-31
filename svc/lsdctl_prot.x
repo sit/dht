@@ -59,6 +59,15 @@ struct lsdctl_dhashstats {
   str hack;
 };
 
+struct lsdctl_lsdparameters {
+  int nvnodes;
+  str adbdsock;
+  int dfrags;
+  int efrags;
+  int nreplica;
+  net_address addr;
+};
+
 program LSDCTL_PROG {
 	version LSDCTL_VERSION {
 		void
@@ -98,5 +107,8 @@ program LSDCTL_PROG {
 		lsdctl_dhashstats
 		LSDCTL_GETDHASHSTATS (lsdctl_getdhashstats_arg) = 8;
 		/** Tell me somthing about the status of DHash on vnode i*/
+		lsdctl_lsdparameters 
+		LSDCTL_GETLSDPARAMETERS (void) = 9;
+		/** Return useful parameters about this lsd */
 	} = 1;
 } = 344500;

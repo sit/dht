@@ -122,6 +122,9 @@ void stop ();
 void halt ();
 
 // =====================================
+
+static lsdctl_lsdparameters parameters;
+
 void
 lsdctl_fillnodeinfo (lsdctl_nodeinfo &ni, ptr<location> l)
 {
@@ -277,6 +280,9 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
       }
       sbp->reply (ds);
     }
+    break;
+  case LSDCTL_GETLSDPARAMETERS:
+    sbp->reply (&parameters);
     break;
   default:
     sbp->reject (PROC_UNAVAIL);
@@ -719,6 +725,15 @@ main (int argc, char **argv)
   warn << "  vnodes: " << vnodes << "\n";
   warn << "  lookup_mode: " << mode << "\n";
   warn << "  ss_mode: " << ss_mode << "\n";
+
+  // Initialize for use by LSDCTL_GETLSDPARAMETERS
+  parameters.nvnodes       = vnodes;
+  parameters.adbdsock      = db_name;
+  Configurator::only ().get_int ("dhash.efrags", parameters.efrags);
+  Configurator::only ().get_int ("dhash.dfrags", parameters.dfrags);
+  Configurator::only ().get_int ("dhash.replica", parameters.nreplica);
+  parameters.addr.hostname = myname;
+  parameters.addr.port     = myport; // chord->get_port ();
 
   if (heartbeatfn)
     delaycb (0, wrap (&do_heartbeat, heartbeatfn));

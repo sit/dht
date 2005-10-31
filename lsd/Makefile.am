@@ -1,9 +1,10 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.27 2005/08/19 20:04:32 fdabek Exp $
+# $Id: Makefile.am,v 1.28 2005/10/31 19:29:32 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
 bin_PROGRAMS = lsdctl lsd syncd
+bin_SCRIPTS = start-dhash
 
 lsd_SOURCES = lsd.C
 
@@ -21,7 +22,7 @@ lsdctl_SOURCES = lsdctl.C
 lsdctl_LDADD = ../svc/libsvc.la $(LDADD)
 
 
-EXTRA_DIST = .cvsignore
+EXTRA_DIST = .cvsignore $(bin_SCRIPTS)
 CLEANFILES = core *.core *~ *.rpo
 MAINTAINERCLEANFILES = Makefile.in
 
