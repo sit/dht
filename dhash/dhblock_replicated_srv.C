@@ -47,7 +47,6 @@ dhblock_replicated_srv::~dhblock_replicated_srv ()
 void
 dhblock_replicated_srv::store (chordID key, str d, cbi cb)
 {
-
   db->fetch (key, wrap (this, &dhblock_replicated_srv::store_fetch_cb, 
 			cb, d));
 }
@@ -61,8 +60,7 @@ dhblock_replicated_srv::delete_cb (chordID k, str d, cbi cb, int stat)
        << " U " << k << " " << d.len () << "\n";
   
   db->store (k, d, cb);
-
-};
+}
 
 void
 dhblock_replicated_srv::store_fetch_cb (cbi cb, str d,
@@ -81,8 +79,11 @@ dhblock_replicated_srv::store_fetch_cb (cbi cb, str d,
       info << "db delete: " << key << "\n";
       db->remove (key, wrap (this, &dhblock_replicated_srv::delete_cb, key, d, cb));
     }
+  } else {
+    info << "db write: " << node->my_ID ()
+	 << " N " << key << " " << d.len () << "\n";
+    db->store (key, d, cb);
   }
-
 }
 
 
