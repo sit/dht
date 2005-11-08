@@ -2,7 +2,7 @@ import chord, dhash, oracle, totalrecall
 
 # For automatic use by availsim
 known_types = {
-    'chord': chord,
+    'chord': chord.chord,
     'dhash': dhash.dhash,
     'fragments': dhash.dhash_fragments,
     'replica': dhash.dhash_replica,

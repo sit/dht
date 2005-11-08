@@ -114,7 +114,7 @@ def parsable_monitor (t, dh):
     print s['total_unavailability']
 
 def usage ():
-    sys.stderr.write ("%s [-i] [-m] [-s] events.txt type args\n" % sys.argv[0])
+    sys.stderr.write ("%s [-b bandwidth] [-c] [-i int] [-p port] [-m] [-s] events.txt type args\n" % sys.argv[0])
     sys.stderr.write ("where type is:\n")
     a = dht.known_types.keys ()
     a.sort ()

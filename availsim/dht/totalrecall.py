@@ -305,6 +305,9 @@ class totalrecall_base (chord):
     def read_pieces (my):
 	"""Number needed to reconstruct"""
 	return 0
+    def look_ahead (my):
+	"""Not used for repair in TR; needed for interface"""
+	return 0
 
 class totalrecall_lazy_replica (totalrecall_base):
     """Do lazy repair but for replicas.
