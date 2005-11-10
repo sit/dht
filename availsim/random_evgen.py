@@ -11,7 +11,7 @@ mttr   = 172218  # time steps to repair
 mttf   = 891887  # time steps to failure
 sd     = mttf/2
 
-pc     = 0.01
+pc     = 0.2
 
 stop_time = 86400 * 7 * 26
 if len (sys.argv) > 1:
@@ -45,7 +45,7 @@ total_insert = 4000
 for t in xrange(86400,21*86400,300):
     ni = random_interval (50, 5)
     while total_insert > 0 and ni > 0:
-	add_event (t, "insert", nnode, random_id (), 8*1024)
+	add_event (t, "insert", nnode, random_id (), 20*1024*1024)
 	ni -= 1
 	total_insert -= 1
             

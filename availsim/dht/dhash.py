@@ -2,6 +2,22 @@ import bisect
 from utils import between
 from simulator import event
 from chord import chord
+from heapq import heappop, heapify	# only 2.3 or newer
+
+def blocks_between (blocks, p, n):
+    """A list of the blocks between p and n
+    e.g. if n is a node and p is its predecessor, the blocks n is resp for.
+    """
+    k = blocks # assumes k is sorted
+    if (p.id <= n.id):
+	start = bisect.bisect_left (k, p.id)
+	stop  = bisect.bisect_right (k, n.id)
+	r = k[start:stop]
+    else:
+	start = bisect.bisect_right (k, p.id)
+	stop  = bisect.bisect_left  (k, n.id)
+	r = k[start:] + k[:stop]
+    return r
 
 class dhash (chord):
     """Provides a paramterizable insertion and repair of blocks.
@@ -11,7 +27,6 @@ class dhash (chord):
 
     def __init__ (my, args = []):
 	chord.__init__ (my, args)
-	my.do_repair = 0
 	# Sizes of all blocks
         my.blocks = {}
 	# Sorted list of blocks.keys ()
@@ -23,7 +38,18 @@ class dhash (chord):
 	my.unavailable_time = {}
 	# The total number of seconds that blocks are unavailable.
 	my.total_unavailability = 0
+
+	my.lasttime = -1
+	my.curtime  = -1
+
+	# Default is to do nothing, no repair.
+	my.do_repair = 0
+	my.add_node = my.add_node_base
+	my.fail_node  = my.fail_node_base
+	my.crash_node = my.crash_node_base
 	for a in args: 
+	    # XXX We need a better way of doing this; abstract
+	    #     this out into classes or something.
 	    if a == 'repair':
 		my.do_repair = 1
 		my.add_node   = my.add_node_repair
@@ -33,6 +59,11 @@ class dhash (chord):
 		my.do_repair = 1
 		my.add_node   = my.add_node_repair
 		my.crash_node = my.crash_node_repair
+	    elif a == 'tempo':
+		my.do_repair = 1
+		my.add_node   = my.add_node_tempo
+		my.fail_node  = my.fail_node_tempo
+		my.crash_node = my.crash_node_tempo
 
     def process (my, ev):
 	now = ev.time
@@ -40,6 +71,10 @@ class dhash (chord):
 	for b in uat:
 	    my.total_unavailability += now - uat[b]
 	    uat[b] = now
+
+	my.lasttime = my.curtime
+	my.curtime  = now
+
 	if ev.type == "insert":
 	    return my.insert_block (ev.id, ev.block, ev.size)
 	elif ev.type == "copy":
@@ -241,22 +276,15 @@ class dhash (chord):
 	    repair = my._repair_join
 	else:
 	    repair = my._repair_fail
+	k = my.block_keys
         # succ's does not include affected_node if it is dead.
         span = preds + succs
-	k = my.block_keys
 	# consider the predecessors who should be doing the repair
         for i in range(1,len(span) - runlen + 1):
             p = span[i - 1]
 	    # let them see further than they would have inserted.
             s = span[i:i+runlen]
-	    if (p.id <= s[0].id):
-		start = bisect.bisect_left (k, p.id)
-		stop  = bisect.bisect_right (k, s[0].id)
-		r = k[start:stop]
-	    else:
-		start = bisect.bisect_right (k, p.id)
-		stop  = bisect.bisect_left  (k, s[0].id)
-		r = k[start:] + k[:stop]
+	    r = blocks_between (k, p, s[0])
 	    evs = repair (t, affected_node, s, r)
 	    if evs is not None:
 		newevs += evs
@@ -264,7 +292,7 @@ class dhash (chord):
 
     # Primary implementations that keep track of what blocks are
     # available incrementally.
-    def add_node (my, t, id):
+    def add_node_base (my, t, id):
 	newevs = chord.add_node (my, t, id)
 	needed = my.read_pieces ()
 	n = my.allnodes[id]
@@ -274,16 +302,12 @@ class dhash (chord):
 	getsucclist = my.succ
 	for b in n.blocks:
 	    # XXX optimize to only call my.succ when it should change
-	    real_succs = getsucclist (b, la + 1)
-	    if n in real_succs[:-1]:
-		if b in real_succs[-1].blocks:
-		    av[b] -= 1
-		    if b not in uat and av[b] < needed: uat[b] = t
-		av[b] += 1
-		if av[b] == needed:
-		    del uat[b]
+	    real_succs = getsucclist (b, la)
+	    av[b] = len ([s for s in real_succs if b in s.blocks])
+	    if b in uat and av[b] >= needed:
+		del uat[b]
 	return newevs
-    def fail_node (my, t, id):
+    def fail_node_base (my, t, id):
 	try:
 	    n = my.allnodes[id]
 	    av = my.available
@@ -294,14 +318,13 @@ class dhash (chord):
 	    # XXX some bug here
 	    for b in n.blocks:
 		real_succs = getsucclist (b, la)
-		if n in real_succs:
-		    av[b] -= 1
-		    if b not in uat and av[b] < needed: uat[b] = t
+		av[b] = len ([s for s in real_succs if b in s.blocks])
+		if b not in uat and av[b] < needed: uat[b] = t
 	    return chord.fail_node (my, t, id)
 	except:
-	    pass
+	    raise
 	return None
-    def crash_node (my, t, id):
+    def crash_node_base (my, t, id):
 	try:
 	    n = my.allnodes[id]
 	    av = my.available
@@ -311,9 +334,8 @@ class dhash (chord):
 	    getsucclist = my.succ
 	    for b in n.blocks:
 		real_succs = getsucclist (b, la)
-		if n in real_succs:
-		    av[b] -= 1
-		    if b not in uat and av[b] < needed: uat[b] = t
+		av[b] = len ([s for s in real_succs if b in s.blocks])
+		if b not in uat and av[b] < needed: uat[b] = t
 	    return chord.crash_node (my, t, id)
 	except:
 	    pass
@@ -351,6 +373,99 @@ class dhash (chord):
 	except KeyError:
 	    pass
 	return newevs
+
+    class blockwrapper (object):
+	"""wrapper pair for block/count so that it can be heapified"""
+	def __init__ (my, block, count):
+	    my.block = block
+	    my.count = count
+	def __cmp__ (my, other):
+	    return cmp (my.count, other.count)
+    def repair_tempo (my, t, id):
+	"""Make 'proactive repairs' for all nodes
+	This should be called for each node event type and performs actions
+	that would have been done in the intervening time between the
+	two events.  This should therefore be called before the actual
+	event processing happens.
+	"""
+	if my.lasttime < 0: return # skip first event
+	dt = my.curtime - my.lasttime
+	k  = my.block_keys
+	read_pieces = my.read_pieces ()
+	min_pieces = my.min_pieces ()
+	insert_piece_size = my.insert_piece_size 
+	# Repair only the blocks that each node is responsible for.
+	# Only one node should be responsible for each block.
+	# Only live nodes repair too.
+	import sys
+	for n in my.nodes:
+	    assert n.alive
+	    n.bavail += n.brate * dt
+	    if n.bavail < 0: continue
+	    p = my.pred (n)
+	    nb = map (lambda b: my.blockwrapper (b, my.available[b]), blocks_between (k, p[0], n))
+	    heapify (nb)
+	    leftovers = []
+	    blockstofix = []
+
+	    runlen = min (my.look_ahead (), len (my.nodes))
+	    succs = my.succ (n, runlen)
+
+	    # High priority are those that aren't yet fully repaired
+	    while n.bavail > 0 and len (nb):
+		b = heappop (nb)
+		blk = b.block
+		trytofixthis = 0
+		if b.count < min_pieces:
+		    if b.count > read_pieces:
+			trytofixthis = 1
+		    else:
+			pass # can't fix the other ones.
+		else:
+		    trytofixthis = 2
+		if trytofixthis == 0: continue
+		# pick node in scope that doesn't yet have b XXX
+		# should we expand past succ list?
+		found = 0
+		for s in succs:
+		    if blk not in s.blocks:
+			dst = s
+			found = 1
+			break
+		if not found: continue
+		# We want to fix this and it has somewhere to go
+		# Build up the work queue
+		sz = my.blocks[blk]
+                isz = insert_piece_size (sz)
+		# Make sure we still have enough bandwidth to go
+		if n.bavail > isz:
+		    n.bavail -= isz
+		else:
+		    continue
+		if trytofixthis == 1:
+		    blockstofix.append ((blk, dst, isz))
+		elif trytofixthis == 2:
+		    leftovers.append ((blk, dst, isz))
+	    blockstofix = blockstofix + leftovers
+
+	    # Actually do the repairs
+	    for (blk, dst, isz) in blockstofix:
+		n.nrpc += 1
+		n.sent_bytes += isz
+		dst.store (blk, isz)
+		# Don't need to update availability tables
+		# creation of this copy couldn't have made anything
+		# more available.
+
+    def add_node_tempo (my, t, id):
+	my.repair_tempo (t, id)
+	return my.add_node_base (t, id)
+    def fail_node_tempo (my, t, id):
+	my.repair_tempo (t, id)
+	return my.fail_node_base (t, id)
+    def crash_node_tempo (my, t, id):
+	my.repair_tempo (t, id)
+	return my.crash_node_base (t, id)
 	
     # Subclass and redefine these methods to explore basic changes.
     def min_pieces (my):

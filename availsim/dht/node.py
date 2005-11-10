@@ -19,6 +19,10 @@ class node:
 
 	my.bandwidth = BANDWIDTH_HACK
 	my.nexttimetosend = -1.0
+
+	# For Tempo: bucket and fill rate in bytes/sec
+	my.bavail = 0
+	my.brate  = 512
         
         my.nrpc = 0
         my.sent_bytes = 0

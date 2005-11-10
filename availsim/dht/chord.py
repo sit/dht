@@ -32,7 +32,7 @@ class chord (object):
 	try:
 	    nnode = my.allnodes[id]
 	    if nnode.alive:
-		raise RuntimeError, "Duplicate insert of %s" % hex(id).lower ()
+		raise RuntimeError, "Duplicate insert of %s at %d" % (hex(id).lower (), t)
 	    else:
 		# This might be a re-join of some sort
 		nnode.start (t)
