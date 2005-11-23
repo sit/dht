@@ -7,30 +7,6 @@ typedef chordID cd_vnode;
 
 /* NEWCHORD *******************************************************/
 
-struct cd_newchord_arg {
-  /* wellknownhost can be zero-length, indicating that cd should figure
-   * out the local machine's address */
-  chord_hostname wellknownhost;
-  int wellknownport;
-  /* myname can be zero-length, and the meaning is the same as for
-   * wellknownhost */
-  chord_hostname myname;
-  int myport;
-  int maxcache;
-};
-
-struct cd_newchord_res {
-  chordstat stat;
-};
-
-/* UNNEWCHORD *****************************************************/
-
-struct cd_unnewchord_res {
-  chordstat stat;
-};
-
-/* NEWVNODE *******************************************************/
-
 enum cd_routing_mode {
   MODE_SUCC,
   MODE_CHORD,
@@ -43,20 +19,36 @@ enum cd_routing_mode {
   MODE_TCPPNSREC
 };
 
-struct cd_newvnode_arg {
+struct cd_newchord_arg {
+  /* wellknownhost can be zero-length, indicating that cd should figure
+   * out the local machine's address */
+  chord_hostname wellknownhost;
+  int wellknownport;
+  /* myname can be zero-length, and the meaning is the same as for
+   * wellknownhost */
+  chord_hostname myname;
+  int myport;
+  int maxcache;
+  int nvnodes;
   cd_routing_mode routing_mode;
 };
 
-struct cd_newvnode_res_ok {
-  cd_vnode vnode;
+struct cd_newchord_res_ok {
+  int nvnodes;
+  cd_vnode vnodes<>;
 };
 
-union cd_newvnode_res switch (chordstat stat) {
-  case CHORD_OK:
-    cd_newvnode_res_ok resok;
-  default:
-    /* CHORD_NOTINRANGE if mode is invalid */
-    void;
+union cd_newchord_res switch (chordstat stat) {
+ case CHORD_OK:
+   cd_newchord_res_ok resok;
+ default:
+   void;
+};
+
+/* UNNEWCHORD *****************************************************/
+
+struct cd_unnewchord_res {
+  chordstat stat;
 };
 
 /* LOOKUP *********************************************************/
@@ -99,12 +91,8 @@ program CD_PROGRAM {
 		/** Delete the chord object (returns CHORD_NOINRANGE if the
 		    Chord object doesn't exist) */
 
-		cd_newvnode_res
-		CD_NEWVNODE(cd_newvnode_arg) = 4;
-		/** Instantiate a new vnode */
-
 		cd_lookup_res
-		CD_LOOKUP(cd_lookup_arg) = 5;
+		CD_LOOKUP(cd_lookup_arg) = 4;
 		/** Find successor node of chord ID */
 	} = 1;
 } = 344600;

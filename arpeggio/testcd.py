@@ -4,6 +4,7 @@
 
 import sys, os, socket
 sys.path.append("../devel/")  # XXX Need RPC library
+sys.path.append("../svc/") 
 
 import RPC, asyncore
 import chord_types, cd_prot
@@ -133,20 +134,6 @@ def do_lookup(vnodeid, id):
     print "Looking up", arg.key, "via", arg.vnode
     CD(cd_prot.CD_LOOKUP, arg, lookupcb)
 
-def start_vnode():
-    """Start a new vnode and do a demonstration lookup."""
-    arg = cd_prot.cd_newvnode_arg()
-
-    arg.routing_mode = cd_prot.MODE_CHORD
-
-    def newvnodecb(res):
-        if res.stat == chord_types.CHORD_OK:
-            print "Vnode created:", res.resok.vnode
-            do_lookup(res.resok.vnode, res.resok.vnode + 1)
-        else:
-            print "Vnode creation failed:", res.stat
-    print "Starting vnode"
-    CD(cd_prot.CD_NEWVNODE, arg, newvnodecb)
 
 def start_chord():
     """Start a Chord instance and launch a single vnode when done.
@@ -154,26 +141,32 @@ def start_chord():
     Since cd is a very thin wrapper around the Chord API, it is
     necessary to initialize the chord object with the appropriate
     arguments.  Once the Chord object has been created, this calls
-    start_vnode."""
+    do_lookup."""
     
     arg = cd_prot.cd_newchord_arg()
 
     if options.bootstrap:
-        arg.wellknownhost = ""
+        arg.wellknownhost = options.myname
         arg.wellknownport = options.port
     else:
         arg.wellknownhost = socket.gethostbyname(options.join[0])
         arg.wellknownport = options.join[1]
-    arg.myname = ""
+    arg.myname = options.myname
     arg.myport = options.port
     arg.maxcache = 64  # XXX Uh
+    arg.nvnodes = 1    # XXX Uh again
+    arg.routing_mode = cd_prot.MODE_CHORD
 
     def newchordcb(res):
         if res.stat == chord_types.CHORD_NOTINRANGE:
             print "Chord object already exists, continuing anyways"
         else:
             print "Chord object created"
-        start_vnode()
+            print "Vnodes:"
+            for x in res.resok.vnodes:
+                print str(x)
+            vnid = res.resok.vnodes[0]
+            do_lookup(vnid, vnid+1)
     print "Instantiating Chord"
     CD(cd_prot.CD_NEWCHORD, arg, newchordcb)
 
@@ -211,6 +204,7 @@ def start():
     filled with a reasonable default.
 
     options.port -- The port to run Chord on (always valid)
+    options.myname -- Hostname to bind to (empty for default)
     options.bootstrap -- True iff this is a bootstrap node
     options.join -- (host, port) of another cc node to join with or None
        if this is a bootstrap node"""
@@ -239,7 +233,8 @@ def start():
     parser.add_option("-p", type="int", dest="port",
                       help="indicates local port to listen on for Chord"
                       " connections (defaults to joined node's port)")
-
+    parser.add_option("-l", type="string", dest="myname", default="",
+                      help="specifies local host name to bind to")
     # Parse and validate argments
     (options, args) = parser.parse_args()
     if args:

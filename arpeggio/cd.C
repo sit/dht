@@ -50,23 +50,6 @@ void halt ();
 // =====================================
 
 static void
-newvnode_cb (svccb *sbp, ptr<vnode> vn, chordstat stat)
-{  
-  cd_newvnode_res *res = New cd_newvnode_res ();
-  res->set_stat(stat);
-  
-  if (stat != CHORD_OK) {
-    warnx << "newvnode_cb: status " << stat << "\n";
-  } else {
-    chordID id = vn->my_ID();
-    vnodes.insert(id, vn);
-    res->resok->vnode = id;
-  }
-
-  sbp->reply(res);
-}
-
-static void
 lookup_cb (svccb *sbp, vec<chord_node> nodes, route r, chordstat stat)
 {
   cd_lookup_res *res = New cd_lookup_res ();
@@ -108,26 +91,49 @@ cd_dispatch (ptr<asrv> s, svccb *sbp)
 
   case CD_NEWCHORD:
     {
-      cd_newchord_arg *a = sbp->template getarg<cd_newchord_arg> ();
+      cd_newchord_arg *a = sbp->Xtmpl getarg<cd_newchord_arg> ();
       chord_hostname myname = a->myname;
 	  chord_hostname wellknownhost = a->wellknownhost;
       if (myname.len() == 0) {
         myname = my_addr();
       }
-	  if (wellknownhost.len() == 0) {
-		wellknownhost = my_addr();
-	  }
+      if (wellknownhost.len() == 0) {
+        wellknownhost = my_addr();
+      }
 
       cd_newchord_res *res = New cd_newchord_res ();
       if (chordnode) {
-        res->stat = CHORD_NOTINRANGE;
+        res->set_stat(CHORD_NOTINRANGE);
       } else {
-        chordnode = New refcounted<chord> (a->wellknownhost,
-                                           a->wellknownport,
-                                           myname,
-                                           a->myport,
-                                           a->maxcache);
-        res->stat = CHORD_OK;
+        // Find routing mode
+        int i;
+        bool success = false;
+        for (i = 0; i < nmodes; i++) {
+          if (a->routing_mode == modes[i].m) {
+            success = true;
+            break;
+          }
+        }
+        
+        if (!success) {
+          res->set_stat(CHORD_NOTINRANGE);
+        } else {
+          chordnode = New refcounted<chord> (myname,
+                                             a->myport,
+                                             modes[i].producer,
+                                             a->nvnodes,
+                                             a->maxcache);
+          chordnode->startchord();
+          chordnode->join(wellknownhost, a->wellknownport, false);
+          res->set_stat(CHORD_OK);
+          res->resok->nvnodes = chordnode->num_vnodes();
+          for (int j = 0; j < res->resok->nvnodes; j++) {
+            ptr<vnode> vn = chordnode->get_vnode(j);
+            chordID id = vn->my_ID();
+            vnodes.insert(id, vn);
+            res->resok->vnodes.push_back(id);
+          }
+        }
       }
       sbp->reply(res);
     }
@@ -138,40 +144,17 @@ cd_dispatch (ptr<asrv> s, svccb *sbp)
       cd_newchord_res *res = New cd_newchord_res ();
       if (chordnode) {
         chordnode = NULL;
-        res->stat = CHORD_OK;
+        res->set_stat(CHORD_OK);
       } else {
-        res->stat = CHORD_NOTINRANGE;
+        res->set_stat(CHORD_NOTINRANGE);
       }
       sbp->reply(res);
     }
     break;
-
-  case CD_NEWVNODE:
-    {
-      cd_newvnode_arg *a = sbp->template getarg<cd_newvnode_arg> ();
-      int i;
-      bool success = false;
-      
-      for (i = 0; i < nmodes; i++) {
-        if (a->routing_mode == modes[i].m) {
-          chordnode->newvnode(modes[i].producer, wrap(newvnode_cb, sbp));
-          success = true;
-          break;
-        }
-      }
-
-      if (!success) {
-        cd_newvnode_res *res = New cd_newvnode_res ();
-        res->set_stat(CHORD_NOTINRANGE);
-        sbp->reply(res);
-      }
-      
-    }
-    break;
-
+    
   case CD_LOOKUP:
     {
-      cd_lookup_arg *a = sbp->template getarg<cd_lookup_arg> ();
+      cd_lookup_arg *a = sbp->Xtmpl getarg<cd_lookup_arg> ();
       ptr<vnode> vn = vnodes[a->vnode];
 
       if (vn == NULL) {
@@ -207,7 +190,7 @@ startcontroller ()
   int fd = unixsocket_connect(ctlsocket);
   if (fd < 0)
     fatal << "Error opening control socket: " << strerror(errno) << "\n";
-  unlink(ctlsocket);
+  //unlink(ctlsocket);
   ref<axprt_stream> x = axprt_stream::alloc (fd, 1024*1025);
   control_accept(x);
 }
@@ -458,15 +441,7 @@ main (int argc, char **argv)
     bool ok = Configurator::only ().parse (cffile);
     assert (ok);
   }
-
-  // XXX The following should probably be handled by NEWVNODE
-//   Configurator::only ().get_int ("chord.max_vnodes", max_vnodes);
-//   if (vnodes > max_vnodes) {
-//     warn << "Requested vnodes (" << vnodes << ") more than maximum allowed ("
-// 	 << max_vnodes << ")\n";
-//     usage ();
-//   }
-
+  
   if (ss_mode >= 0) {
     if (ss_mode & 1) {
       fatal << "DHash ordered successors not supported by cd.\n";
