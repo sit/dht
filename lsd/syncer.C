@@ -107,9 +107,7 @@ syncer::get_succlist_cb (chord_nodelistres *res,
 		 clnt_stat status)
 {
   vec<ptr<location> > ret;
-  if (status) {
-    cb (ret);
-  } else {
+  if (!status) {
     size_t sz = res->resok->nlist.size ();
     for (size_t i = 0; i < sz; i++) {
       chord_node n = make_chord_node (res->resok->nlist[i]);
@@ -171,7 +169,9 @@ syncer::sync_replicas_gotsucclist (ptr<location> pred,
   assert(succs[cur_succ]);
 
   //sync with the next node
-  if (tmptree) delete tmptree;
+  if (tmptree) {
+    delete tmptree;
+  }
   int64_t start = getusec ();
 
   // XXX need to twiddle the keys as they come out...
