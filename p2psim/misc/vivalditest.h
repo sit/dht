@@ -65,7 +65,7 @@ public:
   // need to run after _all is filled
   // in. This flag lets us run them once
 
-  Vivaldi *_vivaldi;
+//  Vivaldi *_vivaldi;
   static vector<VivaldiTest*> _all;
 
   int _next_neighbor;
