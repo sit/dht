@@ -181,8 +181,12 @@ dhblock_chash_srv::repair_timer ()
 
   chordID first = bsm->first_block ();
   chordID b = first;
-  do {
+  while (b != 0) {
     u_int count = bsm->pcount (b, succs);
+    if (count < dhblock_chash::num_dfrags ()) {
+      warning << node->my_ID () << ": block " << b << " insufficient fragments available "
+	      << count << " < " << dhblock_chash::num_dfrags () << "\n";
+    } else 
     if (count < dhblock_chash::num_efrags ()) {
       trace << node->my_ID () << ": adding " << b 
 	    << " to outgoing queue "
@@ -192,8 +196,11 @@ dhblock_chash_srv::repair_timer ()
       ptr<location> to = bsm->best_missing (b, succs);
       repair (blockID (b, DHASH_CONTENTHASH), to);
     } 
+
     b = bsm->next_block (b);
-  } while (b != first && b != 0);
+    if (b == first)
+      break;
+  }
 }
 
 bool
