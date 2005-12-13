@@ -5,7 +5,7 @@
 #include "block_status.h"
 #include "misc_utils.h"
 
-u_long
+static u_long
 num_efrags ()
 {
   static bool initialized = false;

@@ -45,7 +45,6 @@ union adb_fetchres switch (adb_status status) {
 
 struct adb_getkeysresok {
   chordID keys<>;
-  int enumerator_id; 
   bool complete;
 };
 
