@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.52 2005/09/16 22:54:45 fdabek Exp $
+# $Id: Makefile.am,v 1.53 2005/12/21 07:41:52 sit Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -41,7 +41,7 @@ dbm_SOURCES = dhash_benchmark.C
 dbm_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)
 
 dbdump_SOURCES = dbdump.C
-dbdump_LDADD = $(DBLIB) $(LDADD)
+dbdump_LDADD = $(DBLIB) ../utils/dbfe_sleepycat.o $(LDADD)
 
 findroute_SOURCES = findroute.C rpclib.C
 findroute_LDADD = ../chord/libchord.a ../svc/libsvc.la ../utils/libutil.a $(LDADD)

@@ -24,6 +24,10 @@
 #include "dmalloc.h"
 #endif
 
+bool dbfe_generate_config (str path, unsigned int cachesize);
+int dbfe_initialize_dbenv (DB_ENV **dbep, str filename, bool join, unsigned int cachesize = 1024);
+int dbfe_opendb (DB_ENV *dbe, DB **dbp, str filename, int flags, int mode = 0664);
+
 //adb options
 #define CACHE_OPT "opt_cachesize"
 #define NODESIZE_OPT "opt_nodesize"
@@ -330,83 +334,15 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
   if (cachesize == -1) cachesize = 1024;  /* KB */
 
   if (do_dbenv) {
-    r = mkdir (filename, 0755);
-    if (r < 0 && errno != EEXIST) {
-      fatal ("Couldn't mkdir for database %s: %m", filename);
-    }
-
-    r = db_env_create (&dbe, 0);
-    if (r) return r;
-
-    /* Generate a configuration file for other processes to use */
-    strbuf db_config_path ("%s/DB_CONFIG", filename);
-    strbuf db_config;
-    db_config << "# MIT lsd db configuration\n\n";
-
-    // clean up old log files not available in old versions
-#if ((DB_VERSION_MAJOR >= 4) && (DB_VERSION_MINOR >= 2))
-    db_config << "set_flags db_log_autoremove\n";
-#endif
-    db_config << "# create " << cachesize << " KB cache\n";
-    db_config << "set_cachesize 0 " << cachesize * 1024 << " 1\n";
-    
-#if 0
-    /* This should be the default */
-    char cpath[MAXPATHLEN];
-    getcwd(cpath, MAXPATHLEN);
-    db_config << "set_data_dir " << cpath << "\n";
-    db_config << "set_lg_dir " << cpath << "\n";
-    db_config << "set_tmp_dir " << cpath << "\n";
-#endif /* 0 */
-
-    // Write out the configuration file
-    str2file (db_config_path, db_config);
-    
-    if (join < 0) {
-      r = dbe->open(dbe, filename, DB_CREATE | DB_INIT_MPOOL | DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_TXN | DB_RECOVER , 0);
-    } else {
-      r = dbe->open(dbe, filename, DB_JOINENV, 0);
-    }
-
+    r = dbfe_initialize_dbenv (&dbe, filename, join >= 0, cachesize);
     if (r){
       warn << "dbe->open returned " << r << " which is " << db_strerror(r) << "\n";
       return r;
     }
-
-    dbe->set_errfile (dbe, stderr);
-  }
-
-  r = db_create (&db, dbe, 0);
-  if (r) return r;
-
-  db->set_pagesize (db, 16 * 1024);
-  // the below seems to cause the db to grow much larger.
-  //  db->set_bt_minkey(db, 60);
-  
-  if(!do_dbenv) {
-#if ((DB_VERSION_MAJOR < 4) || ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 1)))
-    r = db->open(db, (const char *)filename, NULL, DB_BTREE, flags, mode);
-#else
-    r = db->open(db, NULL, (const char*)filename, NULL, DB_BTREE, flags, mode);
-#endif
-
+    r = dbfe_opendb (dbe, &db, "db", flags, mode);
   } else {
-#if ((DB_VERSION_MAJOR < 4) || ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 1)))
-    r = db->open(db, "db", NULL, DB_BTREE, flags, mode);
-#else
-    //Sleepycat 4.1 and greater force us to open the DB inside a transaction
-    // the open suceeds in either case, but if the open isn't surrounded by
-    // a transaction, later calls that use a transaction will fail
-    DB_TXN *t = NULL;
-    r = dbe->txn_begin(dbe, NULL, &t, 0);
-    if (r || !t) return r;
-    r = db->open(db, t, "db", NULL, DB_BTREE, flags, mode);
-    r = t->commit(t, 0);
-    if (r) return r;
-
-#endif
+    r = dbfe_opendb (dbe, &db, (const char *) filename, flags, mode);
   }
-
   return r;
 }
 

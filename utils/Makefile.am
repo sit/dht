@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-## $Id: Makefile.am,v 1.16 2005/12/21 05:53:53 sit Exp $
+## $Id: Makefile.am,v 1.17 2005/12/21 07:41:52 sit Exp $
 
 chordlib_LIBRARIES = libutil.a libadb.a
 chordinclude_HEADERS = id_utils.h configurator.h skiplist.h modlogger.h
@@ -28,6 +28,7 @@ libutil_a_SOURCES = \
 	misc_utils.C \
 	modlogger.C \
 	libadb.C \
+	dbfe_sleepycat.C \
 	dbfe.C
 
 libadb_a_SOURCES = libadb.C

@@ -2,6 +2,11 @@
 #include <aios.h>
 #include <dbfe.h>
 
+int
+dbfe_initialize_dbenv (DB_ENV **dbep, str filename, bool join, unsigned int cachesize = 1024);
+int
+dbfe_opendb (DB_ENV *dbe, DB **dbp, str filename, int flags, int mode = 0664);
+
 enum dumpmode_t {
     MODE_ENV = 1,
     MODE_OLD = 2
@@ -43,42 +48,16 @@ main (int argc, char *argv[])
   DB_ENV* dbe = NULL;
 
   if (mode == MODE_ENV) {
-    r = db_env_create (&dbe, 0);
-    assert (!r);
-    // dbe->set_verbose (dbe, DB_VERB_DEADLOCK, 1);
-    // dbe->set_verbose (dbe, DB_VERB_WAITSFOR, 1);
-    dbe->set_errfile (dbe, stdout);
+    r = dbfe_initialize_dbenv (&dbe, argv[0], /* join = */ true);
+    if (r)
+      fatal << "couldn't open dbenv: " << db_strerror (r) << "\n";
 
-    r = dbe->open (dbe, argv[0], 
-		   DB_JOINENV,
-		   //		   DB_CREATE| DB_INIT_MPOOL | DB_INIT_LOCK | 
-		   // DB_INIT_LOG | DB_INIT_TXN | DB_RECOVER | DB_JOINENV,
-		   0);
-    if (r) 
-      fatal << "couldn't open db env: " << db_strerror(r) << "\n";
-  }
-  
-  r = db_create(&db, dbe, 0);
-  if (r) 
-    fatal << "couldn't create db: " << db_strerror(r) << "\n";
-  
-  if (mode == MODE_OLD) {
-#if ((DB_VERSION_MAJOR < 4) || ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 1)))
-    r = db->open(db, (const char *)argv[0], NULL, DB_BTREE, DB_RDONLY, 0664);
-#else
-    r = db->open(db, NULL, (const char *)argv[0], NULL, 
-		 DB_BTREE, DB_RDONLY, 0664);
-#endif
-    
+    r = dbfe_opendb (dbe, &db, "db", DB_RDONLY);
   } else {
-#if ((DB_VERSION_MAJOR < 4) || ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 1)))
-    r = db->open(db, "db", NULL, DB_BTREE, DB_RDONLY, 0664);
-#else
-    r = db->open(db, NULL, "db", NULL, DB_BTREE, DB_AUTO_COMMIT|DB_RDONLY, 0664);
-#endif
+    r = dbfe_opendb (dbe, &db, argv[0], DB_RDONLY);
   }
-
-  assert (r == 0);
+  if (r)
+    fatal << "couldn't open db: " << db_strerror (r) << "\n";
     
   DBC *cursor;
   r = db->cursor(db, NULL, &cursor, 0);
