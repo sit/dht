@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-## $Id: Makefile.am,v 1.15 2005/08/19 20:04:33 fdabek Exp $
+## $Id: Makefile.am,v 1.16 2005/12/21 05:53:53 sit Exp $
 
 chordlib_LIBRARIES = libutil.a libadb.a
 chordinclude_HEADERS = id_utils.h configurator.h skiplist.h modlogger.h
@@ -34,7 +34,7 @@ libadb_a_SOURCES = libadb.C
 
 bin_PROGRAMS = adbd
 
-adbd_SOURCES = adb.C 
+adbd_SOURCES = adbd.C 
 adbd_LDADD =  libutil.a ../svc/libsvc.la $(LIBARPC)  $(LIBSFSCRYPT) $(LIBGMP) $(DBLIB) $(LIBASYNC) 
 
 # should really figure out how to encode explict rule so that make
