@@ -10,8 +10,6 @@
 
 #undef setbit
 
-#include "dbfe.h"
-
 class merkle_hash {
 private:
   unsigned int getbit (unsigned int i) const;
