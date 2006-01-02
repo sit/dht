@@ -24,10 +24,6 @@
 #include "dmalloc.h"
 #endif
 
-bool dbfe_generate_config (str path, unsigned int cachesize);
-int dbfe_initialize_dbenv (DB_ENV **dbep, str filename, bool join, unsigned int cachesize = 1024);
-int dbfe_opendb (DB_ENV *dbe, DB **dbp, str filename, int flags, int mode = 0664);
-
 //adb options
 #define CACHE_OPT "opt_cachesize"
 #define NODESIZE_OPT "opt_nodesize"

@@ -2,11 +2,6 @@
 #include <aios.h>
 #include <dbfe.h>
 
-int
-dbfe_initialize_dbenv (DB_ENV **dbep, str filename, bool join, unsigned int cachesize = 1024);
-int
-dbfe_opendb (DB_ENV *dbe, DB **dbp, str filename, int flags, int mode = 0664);
-
 enum dumpmode_t {
     MODE_ENV = 1,
     MODE_OLD = 2

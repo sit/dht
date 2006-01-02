@@ -2,7 +2,7 @@
 #include <db.h>
 
 /* Generate a configuration file for other processes to use */
-bool
+static bool
 dbfe_generate_config (str path, unsigned int cachesize)
 {
   strbuf db_config;
@@ -62,13 +62,11 @@ dbfe_initialize_dbenv (DB_ENV **dbep, str filename, bool join, unsigned int cach
     r = dbe->open (dbe, filename, DB_JOINENV, 0);
   }
 
-  if (r) return r;
-
-  return 0;
+  return r;
 }
 
 int
-dbfe_opendb (DB_ENV *dbe, DB **dbp, str filename, int flags, int mode = 0664)
+dbfe_opendb (DB_ENV *dbe, DB **dbp, str filename, int flags, int mode = 0664, bool dups = false)
 {
   int r (-1);
   r = db_create (dbp, dbe, 0);
@@ -76,6 +74,14 @@ dbfe_opendb (DB_ENV *dbe, DB **dbp, str filename, int flags, int mode = 0664)
 
   DB *db = *dbp;
   db->set_pagesize (db, 16 * 1024);
+
+  /* Secondary databases, for example, require duplicates */
+  if (dups && (r = db->set_flags (db, DB_DUPSORT)) != 0) {
+    (void)db->close(db, 0);
+    dbe->err (dbe, r, "db->set_flags: DB_DUP");
+    return r;
+  }
+
   /* the below seems to cause the db to grow much larger. */
   // db->set_bt_minkey(db, 60);
 

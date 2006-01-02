@@ -87,7 +87,6 @@
 
 #include "vec.h"
 #include "async.h"
-#include "ihash.h"
 #include "callback.h"
 
 #ifdef SLEEPYCAT
@@ -102,15 +101,10 @@
 #include "btreeDispatch.h"
 #endif /* !SLEEPYCAT */
 
-template <>
-struct hashfn<DB *> {
-  hashfn () {}
-  hash_t operator() (const DB *a) const
-  {
-    return (u_int)a;
-  }
-};
-
+#ifdef SLEEPYCAT
+int dbfe_initialize_dbenv (DB_ENV **dbep, str filename, bool join, unsigned int cachesize = 1024);
+int dbfe_opendb (DB_ENV *dbe, DB **dbp, str filename, int flags, int mode = 0664, bool dups = false);
+#endif /* SLEEPYCAT */
 
 struct dbrec {
   char *value;
