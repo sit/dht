@@ -16,18 +16,15 @@
 #define DHASHCLIENT_RMW 0x40
 
 struct blockID {
-  enum { size = sha1::hashsize };
-
   chordID ID;
   dhash_ctype ctype;
 
-  blockID (chordID k, dhash_ctype c)
-    : ID(k), ctype(c)
-  {} 
+  blockID (chordID k, dhash_ctype c) : ID (k), ctype (c) {};
+  // blockID (const blockID &b) : ID (b.ID), ctype (b.ctype) {};
 
   bool operator== (const blockID b) const {
-    return((ID == b.ID) &&
-	   (ctype == b.ctype));
+    return ((ID == b.ID) &&
+	    (ctype == b.ctype));
   }
 };
 
