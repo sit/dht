@@ -45,31 +45,35 @@ void
 dhash_store::finish (ptr<bool> p_deleted, 
 		     ptr<dhash_storeres> res, int num, clnt_stat err)
 {
+  // warn << clntnode->my_ID () << ": dhash_store::finish (" << bid << ", "
+  //      << *p_deleted << ", ..., " << num << ", " << err << ")\n";
   if (*p_deleted) return;
 
   npending--;
-  chord_node pred_node;
-
-  if (err) {
-    trace << "store failed: " << bid << ": RPC error " << err << "\n";
-    error = true;
-    status = DHASH_RPCERR;
-  } else if (res->status != DHASH_OK && !error) {
-    status = res->status;
-    error = true;
-  } else if (res->resok->already_present)
-    present = res->resok->already_present;
   
+  // XXX FETCHCOMPLETE has a void return, so just ignore res.
+  if (procno == DHASHPROC_STORE) {
+    if (err) {
+      trace << "store failed: " << bid << ": RPC error " << err << "\n";
+      error = true;
+      status = DHASH_RPCERR;
+    } else if (res->status != DHASH_OK && !error) {
+      status = res->status;
+      error = true;
+    } else if (res->resok->already_present)
+      present = res->resok->already_present;
+  }
 
   if (npending == 0) 
     done (present);
-  
 }
 
 
 void 
 dhash_store::store (char *data, size_t len, size_t off, size_t totsz, int num)
 {
+  // warn << clntnode->my_ID () << ": dhash_store::store (" << bid << ", "
+  //       << len << ", " << off << ", " << totsz << ", " << num << ")\n";
   ref<dhash_storeres> res = New refcounted<dhash_storeres> (DHASH_OK);
   ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
   arg->key     = bid.ID;
@@ -91,6 +95,7 @@ dhash_store::store (char *data, size_t len, size_t off, size_t totsz, int num)
 void 
 dhash_store::done (bool present)
 {
+  // warn << clntnode->my_ID () << ": dhash_store::done (" << bid << ")\n";
   (*cb) (status, dest->id (), present);
   *deleted = true;
   delete this;
