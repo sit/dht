@@ -42,8 +42,12 @@ dbfe_initialize_dbenv (DB_ENV **dbep, str filename, bool join, unsigned int cach
   if (r) return r;
 
   DB_ENV *dbe = *dbep;
-  // dbe->set_verbose (dbe, DB_VERB_DEADLOCK, 1);
-  // dbe->set_verbose (dbe, DB_VERB_WAITSFOR, 1);
+
+  // Enable verbose dead lock detection.
+  dbe->set_verbose (dbe, DB_VERB_DEADLOCK, 1);
+  dbe->set_verbose (dbe, DB_VERB_WAITSFOR, 1);
+  dbe->set_lk_detect (dbe, DB_LOCK_DEFAULT);
+
   dbe->set_errfile (dbe, stderr);
 
   if (!join) {
