@@ -20,7 +20,9 @@ dhblock_keyhash::marshal_block (sfs_pubkey2 key,
   
   int m_len = x.uio ()->resid ();
   char *m_dat = suio_flatten (x.uio ());
-  return str (m_dat, m_len);
+  str v (m_dat, m_len);
+  xfree (m_dat);
+  return v;
 }
 
 vec<str>
