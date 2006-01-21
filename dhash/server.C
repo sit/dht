@@ -33,8 +33,6 @@
 #include "dhash_impl.h"
 #include "dhashcli.h"
 
-#include <dbfe.h>
-
 #include <dhash_prot.h>
 #include <chord_types.h>
 #include <id_utils.h>
@@ -60,8 +58,6 @@
 
 #include <configurator.h>
 
-void store_after_store (int status);
-
 struct dhash_config_init {
   dhash_config_init ();
 } dci;
@@ -71,8 +67,6 @@ dhash_config_init::dhash_config_init ()
   bool ok = true;
 
 #define set_int Configurator::only ().set_int
-  /** How frequently to sync database to disk */
-  ok = ok && set_int ("dhash.sync_timer", 45);
   /** Whether or not to drop writes */
   ok = ok && set_int ("dhash.drop_writes", 0);
   /** Should replication run initially? */
@@ -102,7 +96,6 @@ dhash::name ()						\
 }
 
 DECL_CONFIG_METHOD(reptm, "dhash.repair_timer")
-DECL_CONFIG_METHOD(synctm, "dhash.sync_timer")
 DECL_CONFIG_METHOD(dhash_disable_db_env, "dhash.disable_db_env")
 #undef DECL_CONFIG_METHOD
 
@@ -164,23 +157,12 @@ dhash_impl::dhash_impl (ptr<vnode> node, str dbname) :
     start ();
 }
 
-
-
-/*
-void
-dhash_impl::fetchiter_gotdata_cb (ptr<location> dst, blockID id, long nonce,
-				      str val, dhash_stat err)
-{
-  //DDD initiate multiple RPCs to the requestor
-  cli->sendblock (dst, id, val, 
-		  wrap (this, &dhash_impl::fetchcomplete_done),
-		  nonce)
-}
-*/
 void
 dhash_impl::fetchcomplete_done (int nonce, chord_node sender,
 				dhash_stat err, bool present)
 {
+  warn << host_node->my_ID () << "dhash_impl::fetchcomplete_done: "
+       << nonce << " " << sender << " " << err << "\n";
   if (err == DHASH_NOENT) { // block wasn't in db. notify sender.
     ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
     //fill in just enough fields so that it marshalls
@@ -227,9 +209,8 @@ dhash_impl::unregister_fetch_callback (long nonce)
   fcb_state *fcb = fetch_cbs[nonce];
   fetch_cbs.remove (fcb);
   delete fcb;
-};
+}
 
-				       
 void
 dhash_impl::dispatch (user_args *sbp) 
 {
@@ -256,7 +237,7 @@ dhash_impl::dispatch (user_args *sbp)
 
       //farg is garbage below this line ----- 
 
-      ptr<location> requestor = New refcounted<location> (from);
+      ptr<location> requestor = host_node->locations->lookup_or_create (from);
       ptr<dhblock_srv> srv = blocksrv[id.ctype];
       cli->sendblock (requestor, id, srv,
 		      wrap (this, &dhash_impl::fetchcomplete_done,
@@ -276,8 +257,12 @@ dhash_impl::dispatch (user_args *sbp)
 	  (fcb->cb) (data, sarg->offset, sarg->attr.size);
 	}
       } else
-	warn << "unexpected FCB for " << sarg->key << 
-	  " nonce: " << sarg->nonce << "\n";
+	warn << host_node->my_ID () << ": unexpected FCB for " << sarg->key 
+	  << " nonce: " << sarg->nonce 
+	  << " type: " << sarg->type
+	  << " offset: " << sarg->offset
+	  << " totsz: " << sarg->attr.size
+	  << "\n";
       
       sbp->reply (NULL);
     }
@@ -300,19 +285,9 @@ dhash_impl::dispatch (user_args *sbp)
       if (!srv) {
 	dhash_offer_res res (DHASH_ERR);
 	sbp->reply (&res);
+      } else {
+	srv->offer (sbp, arg);
       }
-      srv->offer (sbp, arg);
-    }
-    break;
-  case DHASHPROC_BSMUPDATE:
-    {
-      dhash_bsmupdate_arg *arg = sbp->Xtmpl getarg<dhash_bsmupdate_arg> ();
-      ptr<dhblock_srv> srv = blocksrv[arg->ctype];
-      if (!srv) {
-	sbp->reply (NULL);
-	break;
-      }
-      srv->bsmupdate (sbp, arg);
     }
     break;
   default:
@@ -320,6 +295,8 @@ dhash_impl::dispatch (user_args *sbp)
     break;
   }
 }
+
+void store_after_store (cbstore cb, dhash_stat status);
 
 void
 dhash_impl::storesvc_cb (user_args *sbp,
@@ -337,12 +314,6 @@ dhash_impl::storesvc_cb (user_args *sbp,
   }
   sbp->reply (&res);
 }
-
-
-//---------------- no sbp's below this line --------------
-
-// --- node to database transfers --- 
-
 
 void 
 dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
@@ -367,14 +338,14 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
 
   if (ss->iscomplete()) {
     str d (ss->buf, ss->size);
-    // this will start the store, but it won't be on disk when 
-    // the function returns
-    srv->store (arg->key, d, wrap(&store_after_store));
-    // XXX keep other stats?
+    // this will start the store, but it won't be on disk until the cb
+    // is called.
+    srv->store (arg->key, d, wrap (&store_after_store, cb));
     bytes_stored += ss->size;
     pst.remove (ss);
     delete ss;
-    cb (false, DHASH_OK);
+    // Wait until store returns to decide what error code to return.
+    // XXX this needs a "callback" RPC.
   } else {
     cb (false, DHASH_STORE_PARTIAL);
   }
@@ -382,12 +353,14 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
 }
 
 void
-store_after_store (int status)
+store_after_store (cbstore cb, dhash_stat status)
 {
-  if (status != ADB_OK) warn << "store failed. oops\n";
+  // XXX eliminate already_present flag to simplify this.
+  cb (false, status);
+  return; 
 }
-// --------- utility
 
+// --------- utility
 
 void
 dhash_impl::doRPC (const chord_node &n, const rpc_program &prog, int procno,
@@ -424,8 +397,6 @@ dhash_impl::print_stats ()
   vec<dstat> ds = stats ();
   for (size_t i = 0; i < ds.size (); i++)
     warnx << "  " << ds[i].value << " " << ds[i].desc << "\n";
-  
-  warnx << key_info ();
 }
 
 static void
@@ -447,18 +418,6 @@ dhash_impl::stats ()
   blocksrv.traverse (wrap (&statscb, &s));
 
   return s;
-}
-
-strbuf
-dhash_impl::key_info ()
-{
-  // XXX only prints DHASH_CONTENTHASH records
-  // XXX probably a terrible idea to enumerate the database!!!
-  strbuf out;
-  ptr<dhblock_srv> s = blocksrv[DHASH_CONTENTHASH];
-  if (s)
-    s->key_info (out);
-  return out;
 }
 
 static void

@@ -1,7 +1,6 @@
 #include <chord.h>
 #include <dhash.h>
 #include <dhash_common.h>
-#include "dhashcli.h"
 
 #include "dhblock_noauth.h"
 #include "dhblock_noauth_srv.h"  
@@ -11,186 +10,25 @@
 #include "location.h"
 
 #include "merkle_tree.h"
-#include "merkle_server.h"
-
-void cbi_ignore (int err);
 
 // "fake" key to merkle on.. low 32 bits are hash of the block contents
-chordID
-dhblock_noauth_srv::get_merkle_key (chordID key, str data)
+inline static u_int32_t
+mhashdata (str data)
 {
-
-  //get the low bits: xor of the marshalled words
-  unsigned long *d = (unsigned long *)data.cstr ();
-  unsigned long hash = 0;
+  // get the low bits: xor of the marshalled words
+  u_int32_t *d = (u_int32_t *)data.cstr ();
+  u_int32_t hash = 0;
   for (unsigned int i = 0; i < data.len ()/4; i++) 
     hash ^= d[i];
   
-  //mix the hash in with the low bytes
-  chordID fkey = key >> 32;
-  fkey = fkey << 32;
-  chordID mkey = fkey | bigint(hash);
-
-  return mkey;
+  return hash;
 }
-
-// key to store data under in the DB. Low 32-bits are zero
-chordID
-dhblock_noauth_srv::get_database_key (chordID key)
-{
-
-  //get a key with the low bits cleard out
-  key = key >> 32;
-  key = key << 32;
-  assert (key > 0);  //assert that there were some high bits left
-  return key;
-}
-
-
-dhblock_noauth_srv::dhblock_noauth_srv (ptr<vnode> node, 
-					ptr<dhashcli> cli,
-					str desc, 
-					str dbname, str dbext) :
-  dhblock_replicated_srv (node, cli, desc, dbname, dbext, DHASH_NOAUTH)
-{
-
-  // merkle state, don't populate from db
-  mtree = New merkle_tree (db, false);
-  msrv = New merkle_server (mtree);
-  
-  db->getkeys (bigint(0), wrap (this, &dhblock_noauth_srv::iterate_cb));
-}
-
-void
-dhblock_noauth_srv::iterate_cb (adb_status stat, vec<chordID> keys)
-{
-  for (unsigned int i = 0; i < keys.size (); i++) 
-    db->fetch (keys[i], wrap (this, &dhblock_noauth_srv::iterate_fetch_cb));
-
-  if (stat == ADB_OK) // more keys
-    db->getkeys (incID (keys.back ()), 
-		 wrap (this, &dhblock_noauth_srv::iterate_cb));
-}
-
-void
-dhblock_noauth_srv::iterate_fetch_cb (adb_status stat, 
-				      chordID key, 
-				      str data)
-{
-    assert (stat == ADB_OK);
-
-    merkle_hash mkey = to_merkle_hash (get_merkle_key (key, data));
-
-    mtree->insert (mkey);
-
-}
-
- 
-void
-dhblock_noauth_srv::fetch (chordID k, cb_fetch cb)
-{
-  chordID db_key = dhblock_noauth_srv::get_database_key (k);
-  return db->fetch (db_key, cb);
-}
-
-
-void
-dhblock_noauth_srv::store (chordID key, str new_data, cbi cb)
-{
-
-  chordID dbKey = get_database_key (key);
-
-  if( _paused_stores[dbKey] != NULL ) {
-    // someone is already using this key, so just add ourselves to the
-    // list of waiters
-    vec<cbv> *waiters = *(_paused_stores[dbKey]);
-    waiters->push_back (wrap (db, &adb::fetch, dbKey,
-			      wrap (this, 
-				    &dhblock_noauth_srv::store_after_fetch_cb, 
-				    new_data, cb)));
-    return;
-  } else {
-    // We must clear this out before calling cb on all possible paths
-    vec<cbv> *waiters = New vec<cbv> ();
-    _paused_stores.insert (dbKey, waiters);
-    db->fetch (dbKey, 
-	       wrap (this, &dhblock_noauth_srv::store_after_fetch_cb, 
-		     new_data, cb));
-  }
-
-}
-
-void
-dhblock_noauth_srv::finish_store (chordID key)
-{
-
-  assert (_paused_stores[key] != NULL);
-  vec<cbv> *waiters = *(_paused_stores[key]);
-
-  if (waiters->size () > 0) {
-    cbv cb = waiters->pop_front ();
-    (*cb) ();
-  } else {
-    _paused_stores.remove (key);
-    delete waiters;
-  }
-
-}
-
-void
-dhblock_noauth_srv::store_after_fetch_cb (str new_data, cbi cb, adb_status err,
-					  chordID dbkey, str old_data) 
-{
-
-  if (err != ADB_OK) 
-    old_data = "";
-  
-  str dprep = merge_data (dbkey, new_data, old_data);
-
-  if (dprep != old_data) { //new data added something
-    chordID kdb = dhblock_noauth_srv::get_database_key (dbkey);
-
-    //put the key in the merkle tree; kick out the old key
-    merkle_hash mkey;
-    if (old_data.len ()) {
-      mkey = to_merkle_hash(dhblock_noauth_srv::get_merkle_key (dbkey, 
-								old_data));
-      mtree->remove (mkey);
-      db->remove (kdb, wrap (this, &dhblock_noauth_srv::after_delete, 
-			     dbkey, dprep, cb));
-    } else
-      after_delete (dbkey, dprep, cb, ADB_OK);
-  } else {
-    finish_store (dbkey);
-    cb (ADB_OK);
-  }
-}
-
-void
-dhblock_noauth_srv::after_delete (chordID key, str data, cbi cb,
-				  int err)
-{
-  assert (err == ADB_OK);
-
-  merkle_hash mkey = 
-    to_merkle_hash (dhblock_noauth_srv::get_merkle_key (key, data));
-  mtree->insert (mkey);
-
-  warn << node->my_ID () << " db write: " 
-       << " U " << key << " " << data.len ()  << "\n";
-
-  db->store (key, data, cb); 
-  finish_store (key); 
-
-}
-
 
 // add new_data to existing key
 // returns NULL unless new_data added new sub-blocks
 str 
-dhblock_noauth_srv::merge_data (chordID key, str new_data, str prev_data)
+merge_data (chordID key, str new_data, str prev_data)
 {
-
   vec<str> new_elems = dhblock_noauth::get_payload (new_data.cstr (), 
 						    new_data.len ());
   
@@ -206,7 +44,6 @@ dhblock_noauth_srv::merge_data (chordID key, str new_data, str prev_data)
 		       true);
   }
   
-
   u_int pre_merge_size = old_elems.size ();
   //look through the new data for sub blocks we don't have
   for (u_int i = 0; i < new_elems.size (); i++) {
@@ -228,87 +65,72 @@ dhblock_noauth_srv::merge_data (chordID key, str new_data, str prev_data)
 }
 
 
-void
-dhblock_noauth_srv::bsmupdate (user_args *sbp, dhash_bsmupdate_arg *arg)
+dhblock_noauth_srv::dhblock_noauth_srv (ptr<vnode> node, 
+					ptr<dhashcli> cli,
+					str desc, 
+					str dbname, str dbext) :
+  dhblock_replicated_srv (node, cli, desc, dbname, dbext, DHASH_NOAUTH)
 {
+}
 
-  if (arg->round_over) {
-    //    warn << "sync round over\n";
-  } else {
-    /** XXX Should make sure that only called from localhost! */
-    chord_node n = make_chord_node (arg->n);
-    ptr<location> from = node->locations->lookup (n.x);
-    if (from) {
-      chordID dbkey = dhblock_noauth_srv::get_database_key (arg->key);
-      if (!arg->local) {
-	//send our block to from
-	repair (blockID (dbkey, DHASH_NOAUTH), from);
-      } else {
-	// get his block and call store?
-	repair (blockID (dbkey, DHASH_NOAUTH), NULL);
+void
+dhblock_noauth_srv::real_store (chordID dbkey,
+    str old_data, str new_data, cb_dhstat cb)
+{
+  str dprep = merge_data (dbkey, new_data, old_data);
 
-      }
+  if (dprep != old_data) { //new data added something
+    chordID kdb = id_to_dbkey (dbkey);
+    // put the key in the merkle tree; kick out the old key
+    if (old_data.len ()) {
+      u_int32_t hash = mhashdata (old_data);
+      mtree->remove (dbkey, hash);
+      db->update (kdb, node->my_location (), hash, false);
+      db->remove (kdb, wrap (this, &dhblock_noauth_srv::after_delete, 
+			     dbkey, dprep, cb));
     } else
-      warn << "stale bsmupdate\n";
-  }
-  sbp->reply (NULL);
-}
-
-bool
-dhblock_noauth_srv::repair (blockID k, ptr<location> to)
-{
-
-  // Be very careful about maintaining this counter.
-  // There are many branches and hence many possible termination
-  // cases for a repair; the end of each branch must call return_done!
-  if (!dhblock_srv::repair(k, to)) {
-    return false;
-  }
-
-  if( to == NULL ) {
-    //warn << "getting " << k << " from " << "\n";
-    cli->retrieve (k, 
-		   wrap (this, &dhblock_noauth_srv::repair_retrieve_cb,k));
+      after_delete (dbkey, dprep, cb, ADB_OK);
   } else {
-    cli->sendblock (to,  k, mkref(this),
-		    wrap (this, &dhblock_noauth_srv::repair_send_cb));
-
+    // Don't need to do anything.
+    cb (DHASH_OK);
   }
-
-  return true;
-
 }
 
 void
-dhblock_noauth_srv::repair_send_cb (dhash_stat err, bool something)
+dhblock_noauth_srv::after_delete (chordID key, str data, cb_dhstat cb,
+				  adb_status err)
 {
+  assert (err == ADB_OK);
+  u_int32_t hash = mhashdata (data);
+  mtree->insert (key, hash);
 
-  repair_done ();
-
-  if (err) 
-    warn << "error sending block\n";
-
+  warn << node->my_ID () << " db write: " 
+       << "U " << key << " " << data.len ()  << "\n";
+  db_store (key, data, hash, cb); 
+  db->update (key, node->my_location (), hash, true);
 }
 
-void
-cbi_ignore (int err)
-{
-  if (err) warn << "err: " << err << "\n";
-}
+
+// =====================================================
 
 void
-dhblock_noauth_srv::repair_retrieve_cb (blockID key,  
-					dhash_stat err, 
-					ptr<dhash_block> b, 
-					route r) 
+dhblock_noauth_srv::real_repair (blockID key, ptr<location> me, u_int32_t *myaux, ptr<location> them, u_int32_t *theiraux)
 {
-
-  repair_done ();
-
-  if (err) {
-    warn << "noauth: retrieve failed for repair of " << key.ID << "\n";
-    return;
+  ptr<repair_job> job;
+  if (!myaux) {
+    // We're missing, so fetch it.
+    job = New refcounted<rjrep> (key, me, mkref (this));
+    repair_add (job);
+  } else {
+    if (!theiraux) {
+      job = New refcounted<rjrep> (key, them, mkref (this));
+      repair_add (job);
+    } else if (*theiraux != *myaux) {
+      // No way of knowing who is newer, so let's swap.
+      job = New refcounted<rjrep> (key, me, mkref (this));
+      repair_add (job);
+      job = New refcounted<rjrep> (key, them, mkref (this));
+      repair_add (job);
+    }
   }
-  
-  dhblock_noauth_srv::store (key.ID, b->data, wrap (cbi_ignore));
 }

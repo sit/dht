@@ -1,23 +1,10 @@
 #include <chord_types.h>
 #include <id_utils.h>
-#include <block_status.h>
-#include <location.h>
 #include "merkle_tree.h"
 #include "dhash_common.h"
-#include "dhblock.h"
-#include "dhblock_noauth.h"
 
-merkle_tree::merkle_tree (ptr<adb> realdb, bool populate)
+merkle_tree::merkle_tree ()
 {
-
-  chordID start = bigint (0);
-  if (populate) 
-    // populate merkle tree with keys
-    realdb->getkeys (start, wrap (this, &merkle_tree::iterate_cb, realdb));
-  
-  
-  //leave the merkle tree under the fakedb. We'll only use this to hold keys
-  // higher layers are responsible for managing their own data in the db
 }
 
 merkle_tree::~merkle_tree ()
@@ -29,102 +16,6 @@ merkle_tree::~merkle_tree ()
     delete kcur;
   }
 }
-
-void
-merkle_tree::iterate_cb (ptr<adb> realdb, adb_status stat, vec<chordID> keys)
-{
-
-  for (unsigned int i = 0; i < keys.size (); i++) {
-      merkle_hash key = to_merkle_hash (keys[i]);
-      int ret = insert (0, key, &root);
-      assert (!ret);
-  }
-  
-  if (stat == ADB_OK)
-    realdb->getkeys (incID(keys.back ()), 
-		     wrap (this, &merkle_tree::iterate_cb, 
-			   realdb));
-}
-
-//build a merkle tree custom-tailored for remoteID
-merkle_tree::merkle_tree (ptr<adb> realdb,
-			  ptr<block_status_manager> bsm,
-			  chordID remoteID,
-			  vec<ptr<location> > succs,
-			  dhash_ctype ctype,
-			  cbv done_cb)
-{
-  chordID localID = succs[0]->id ();
-
-  chordID start = bigint (0);
-  realdb->getkeys (start, wrap (this, &merkle_tree::iterate_custom_cb, 
-				bsm, 
-				localID, remoteID,
-				realdb, done_cb));
-}
-  
-
-void
-merkle_tree::iterate_custom_cb (ptr<block_status_manager> bsm, 
-				chordID localID,
-				chordID remoteID,
-				ptr<adb> realdb, 				
-				cbv done_cb,
-				adb_status stat, 
-				vec<chordID> keys)
-{
-
-  for (unsigned int i = 0; i < keys.size (); i++) {
-      merkle_hash key = to_merkle_hash (keys[i]);
-      if (!bsm->missing_on (keys[i], remoteID)) 
-	assert (!insert (0, key, &root));
-      else 
-	warn << "leaving " << keys[i]
-	     << " out of merkle tree.\n";
-      
-  }
-  
-  if (stat == ADB_OK)
-    realdb->getkeys (incID(keys.back ()), 
-		     wrap (this, &merkle_tree::iterate_custom_cb, 
-			   bsm, localID, remoteID, realdb, done_cb));
-
-  else {
-    //now add the keys that we know we are missing
-    vec<chordID> mis = bsm->missing_what (localID);
-    for (unsigned int i = 0; i < mis.size (); i++)
-      {
-	bool indb = (sk_keys.search (mis[i]) != NULL);	
-
-	/* only fake having a key if: 
-	   1) we really don't have it, and
-	   2) we've confirmed other node has block
-	   or: 
-	   3) other node might have it and we need to learn which it is
-	*/
-	
-	if (!indb && 
-	    (bsm->confirmed_on (mis[i], remoteID)
-	     || !bsm->missing_on (mis[i], remoteID))) 
-	  {
-	    merkle_hash key = to_merkle_hash (mis[i]);
-	    int ret = insert (0, key, &root);
-	    assert (!ret);
-	  } 
-	
-	//	if (indb) {
-	//	  bsm->unmissing (succs[0], tobigint(key));
-	//  warn << "had " << tobigint(key) 
-	//     << " even though bsm thought I didn't\n";
-	//	}
-      }
-    
-    done_cb ();
-  }
-}
-
- 
-
 
 
 void
@@ -244,7 +135,38 @@ merkle_tree::insert (u_int depth, merkle_hash& key, merkle_node *n)
   return ret;
 }
 
+int
+merkle_tree::insert (merkle_hash &key)
+{
 
+  if (sk_keys.search (tobigint (key)) != NULL) 
+    fatal << "merkle_tree::insert: key already exists " << key << "\n";
+
+  return insert (0, key, &root);
+}
+
+int
+merkle_tree::insert (const chordID &id)
+{
+  merkle_hash mkey = to_merkle_hash (id);
+  return insert (mkey);
+}
+
+int
+merkle_tree::insert (const chordID &id, const u_int32_t aux)
+{
+  // When there is auxiliary information, we use the low-order bytes
+  // of the key to hold the information.  This is used mostly for mutable
+  // data that needs to distinguish whether or not the remote node has
+  // the same version as the local node.
+  chordID key = id;
+  key >>= 32;
+  key <<= 32;
+  assert (key > 0);
+  key |= aux;
+  merkle_hash mkey = to_merkle_hash (key);
+  return insert (mkey);
+}
 
 void
 merkle_tree::remove (merkle_hash &key)
@@ -257,14 +179,23 @@ merkle_tree::remove (merkle_hash &key)
   remove (0, key, &root);
 }
 
-int
-merkle_tree::insert (merkle_hash &key)
+void
+merkle_tree::remove (const chordID &id)
 {
+  merkle_hash mkey = to_merkle_hash (id);
+  remove (mkey);
+}
 
-  if (sk_keys.search (tobigint (key)) != NULL) 
-    fatal << "merkle_tree::insert: key already exists " << key << "\n";
-
-  return insert (0, key, &root);
+void
+merkle_tree::remove (const chordID &id, const u_int32_t aux)
+{
+  chordID key = id;
+  key >>= 32;
+  key <<= 32;
+  assert (key > 0);
+  key |= aux;
+  merkle_hash mkey = to_merkle_hash (key);
+  remove (mkey);
 }
 
 
@@ -369,7 +300,9 @@ merkle_tree::dump ()
 void
 merkle_tree::check_invariants ()
 {
+#if 0
   root.check_invariants (0, 0, db);
+#endif /* 0 */
 }
 
 void

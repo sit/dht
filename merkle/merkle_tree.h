@@ -5,13 +5,11 @@
 #include "sha1.h"
 #include "merkle_hash.h"
 #include "merkle_node.h"
-#include "qhash.h"
-#include "libadb.h"
 #include "skiplist.h"
 
-class block_status_manager;
 class location;
 class merkle_tree;
+class block_status_manager;
 
 struct merkle_tree_stats {
   uint32 nodes_per_level[merkle_hash::NUM_SLOTS];
@@ -45,32 +43,21 @@ private:
   merkle_node *lookup (u_int *depth, u_int max_depth, 
 		       const merkle_hash &key, merkle_node *n);
 
-  void iterate_cb (ptr<adb> realdb, adb_status stat, vec<chordID> keys);
-  void iterate_custom_cb (ptr<block_status_manager> bsm, 
-			  chordID localID,
-			  chordID remoteID,
-			  ptr<adb> realdb, 
-			  cbv cb,
-			  adb_status stat, 
-			  vec<chordID> keys);
-
   skiplist<merkle_key, chordID, &merkle_key::id, &merkle_key::sk> sk_keys;
+
 public:
   enum { max_depth = merkle_hash::NUM_SLOTS }; // XXX off by one? or two?
-  ptr<adb> db;     // public for testing only
-  merkle_node root; // ditto
+  merkle_node root; // public for testing only
   merkle_tree_stats stats;
 
-  merkle_tree (ptr<adb> db, bool populate); 
-  merkle_tree (ptr<adb> realdb,
-	       ptr<block_status_manager> bsm,
-	       chordID remoteID,
-	       vec<ptr<location> > succs,
-	       dhash_ctype ctype,
-	       cbv cb);
+  merkle_tree ();
   ~merkle_tree ();
   void remove (merkle_hash &key);
+  void remove (const chordID &id);
+  void remove (const chordID &id, const u_int32_t aux);
   int insert (merkle_hash &key);
+  int insert (const chordID &id);
+  int insert (const chordID &id, const u_int32_t aux);
   merkle_node *lookup_exact (u_int depth, const merkle_hash &key);
   merkle_node *lookup (u_int depth, const merkle_hash &key);
   merkle_node *lookup (u_int *depth, u_int max_depth, const merkle_hash &key);

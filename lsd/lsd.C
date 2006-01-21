@@ -273,10 +273,6 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
 	  ds->stats[i].desc = stats[i].desc;
 	  ds->stats[i].value = stats[i].value;
 	}
-	if (arg->doblockinfo)
-	  ds->hack = dh[arg->vnode]->key_info ();
-	else
-	  ds->hack = "";
       }
       sbp->reply (ds);
     }

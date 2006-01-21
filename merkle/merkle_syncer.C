@@ -13,6 +13,36 @@
 
 
 // ---------------------------------------------------------------------------
+
+class merkle_getkeyrange {
+private:
+  dhash_ctype ctype;
+  bigint rngmin;
+  bigint rngmax;
+  bigint current;
+  missingfnc_t missing;
+  rpcfnc_t rpcfnc;
+  vec<chordID> lkeys;
+
+
+  void go ();
+  void getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res, clnt_stat err);
+  void doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb);
+
+public:
+  ~merkle_getkeyrange () {}
+  merkle_getkeyrange (dhash_ctype ctype, 
+		      bigint rngmin, bigint rngmax, 
+		      vec<chordID> plkeys,
+		      missingfnc_t missing, rpcfnc_t rpcfnc)
+    : ctype (ctype), rngmin (rngmin), 
+      rngmax (rngmax), current (rngmin), 
+      missing (missing), rpcfnc (rpcfnc), lkeys (plkeys)
+    { go (); }
+};
+
+
+// ---------------------------------------------------------------------------
 // util junk
 
 
@@ -314,7 +344,7 @@ compare_keylists (vec<chordID> lkeys,
   qhash<chordID, int, hashID> rkeys;
   for (u_int i = 0; i < vrkeys.size (); i++) {
     if (betweenbothincl (rngmin, rngmax, vrkeys[i])) {
-      trace << "remote key: " << vrkeys[i] << "\n";
+      // trace << "remote key: " << vrkeys[i] << "\n";
       rkeys.insert (vrkeys[i], 1);
     }
   }
@@ -376,7 +406,7 @@ compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax,
     if (between (tmpmin, tmpmax, rngmax))
       tmpmax = rngmax;
 
-    vNew merkle_getkeyrange (ctype, ltree->db, tmpmin, tmpmax, lkeys, 
+    vNew merkle_getkeyrange (ctype, tmpmin, tmpmax, lkeys, 
 			     missingfnc, rpcfnc);
   }
 }

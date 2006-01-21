@@ -12,7 +12,6 @@ typedef callback<void, ptr<location> >::ref  cb_location;
 typedef callback<void, vec<ptr<location> > >::ref cb_locationlist;
 
 class syncer {
-  ptr<block_status_manager> bsm;
   ptr<locationtable> locations;
 
   dhash_ctype ctype;
@@ -57,14 +56,11 @@ protected:
   void sync_replicas_predupdated (ptr<location> pred);
   void sync_replicas_gotsucclist (ptr<location> pred,
 				  vec<ptr<location> > succs);
+  void populate_tree (u_int64_t start,
+    ptr<location> pred, vec<ptr<location> > succs,
+    adb_status astat, vec<chordID> blocks, vec<u_int32_t> aux);
 
   void doRPC_unbundler (ptr<location> dst, RPC_delay_args *args);
   void missing (ptr<location> from,
-		vec<ptr<location> > succs,
-		bigint key, bool missingLocal, bool round_over);
-  void lookup_cb (adb_status stat, chordID key, str data);
-
-  void sync_replicas_treedone (int64_t start, 
-			       vec<ptr<location> > succs,
-			       ptr<location> pred);
+		bigint key, bool missing_local, bool round_over);
 };

@@ -8,7 +8,6 @@
 #include <location.h>
 #include <locationtable.h>
 #include <comm.h>
-#include "libadb.h"
 
 // ---------------------------------------------------------------------------
 // merkle_server

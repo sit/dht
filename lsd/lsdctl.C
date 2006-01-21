@@ -318,8 +318,6 @@ lsdctl_getdhashstats_cb (ptr<lsdctl_getdhashstats_arg> a,
     out << "  " << ds->stats[i].desc << " " << ds->stats[i].value << "\n";
   for (size_t i = 0; i < ds->blocks.size (); i++) 
     out << ds->blocks[i].id << "\t" << ds->blocks[i].missing.size () << "\n";
-  if (a->doblockinfo)
-    out << ds->hack;
   make_sync (1);
   out.tosuio ()->output (1);
   exit (0);
@@ -328,20 +326,8 @@ lsdctl_getdhashstats_cb (ptr<lsdctl_getdhashstats_arg> a,
 void
 lsdctl_getdhashstats (int argc, char *argv[])
 {
-  int ch;
   ptr<lsdctl_getdhashstats_arg> a = New refcounted<lsdctl_getdhashstats_arg> ();
   a->vnode = 0;
-  a->doblockinfo = false;
-
-  while ((ch = getopt (argc, argv, "l")) != -1)
-    switch (ch) {
-    case 'l':
-      a->doblockinfo = true;
-      break;
-    default:
-      usage ();
-      break;
-    }
 
   if (optind != argc)
     if (!convertint (argv[optind], &a->vnode))

@@ -105,10 +105,10 @@ merkle_node::~merkle_node ()
   bzero (this, sizeof (*this)); 
 }
 
+#if 0
 void
 merkle_node::check_invariants (u_int depth, merkle_hash prefix, ptr<adb> db)
 {
-#if 0
   sha1ctx sc;
   merkle_hash mhash = 0;
   u_int64_t _count = 0;
@@ -142,5 +142,5 @@ merkle_node::check_invariants (u_int depth, merkle_hash prefix, ptr<adb> db)
     assert (hash == mhash);
     assert (hash != 0);
   }
-  #endif
 }
+#endif

@@ -57,39 +57,6 @@ class merkle_syncer {
 };
 
 
-// ---------------------------------------------------------------------------
-
-class merkle_getkeyrange {
-private:
-  dhash_ctype ctype;
-  ptr<adb> db;
-  bigint rngmin;
-  bigint rngmax;
-  bigint current;
-  missingfnc_t missing;
-  rpcfnc_t rpcfnc;
-  vec<chordID> lkeys;
-
-
-  void go ();
-  void getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res, clnt_stat err);
-  void doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb);
-
-public:
-  ~merkle_getkeyrange () {}
-  merkle_getkeyrange (dhash_ctype ctype, ptr<adb> db, 
-		      bigint rngmin, bigint rngmax, 
-		      vec<chordID> plkeys,
-		      missingfnc_t missing, rpcfnc_t rpcfnc)
-    : ctype (ctype), db (db), rngmin (rngmin), 
-      rngmax (rngmax), current (rngmin), 
-      missing (missing), rpcfnc (rpcfnc), lkeys (plkeys)
-    { go (); }
-};
-
-
-// ---------------------------------------------------------------------------
-
 void
 format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
 		const merkle_node *node, merkle_rpc_node *rpcnode);

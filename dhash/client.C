@@ -441,7 +441,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
     // the block reliably.
     info << "Not enough successors for insert: |succs| " << succs.size ()
 	 << ", DFRAGS " << blk->min_put () << "\n";
-    (*cb) (DHASH_STOREERR, mt);
+    (*cb) (DHASH_CHORDERR, mt);
     return;
   }
 
@@ -513,7 +513,7 @@ dhashcli::insert_store_cb (ref<sto_state> ss, route r, u_int i,
 	  " insufficient frags/blocks stored.\n";
 	
 	r_ret.push_back (ss->succs[0].x);
-	(*ss->cb) (DHASH_STOREERR, r_ret);
+	(*ss->cb) (DHASH_ERR, r_ret);
 	// We should do something here to try and store this fragment
 	// somewhere else.
 	return;

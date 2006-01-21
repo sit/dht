@@ -10,7 +10,6 @@ class RPC_delay_args;
 
 class dhashcli;
 struct dbrec;
-class dbfe;
 class dhblock_srv;
 
 class location;
@@ -140,7 +139,6 @@ class dhash_impl : public dhash, public virtual refcount {
   ~dhash_impl ();
 
   vec<dstat> stats ();
-  strbuf key_info ();
   void print_stats ();
   
   void stop ();

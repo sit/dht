@@ -47,7 +47,7 @@ private:
   void pmaint_handoff (chord_node dst, bigint key, cbi cb);
   void pmaint_handoff_cb (bigint key, cbi cb, dhash_stat err, bool present);
   void handed_off_cb (bigint key, int status);
-  void pmaint_gotkey (adb_status stat, vec<chordID> keys);
+  void pmaint_gotkey (adb_status stat, vec<chordID> keys, vec<u_int32_t>);
 };
 
 #endif

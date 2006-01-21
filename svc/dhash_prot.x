@@ -128,17 +128,6 @@ union dhash_fetchrec_res switch (dhash_stat status) {
    dhash_fetchrec_resdefault resdef;
 };
 
-struct dhash_bsmupdate_arg {
-  /* If we're missing locally, n is the one who told us */
-  /* Else, n is where it is missing */
-  chord_node_wire n;
-  bool local;
-
-  chordID key;
-  dhash_ctype ctype;
-  bool round_over;
-};
-
 program DHASH_PROGRAM {
   version DHASH_VERSION {
     void
@@ -160,15 +149,8 @@ program DHASH_PROGRAM {
     dhash_offer_res
     DHASHPROC_OFFER (dhash_offer_arg) = 4;
 
-    /* For the syncer to update DHash's bsm.
-     * Should only be called from localhost.
-     */
-    void
-    DHASHPROC_BSMUPDATE (dhash_bsmupdate_arg) = 5;
-
     /* RPC back to fetch initiator with data */
     void
-    DHASHPROC_FETCHCOMPLETE (s_dhash_insertarg) = 6;
-
+    DHASHPROC_FETCHCOMPLETE (s_dhash_insertarg) = 5;
   } = 1;
 } = 344449;

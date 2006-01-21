@@ -62,7 +62,6 @@ typedef callback<void, dhash_stat, ptr<dhash_block>, vec<ptr<location> > >::ptr 
 class dhash {
  public:
   static u_long reptm ();
-  static u_long synctm ();
   
   static u_long dhash_disable_db_env ();
 
@@ -71,7 +70,6 @@ class dhash {
   virtual ~dhash () = 0;
 
   virtual vec<dstat> stats () = 0;
-  virtual strbuf key_info () = 0;
   virtual void print_stats () = 0;
   
   virtual void start (bool randomize) = 0;

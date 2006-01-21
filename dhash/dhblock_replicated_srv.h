@@ -8,49 +8,60 @@
 class location;
 class merkle_tree;
 class merkle_server;
+class dhblock_replicated_srv;
+
+struct rjrep : public repair_job {
+  rjrep (blockID key, ptr<location> w, ptr<dhblock_replicated_srv> bsrv);
+  const ptr<dhblock_replicated_srv> bsrv;
+
+  void execute ();
+
+  // Async callbacks
+  void repair_retrieve_cb (dhash_stat err, 
+			   ptr<dhash_block> b, 
+			   route r);
+  void repair_send_cb (dhash_stat err, bool something);
+  bool repair (blockID k, ptr<location> to);
+};
 
 class dhblock_replicated_srv : public dhblock_srv
 {
-private:
-  
-  void  delete_cb (chordID k, str d, cbi cb, int stat);
-  void store_fetch_cb (cbi cb, str d,
-			adb_status stat, 
-			chordID key,
-			str prev);  
+  friend struct rjrep;
+
+  // async callbacks
+  void delete_cb (chordID k, str d, cb_dhstat cb, adb_status stat);
+  void store_after_fetch_cb (str d, cb_dhstat cb, adb_status stat, 
+			     chordID key, str old_data);  
+  void store_after_rstore_cb (chordID dbkey, cb_dhstat cb, dhash_stat astat);
+  void finish_store (chordID key);
+
+  void localqueue (clnt_stat err, adb_status stat, vec<block_info> blocks);
+
 protected:
   const dhash_ctype ctype;
-  unsigned nrpcsout;
-
-  merkle_server *msrv;
   merkle_tree *mtree;
+  merkle_server *msrv;
 
-  vec<ptr<location> > replicas;
-  void update_replica_list ();
+  qhash<chordID, vec<cbv> *, hashID> _paused_stores;
 
-  timecb_t *checkrep_tcb;
-  int checkrep_interval;
-  void checkrep_timer ();
-  void checkrep_lookup (chordID key,
-			vec<chord_node> hostsl, route r,
-			chordstat err);
-  void checkrep_sync_done (dhash_stat stat, chordID k, bool present);
+  virtual void populate_mtree (adb_status stat, vec<chordID> keys, vec<u_int32_t> aux);
 
-  virtual bool is_block_stale (str prev, str d) = 0;
+  // Mutable blocks require Merkle key tweaking
+  virtual chordID idaux_to_mkey (chordID key, u_int32_t aux);
+  virtual chordID id_to_dbkey (chordID key);
 
-  merkle_server * mserv () { return msrv; };
+  virtual void real_store (chordID key, str od, str nd, cb_dhstat cb) = 0;
+  virtual void real_repair (blockID key, ptr<location> me, u_int32_t *myaux, ptr<location> them, u_int32_t *theiraux) = 0;
 
 public:
   dhblock_replicated_srv (ptr<vnode> node, ptr<dhashcli> cli,
 			  str dbname, str dbext, str desc,
                           dhash_ctype ctype);
-  ~dhblock_replicated_srv ();
 
-  void start (bool randomize) {};
-  void stop  () {};
-
-  void store (chordID key, str d, cbi cb);
-
+  merkle_server *mserv () { return msrv; };
+  virtual void store (chordID key, str d, cb_dhstat cb);
+  virtual void fetch (chordID key, cb_fetch cb);
+  virtual void generate_repair_jobs ();
 };
 
 #endif

@@ -1,7 +1,6 @@
 #include "dhash_common.h"
 #include "dhblock_noauth.h"
 #include "dhblock_storage.h"
-#include "dbfe.h"
 
 vec<str>
 dhblock_noauth::get_payload (str data)

@@ -51,15 +51,15 @@ pmaint::pmaint_next ()
  
   if (pmaint_searching) {
     ptr<adb> db = srv->get_db ();
-    db->getkeys (pmaint_next_key, wrap (this, &pmaint::pmaint_gotkey));
+    db->getkeys (pmaint_next_key, false,
+	wrap (this, &pmaint::pmaint_gotkey));
   } else 
     info << host_node->my_ID () << " in offer phase, delaying\n";
 }
 
 void
-pmaint::pmaint_gotkey (adb_status stat, vec<chordID> keys)
+pmaint::pmaint_gotkey (adb_status stat, vec<chordID> keys, vec<u_int32_t> auxdata)
 {
-  
   if (stat == ADB_OK && keys.size () > 0) {
     chordID key = keys[0];
     pmaint_next_key = key;

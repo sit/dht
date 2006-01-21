@@ -22,7 +22,7 @@ usage (void)
 }
 
 void
-storecb (chordID k, int stat)
+storecb (chordID k, adb_status stat)
 {
   nout--;
   if (stat)

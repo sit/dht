@@ -50,13 +50,11 @@ struct lsdctl_blockstatus {
 
 struct lsdctl_getdhashstats_arg  {
   int vnode;
-  bool doblockinfo;
 };
 
 struct lsdctl_dhashstats {
   lsdctl_stat stats<>;
   lsdctl_blockstatus blocks<>;
-  str hack;
 };
 
 struct lsdctl_lsdparameters {

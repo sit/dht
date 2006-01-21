@@ -2,39 +2,55 @@
 #define __LIBADB_H__
 
 #include "chord_types.h"
-#include "async.h"
-#include "arpc.h"
 #include "adb_prot.h"
-#include "dbfe.h"
+
+class aclnt;
+class location;
+struct block_info;
 
 typedef callback<void, adb_status, chordID, str>::ptr cb_fetch;
-typedef callback<void, adb_status, vec<chordID> >::ptr cb_getkeys;
+typedef callback<void, adb_status>::ptr cb_adbstat;
+typedef callback<void, adb_status, vec<chordID>, vec<u_int32_t> >::ptr cb_getkeys;
 
-chordID dbrec_to_id (ptr<dbrec> dbr);
-ptr<dbrec> id_to_dbrec (chordID key, str name_space);
-str dbrec_to_name (ptr<dbrec> dbr);
+typedef callback<void, clnt_stat, adb_status, vec<block_info> >::ref cbvblock_info_t;
+typedef callback<void, clnt_stat, adb_status, block_info>::ref cbblock_info_t;
 
-struct adb {
+struct block_info {
+  chordID k;
+  vec<chord_node> on;
+  vec<u_int32_t> aux;
+  block_info (chordID k) : k (k) {};
+};
 
-  void store (chordID key, str data, cbi cb);
-  void fetch (chordID key, cb_fetch cb);
-  void remove (chordID key, cbi cb);
-  void getkeys (chordID start, cb_getkeys cb);
-  void sync () {};
-  void checkpoint () {};
-  
-
-  adb (str sock_name, str name = "default");
-
-private:
-
+class adb {
   ptr<aclnt> c;
   str name_space;
-  
-  void delete_cb (adb_status *stat, cbi cb, clnt_stat err);
-  void store_cb (adb_status *res, cbi cb, clnt_stat err);
+  bool hasaux;
+
+  void initspace_cb (adb_status *astat, clnt_stat stat);
+  void generic_cb (adb_status *res, cb_adbstat cb, clnt_stat err);
   void fetch_cb (adb_fetchres *res, chordID key, cb_fetch cb, clnt_stat err);
-  void getkeys_cb (adb_getkeysres *res, cb_getkeys cb, clnt_stat err);
+  void getkeys_cb (bool getaux, adb_getkeysres *res, cb_getkeys cb, clnt_stat err);
+  void getblockrangecb (ptr<adb_getblockrangeres> res, cbvblock_info_t cb, clnt_stat err);
+  void getinfocb (chordID block, ptr<adb_getinfores> res, cbblock_info_t cb, clnt_stat err);
+
+public:
+  adb (str sock_name, str name = "default", bool hasaux = false);
+
+  void store (chordID key, str data, u_int32_t auxdata, cb_adbstat cb);
+  void store (chordID key, str data, cb_adbstat cb);
+  void fetch (chordID key, cb_fetch cb);
+  void remove (chordID key, cb_adbstat cb);
+  void getkeys (chordID start, bool getaux, cb_getkeys cb);
+  void sync ();
+
+  void getblockrange (const chordID &start, const chordID &stop,
+      int extant, int count, cbvblock_info_t cb);
+  void getkeyson (const ptr<location> n, const chordID &start,
+      const chordID &stop, cb_getkeys cb);
+  void update (const chordID &block, const ptr<location> n, bool present);
+  void update (const chordID &block, const ptr<location> n, u_int32_t auxdata, bool present);
+  void getinfo (const chordID &block, cbblock_info_t cb);
 };
 
 #endif

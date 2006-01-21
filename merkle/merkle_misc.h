@@ -1,18 +1,8 @@
 #ifndef _MERKLE_MISC_H_
 #define _MERKLE_MISC_H_
 
-#include "qhash.h"
 #include "merkle_hash.h"
 #include "merkle_sync_prot.h"
-#include "libadb.h"
-
-vec<chordID>
-database_get_IDs (ptr<adb> db, u_int depth, const merkle_hash &prefix);
-
-vec<merkle_hash> database_get_keys     (ptr<adb> db, u_int depth, 
-				        const merkle_hash &prefix);
-
-ptr<dbrec> to_merkle_key (ptr<dbfe> db, ptr<dbrec> key, dhash_ctype c);
 
 static inline str err2str (merkle_stat status)
 {
@@ -88,11 +78,5 @@ dbrec2id (ptr<dbrec> r)
   return tobigint (to_merkle_hash (r));
 }
 #endif
-
-
-
-
-
-
 
 #endif /* _MERKLE_MISC_H_ */

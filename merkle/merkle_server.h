@@ -1,12 +1,8 @@
 #ifndef _MERKLE_SERVER_H_
 #define _MERKLE_SERVER_H_
 
-#include "libadb.h"
-#include "merkle_sync_prot.h"
-
 class merkle_tree;
 class user_args;
-
 
 // One merkle_server runs for each node of the Chord ring.
 //  - i.e., one merkle_server per virtual node

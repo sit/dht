@@ -1,54 +1,25 @@
+#include <arpc.h>
+
+#include <location.h>
+#include <misc_utils.h>
 #include "libadb.h"
-#include "adb_prot.h"
-#include "rxx.h"
+#include <adb_prot.h>
 
-str
-dbrec_to_str (ptr<dbrec> dbr, int i)
+static chord_node
+make_chord_node (const adb_vnodeid &n)
 {
-  //we aren't storing a null terminator.
-  // add it here or the conversion grabs trailing garbage
-  char buf[128];
-  int ncpy = (dbr->len > 127) ? 127 : dbr->len;
-  memcpy (buf, dbr->value, dbr->len);
-  buf[ncpy] = 0;
-  // cache:abc03313ff
-  rxx m("^([^!]+)!([0-9a-f]+)", "m");
-  m.search (buf);
-  if (!m.success ()) {
-    fatal << "dbrec_to_str expected match from '" << buf << "' but didn't get one\n";
-  }
-  return m[i];
+  chord_node_wire x;
+  bzero (&x, sizeof (chord_node_wire));
+  // XXX Will it be a problem to have zero coordinates and
+  //     zero accordion data?
+  x.machine_order_ipv4_addr  = n.machine_order_ipv4_addr;
+  x.machine_order_port_vnnum = n.machine_order_port_vnnum;
+  return make_chord_node (x);
 }
 
-chordID
-dbrec_to_id (ptr<dbrec> dbr)
-{
-  str id = dbrec_to_str (dbr, 2);
-  chordID ret (id, 16);
-  return ret;
-}
-
-str
-dbrec_to_name (ptr<dbrec> dbr)
-{
-  str name = dbrec_to_str(dbr, 1);
-  return name;
-}
-
-ptr<dbrec>
-id_to_dbrec (chordID key, str name_space)
-{
-  //pad out all keys to 20 bytes so that they sort correctly
-  str keystr = strbuf () << key;
-  while (keystr.len () < 20)
-    keystr = strbuf () << "0" << keystr;
-
-  str c = strbuf () << name_space << "!" << keystr;
-  return New refcounted<dbrec> (c.cstr (), c.len ());
-}
-
-
-adb::adb (str sock_name, str name) : name_space (name)
+adb::adb (str sock_name, str name, bool hasaux) :
+  name_space (name),
+  hasaux (hasaux)
 {
   int fd = unixsocket_connect (sock_name);
   if (fd < 0) {
@@ -59,37 +30,69 @@ adb::adb (str sock_name, str name) : name_space (name)
   c = aclnt::alloc (axprt_unix::alloc (fd, 1024*1025),
 		    adb_program_1);
 
+  adb_initspacearg arg;
+  arg.name = name_space;
+  arg.hasaux = hasaux;
+
+  adb_status *res = New adb_status ();
+
+  c->call (ADBPROC_INITSPACE, &arg, res,
+	   wrap (this, &adb::initspace_cb, res));
 }
 
 void
-adb::store (chordID key, str data, cbi cb)
+adb::initspace_cb (adb_status *astat, clnt_stat stat)
 {
-  
+  if (stat)
+    fatal << "adb_initspace_cb: RPC error for " << name_space << ": " << stat << "\n";
+  else if (*astat)
+    fatal << "adb_initspace_cb: adbd error for " << name_space << ": " << *astat << "\n";
+  delete astat;
+}
+
+void
+adb::store (chordID key, str data, u_int32_t auxdata, cb_adbstat cb)
+{
+  assert (hasaux);
   adb_storearg arg;
   arg.key = key;
   arg.name = name_space;
-  arg.data.setsize (data.len ());
-  memcpy (arg.data.base (), data.cstr (), data.len ());
+  arg.data = data;
+  arg.auxdata = auxdata;
 
   adb_status *res = New adb_status ();
 
   c->call (ADBPROC_STORE, &arg, res,
-	   wrap (this, &adb::store_cb, res, cb));
+	   wrap (this, &adb::generic_cb, res, cb));
   return;
 }
 
 void
-adb::store_cb (adb_status *res, cbi cb, clnt_stat err)
+adb::store (chordID key, str data, cb_adbstat cb)
+{
+  assert (!hasaux);
+  adb_storearg arg;
+  arg.key = key;
+  arg.name = name_space;
+  arg.data = data;
+
+  adb_status *res = New adb_status ();
+
+  c->call (ADBPROC_STORE, &arg, res,
+	   wrap (this, &adb::generic_cb, res, cb));
+  return;
+}
+
+void
+adb::generic_cb (adb_status *res, cb_adbstat cb, clnt_stat err)
 {
   if (cb) 
     if (err || !res)
-      cb (err);
+      cb (ADB_ERR);
     else 
       cb (*res);
-
   delete res;
 }
-
 
 void
 adb::fetch (chordID key, cb_fetch cb)
@@ -108,7 +111,7 @@ adb::fetch_cb (adb_fetchres *res, chordID key, cb_fetch cb, clnt_stat err)
 {
   if (err || (res && res->status)) {
     str nodata = "";
-    cb (ADB_ERR, key, nodata);
+    cb ((err ? ADB_ERR : res->status) , key, nodata);
   } else {
     assert (key == res->resok->key);
     str data (res->resok->data.base (), res->resok->data.size ());
@@ -119,35 +122,46 @@ adb::fetch_cb (adb_fetchres *res, chordID key, cb_fetch cb, clnt_stat err)
 }
 
 void
-adb::getkeys (chordID start, cb_getkeys cb)
+adb::getkeys (chordID start, bool getaux, cb_getkeys cb)
 {
   adb_getkeysarg arg;
   arg.start = start;
   arg.name = name_space;
+  arg.getaux = getaux;
 
-  adb_getkeysres *res = New adb_getkeysres ();
+  adb_getkeysres *res = New adb_getkeysres (ADB_OK);
   c->call (ADBPROC_GETKEYS, &arg, res,
-	   wrap (this, &adb::getkeys_cb, res, cb));
+	   wrap (this, &adb::getkeys_cb, getaux, res, cb));
 }
 
 void
-adb::getkeys_cb (adb_getkeysres *res, cb_getkeys cb, clnt_stat err)
+adb::getkeys_cb (bool getaux, adb_getkeysres *res, cb_getkeys cb, clnt_stat err)
 {
-  if (err || (res && res->status)) {
+  if (err || (res && res->status == ADB_ERR)) {
     vec<chordID> nokeys;
-    cb (ADB_ERR, nokeys);
+    vec<u_int32_t> nostr;
+    cb (ADB_ERR, nokeys, nostr);
   } else {
     vec<chordID> keys;
-    for (unsigned int i = 0; i < res->resok->keys.size (); i++)
-      keys.push_back (res->resok->keys[i]);
+    vec<u_int32_t> auxdata;
+    if (getaux) {
+      for (unsigned int i = 0; i < res->resok->keyaux.size (); i++) {
+	keys.push_back (res->resok->keyaux[i].key);
+	auxdata.push_back (res->resok->keyaux[i].auxdata);
+      }
+    } else {
+      for (unsigned int i = 0; i < res->resok->keyaux.size (); i++)
+	keys.push_back (res->resok->keyaux[i].key);
+    }
+
     adb_status ret = (res->resok->complete) ? ADB_COMPLETE : ADB_OK;
-    cb (ret, keys);
+    cb (ret, keys, auxdata);
   }
   delete res;
 }
 
 void
-adb::remove (chordID key, cbi cb)
+adb::remove (chordID key, cb_adbstat cb)
 {
   adb_storearg arg;
   arg.name = name_space;
@@ -155,15 +169,106 @@ adb::remove (chordID key, cbi cb)
   adb_status *stat = New adb_status ();
 
   c->call (ADBPROC_DELETE, &arg, stat,
-	   wrap (this, &adb::delete_cb, stat, cb));
+	   wrap (this, &adb::generic_cb, stat, cb));
 }
 
 void
-adb::delete_cb (adb_status *stat, cbi cb, clnt_stat err)
+adb::getblockrangecb (ptr<adb_getblockrangeres> res, cbvblock_info_t cb,
+    clnt_stat err)
 {
-  if (err) cb (err);
-  else cb (*stat);
-
-  delete stat;
+  vec<block_info> blocks;
+  if (!err && res->status != ADB_ERR) {
+    for (size_t i = 0; i < res->blocks.size (); i++) {
+      block_info block (res->blocks[i].block);
+      for (size_t j = 0; j < res->blocks[i].hosts.size (); j++) {
+	block.on.push_back (make_chord_node (res->blocks[i].hosts[j].n));
+	block.aux.push_back (res->blocks[i].hosts[j].auxdata);
+      }
+      blocks.push_back (block);
+    }
+  }
+  (*cb) (err, res->status, blocks);
 }
 
+void
+adb::getblockrange (const chordID &start,
+		    const chordID &stop,
+		    int extant, int count,
+		    cbvblock_info_t cb)
+{
+  adb_getblockrangearg arg;
+  arg.name   = name_space;
+  arg.start  = start;
+  arg.stop   = stop;
+  arg.extant = extant;
+  arg.count  = count;
+  // validity checking?
+  ptr<adb_getblockrangeres> res = New refcounted<adb_getblockrangeres> (); 
+  res->status = ADB_ERR;
+  c->call (ADBPROC_GETBLOCKRANGE, &arg, res,
+           wrap (this, &adb::getblockrangecb, res, cb));
+}
+
+void
+adb::getkeyson (const ptr<location> n,
+		  const chordID &start,
+		  const chordID &stop,
+		  cb_getkeys cb)
+{
+  const sockaddr_in s (n->saddr ());
+  adb_getkeysonarg arg;
+  arg.name  = name_space;
+  arg.start = start;
+  arg.stop  = stop;
+  arg.who.machine_order_ipv4_addr = ntohl (s.sin_addr.s_addr);
+  arg.who.machine_order_port_vnnum = (ntohs (s.sin_port) << 16) | n->vnode ();
+
+  adb_getkeysres *res = New adb_getkeysres (ADB_OK); 
+  c->call (ADBPROC_GETKEYSON, &arg, res,
+           wrap (this, &adb::getkeys_cb, true, res, cb));
+}
+
+void
+adb::update (const chordID &key, const ptr<location> n, bool present)
+{
+  update (key, n, 0, present);
+}
+
+void
+adb::update (const chordID &key, const ptr<location> n, u_int32_t aux, bool present)
+{
+  const sockaddr_in s (n->saddr ());
+  adb_updatearg arg;
+  arg.name    = name_space;
+  arg.key   = key;
+  arg.bsinfo.n.machine_order_ipv4_addr = ntohl (s.sin_addr.s_addr);
+  arg.bsinfo.n.machine_order_port_vnnum = (ntohs (s.sin_port) << 16) | n->vnode ();
+  arg.bsinfo.auxdata = aux;
+  arg.present = present;
+  c->call (ADBPROC_UPDATE, &arg, NULL, aclnt_cb_null);
+  /* Throw away void return */
+}
+
+void
+adb::getinfo (const chordID &key, cbblock_info_t cb)
+{
+  ptr<adb_getinfores> res = New refcounted<adb_getinfores> ();
+  adb_getinfoarg arg;
+  arg.name = name_space;
+  arg.key  = key;
+  c->call (ADBPROC_GETINFO, &arg, res, 
+           wrap (this, &adb::getinfocb, key, res, cb));
+}
+
+void
+adb::getinfocb (chordID key, ptr<adb_getinfores> res,
+	        cbblock_info_t cb,
+	        clnt_stat err)
+{
+  block_info bi (key);
+  if (!err && res->status == ADB_OK) {
+    for (size_t i = 0; i < res->nlist.size (); i++)
+      bi.on.push_back (make_chord_node (res->nlist[i]));
+  }
+  cb (err, res->status, bi);
+}
