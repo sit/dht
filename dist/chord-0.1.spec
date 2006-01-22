@@ -60,7 +60,6 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/dbm
 %{_bindir}/dbm_noauth
 %{_bindir}/dbm.py
-%{_bindir}/dhashping
 %{_bindir}/filestore
 %{_bindir}/findroute
 %{_bindir}/lsd
