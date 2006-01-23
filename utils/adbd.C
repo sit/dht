@@ -142,7 +142,7 @@ class dbns {
   void warner (const char *method, const char *desc, int r);
 
 public:
-  dbns (const str &name, bool aux);
+  dbns (const str &dbpath, const str &name, bool aux);
   ~dbns ();
 
   void sync ();
@@ -169,7 +169,7 @@ public:
 };
 
 // {{{ dbns::dbns
-dbns::dbns (const str &name, bool aux) :
+dbns::dbns (const str &dbpath, const str &name, bool aux) :
   name (name),
   dbe (NULL),
   datadb (NULL),
@@ -182,9 +182,11 @@ dbns::dbns (const str &name, bool aux) :
     fatal << desc << " returned " << r << ": " << db_strerror (r) << "\n"; \
     return;		  \
   }
+  assert (dbpath[dbpath.len () - 1] == '/');
+  strbuf fullpath ("%s%s", dbpath.cstr (), name.cstr ());
 
   int r = -1;
-  r = dbfe_initialize_dbenv (&dbe, name, false, 1024);
+  r = dbfe_initialize_dbenv (&dbe, fullpath, false, 1024);
   DBNS_ERRCHECK ("dbe->open");
 
   r = dbfe_opendb (dbe, &datadb, "db", DB_CREATE, 0);
@@ -200,7 +202,7 @@ dbns::dbns (const str &name, bool aux) :
   DBNS_ERRCHECK ("bsdx->open");
   r = bsdb->associate (bsdb, NULL, bsdx, getnumreplicas, DB_AUTO_COMMIT);
   DBNS_ERRCHECK ("bsdb->associate (bsdx)");
-  warn << "dbns::dbns (" << name << ", " << aux << ")\n";
+  warn << "dbns::dbns (" << dbpath << ", " << name << ", " << aux << ")\n";
 }
 // }}}
 // {{{ dbns::~dbns
@@ -682,6 +684,23 @@ public:
 dbmanager::dbmanager (str p) :
   dbpath (p)
 {
+  if (p[p.len () - 1] != '/')
+    dbpath = strbuf () << p << "/";
+
+  struct stat sb;
+  if (stat (dbpath, &sb) < 0) {
+    if (errno == ENOENT) {
+      if (mkdir (dbpath, 0755) < 0)
+	fatal ("dbmanager::dbmanager: mkdir (%s): %m\n", dbpath.cstr ());
+    } else {
+      fatal ("dbmanager::dbmanager: stat (%s): %m\n", dbpath.cstr ());
+    }
+  } else {
+    if (!S_ISDIR (sb.st_mode)) 
+      fatal ("dbmanager::dbmanager: %s is not a directory\n", dbpath.cstr ());
+    if (access (dbpath, W_OK) < 0)
+      fatal ("dbmanager::manager: access (%s, W_OK): %m\n", dbpath.cstr ());
+  }
 }
 
 dbmanager::~dbmanager ()
@@ -706,7 +725,7 @@ dbmanager::createdb (const str &n, bool aux)
 {
   dbns *db = dbs[n];
   if (!db) {
-    db = New dbns (n, aux);
+    db = New dbns (dbpath, n, aux);
     dbs.insert (db);
   }
   return db;
