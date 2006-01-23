@@ -60,6 +60,11 @@ dhblock_replicated_srv::dhblock_replicated_srv (ptr<vnode> node,
 void
 dhblock_replicated_srv::populate_mtree (adb_status stat, vec<chordID> keys, vec<u_int32_t> aux)
 {
+  if (stat != ADB_COMPLETE && stat != ADB_OK) {
+    warn << "dhblock_replicated_srv::populate_mtree: unexpected adb status " 
+         << stat << "\n";
+    return;
+  }
   // aux contains pre-computed hashes of the low-order
   // bytes of the key.
   for (unsigned int i = 0; i < keys.size (); i++)
