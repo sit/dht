@@ -307,7 +307,7 @@ dbns::lookup (const chordID &key, str &data)
       warner ("dbns::fetch", "get error", r);
     return r;
   }
-  data.setbuf (static_cast<const char *> (content.data), content.size);
+  data.setbuf ((const char *) (content.data), content.size);
   return 0;
 }
 // }}}
