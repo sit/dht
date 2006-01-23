@@ -161,8 +161,8 @@ void
 dhash_impl::fetchcomplete_done (int nonce, chord_node sender,
 				dhash_stat err, bool present)
 {
-  warn << host_node->my_ID () << "dhash_impl::fetchcomplete_done: "
-       << nonce << " " << sender << " " << err << "\n";
+  // warn << host_node->my_ID () << ": dhash_impl::fetchcomplete_done: "
+  //     << nonce << " " << sender << " " << err << "\n";
   if (err == DHASH_NOENT) { // block wasn't in db. notify sender.
     ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
     //fill in just enough fields so that it marshalls
