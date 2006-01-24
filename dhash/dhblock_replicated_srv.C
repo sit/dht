@@ -176,7 +176,7 @@ dhblock_replicated_srv::localqueue (clnt_stat err, adb_status stat, vec<block_in
   for (size_t i = 0; i < blocks.size (); i++) {
     holders.clear ();
     for (size_t j = 0; j < blocks[i].on.size (); j++) {
-      holders.insert (blocks[i].on[j].x, blocks[i].aux[i]);
+      holders.insert (blocks[i].on[j].x, blocks[i].aux[j]);
     }
 
     ptr<repair_job> job = NULL;
