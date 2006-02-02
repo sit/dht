@@ -20,7 +20,7 @@ struct blockID {
   dhash_ctype ctype;
 
   blockID (chordID k, dhash_ctype c) : ID (k), ctype (c) {};
-  // blockID (const blockID &b) : ID (b.ID), ctype (b.ctype) {};
+  blockID (const blockID &b) : ID (b.ID), ctype (b.ctype) {};
 
   bool operator== (const blockID b) const {
     return ((ID == b.ID) &&
