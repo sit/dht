@@ -5,6 +5,12 @@
 
 typedef chordID cd_vnode;
 
+// This seems silly.
+struct chord_node_wire_plus_id {
+  chord_node_wire wire;
+  chordID id;
+};
+
 /* NEWCHORD *******************************************************/
 
 enum cd_routing_mode {
@@ -59,12 +65,31 @@ struct cd_lookup_arg {
 };
 
 struct cd_lookup_res_ok {
-  chord_node_wire route<>;
+  chord_node_wire_plus_id successors<>;
+  chord_node_wire_plus_id route<>;
 };
 
 union cd_lookup_res switch (chordstat stat) {
   case CHORD_OK:
     cd_lookup_res_ok resok;
+  default:
+    /* CHORD_NOTINRANGE if the vnode id is invalid */
+    void;
+};
+
+/* GETSUCCLIST or GETPREDLIST *************************************/
+
+struct cd_getsucclist_arg {
+  cd_vnode vnode;
+};
+
+struct cd_getsucclist_res_ok {
+  chord_node_wire_plus_id nodes<>;
+};
+
+union cd_getsucclist_res switch (chordstat stat) {
+  case CHORD_OK:
+    cd_getsucclist_res_ok resok;
   default:
     /* CHORD_NOTINRANGE if the vnode id is invalid */
     void;
@@ -94,5 +119,13 @@ program CD_PROGRAM {
 		cd_lookup_res
 		CD_LOOKUP(cd_lookup_arg) = 4;
 		/** Find successor node of chord ID */
+
+                cd_getsucclist_res
+                CD_GETSUCCLIST(cd_getsucclist_arg) = 5;
+                /** Get list of successors of one of our vnodes */
+
+                cd_getsucclist_res
+                CD_GETPREDLIST(cd_getsucclist_arg) = 6;
+                /** Get list of predecessors of one of our vnodes */
 	} = 1;
 } = 344600;

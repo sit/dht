@@ -97,6 +97,41 @@ def CD(pnum, arg, cb = None):
     if res is not None and cb is not None:
         cb(res)
 
+def itos(val):
+    """Converts an integer into the equivalent four-character
+    string.
+
+    Unfortunately, the Python sockets API is mixed with respect to
+    which functions expect integers and which functions expect
+    four-character strings (why do _any_ of them expect strings?).
+    This function exists to make peace between the two worlds."""
+    return (chr((val>>24)&0xFF) + chr((val>>16)&0xFF) +
+            chr((val>>8)&0xFF) + chr(val&0xFF))
+
+
+def do_getsucclist(vnodeid):
+    """Get and display the successor list of vnode vnodeid."""
+
+    arg = cd_prot.cd_getsucclist_arg()
+
+    arg.vnode = chord_types.bigint(vnodeid)
+
+    def succlistcb(res):
+        if res.stat == chord_types.CHORD_OK:
+            print "Successor list:"
+            for wireID in res.resok.nodes:
+                wire = wireID.wire
+                chordID = wireID.id
+                print "%s:%d (%d)" % \
+                      (socket.inet_ntoa(itos(wire.machine_order_ipv4_addr)),
+                       wire.machine_order_port_vnnum>>16,
+                       wire.machine_order_port_vnnum&0xFFFF)
+        else:
+            print "getsucclist failed:", res.stat
+    print "Getting successor list for", arg.vnode
+    CD(cd_prot.CD_GETSUCCLIST, arg, succlistcb)
+
+
 def do_lookup(vnodeid, id):
     """Performs a lookup of id from vnode vnodeid.
 
@@ -104,17 +139,6 @@ def do_lookup(vnodeid, id):
     lookup call completes.  Not useful in general, but this function
     includes some bits of code for decoding the returned information
     that may prove useful later."""
-
-    def itos(val):
-        """Converts an integer into the equivalent four-character
-        string.
-
-        Unfortunately, the Python sockets API is mixed with respect to
-        which functions expect integers and which functions expect
-        four-character strings (why do _any_ of them expect strings?).
-        This function exists to make peace between the two worlds."""
-        return (chr((val>>24)&0xFF) + chr((val>>16)&0xFF) +
-                chr((val>>8)&0xFF) + chr(val&0xFF))
 
     arg = cd_prot.cd_lookup_arg()
 
@@ -124,11 +148,14 @@ def do_lookup(vnodeid, id):
     def lookupcb(res):
         if res.stat == chord_types.CHORD_OK:
             print "Found", arg.key, "at:"
-            for wire in res.resok.route:
+            for wireID in res.resok.route:
+                wire = wireID.wire
+                chordID = wireID.id
                 print "%s:%d (%d)" % \
                       (socket.inet_ntoa(itos(wire.machine_order_ipv4_addr)),
                        wire.machine_order_port_vnnum>>16,
                        wire.machine_order_port_vnnum&0xFFFF)
+            do_getsucclist(vnodeid)
         else:
             print "Lookup failed:", res.stat
     print "Looking up", arg.key, "via", arg.vnode

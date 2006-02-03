@@ -56,10 +56,39 @@ lookup_cb (svccb *sbp, vec<chord_node> nodes, route r, chordstat stat)
   res->set_stat(stat);
 
   if (stat == CHORD_OK) {
-    chord_node_wire cnw;
+    chord_node_wire_plus_id cnw;
     while (!r.empty()) {
-      r.pop_front()->fill_node(cnw);
+      ptr<location> l = r.pop_front();
+      l->fill_node(cnw.wire);
+      cnw.id = l->id();
       res->resok->route.push_back(cnw);
+    }
+    
+    for (unsigned int i = 0; i < nodes.size(); i++) {
+      location l = location(nodes[i]);
+      l.fill_node(cnw.wire);
+      cnw.id = l.id();
+      res->resok->successors.push_back(cnw);
+    }
+
+  }
+  sbp->reply(res);
+  
+}
+
+static void
+getsucclist_cb (svccb *sbp, vec<chord_node> nodes, chordstat stat)
+{
+  cd_getsucclist_res *res = New cd_getsucclist_res ();
+  res->set_stat(stat);
+
+  if (stat == CHORD_OK) {
+    chord_node_wire_plus_id cnw;
+    for (unsigned int i = 0; i < nodes.size(); i++) {
+      location l = location(nodes[i]);
+      l.fill_node(cnw.wire);
+      cnw.id = l.id();
+      res->resok->nodes.push_back(cnw);
     }
   }
 
@@ -163,6 +192,36 @@ cd_dispatch (ptr<asrv> s, svccb *sbp)
         sbp->reply(res);
       } else {
         vn->find_successor(a->key, wrap(lookup_cb, sbp));
+      }
+    }
+    break;
+
+  case CD_GETSUCCLIST:
+    {
+      cd_getsucclist_arg *a = sbp->Xtmpl getarg<cd_getsucclist_arg> ();
+      ptr<vnode> vn = vnodes[a->vnode];
+
+      if (vn == NULL) {
+        cd_lookup_res *res = New cd_lookup_res ();
+        res->set_stat(CHORD_NOTINRANGE);
+        sbp->reply(res);
+      } else {
+        vn->get_succlist(vn->my_location(), wrap(getsucclist_cb, sbp));
+      }
+    }
+    break;
+
+  case CD_GETPREDLIST:
+    {
+      cd_getsucclist_arg *a = sbp->Xtmpl getarg<cd_getsucclist_arg> ();
+      ptr<vnode> vn = vnodes[a->vnode];
+
+      if (vn == NULL) {
+        cd_lookup_res *res = New cd_lookup_res ();
+        res->set_stat(CHORD_NOTINRANGE);
+        sbp->reply(res);
+      } else {
+        vn->get_predlist(vn->my_location(), wrap(getsucclist_cb, sbp));
       }
     }
     break;
