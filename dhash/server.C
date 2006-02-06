@@ -154,7 +154,7 @@ dhash_impl::dhash_impl (ptr<vnode> node, str dbname) :
   int v;
   bool ok = Configurator::only ().get_int ("dhash.start_maintenance", v);
   if (!ok || v)
-    start ();
+    start (true);
 }
 
 void

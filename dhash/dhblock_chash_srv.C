@@ -148,7 +148,8 @@ dhblock_chash_srv::generate_repair_jobs ()
 {
   u_int32_t frags = dhblock_chash::num_dfrags ();
   db->getblockrange (node->my_pred ()->id (), node->my_location ()->id (),
-      frags, -1, wrap (this, &dhblock_chash_srv::localqueue, frags));
+		     frags, REPAIR_QUEUE_MAX - repair_qlength (),
+		     wrap (this, &dhblock_chash_srv::localqueue, frags));
   return;
 }
 
@@ -163,6 +164,13 @@ dhblock_chash_srv::localqueue (u_int32_t frags,
     return;
   }
 
+  trace << "chash-localqueue (" << node->my_ID() << "): repairing " 
+	<< blocks.size() << " blocks with " << frags 
+	<< " frags\n";
+  if( blocks.size() > 0 ) {
+    trace << "first block=" << blocks[0].k << "\n";
+  }
+
   //don't assume we are holding the block
   // i.e. -> put ourselves on this of nodes to check for the block
   vec<ptr<location> > nmsuccs = node->succs ();
@@ -173,17 +181,22 @@ dhblock_chash_srv::localqueue (u_int32_t frags,
 
   bhash<chordID, hashID> holders;
   for (size_t i = 0; i < blocks.size (); i++) {
+    
+    assert (blocks[i].on.size () == frags);
+
     holders.clear ();
     for (size_t j = 0; j < blocks[i].on.size (); j++)
       holders.insert (blocks[i].on[j].x);
 
     blockID key (blocks[i].k, DHASH_CONTENTHASH);
     ptr<location> w = NULL;
+    u_int32_t reps = 0;
     for (size_t j = 0; j < succs.size (); j++) {
       w = succs[j];
-      if (!holders[w->id ()]) {
+      if (!holders[w->id ()] && reps < dhblock_chash::num_efrags () - frags) {
 	ptr<repair_job> job = New refcounted<rjchash> (key, w, mkref (this));
 	repair_add (job);
+	reps++;
 	break;
       }
     }
@@ -198,7 +211,7 @@ dhblock_chash_srv::localqueue (u_int32_t frags,
     } else {
       nstart = blocks.back ().k;
     }
-    if (frags <= dhblock_chash::num_efrags ())
+    if (frags < dhblock_chash::num_efrags ())
       db->getblockrange (nstart, node->my_location ()->id (),
 	  frags, REPAIR_QUEUE_MAX - repair_qlength (),
 	  wrap (this, &dhblock_chash_srv::localqueue, frags));

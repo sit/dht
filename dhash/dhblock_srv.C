@@ -9,6 +9,9 @@
 
 #include <merkle_misc.h>
 
+#include <modlogger.h>
+#define trace   modlogger ("dhblock_srv", modlogger::TRACE)
+
 dhblock_srv::dhblock_srv (ptr<vnode> node,
 			  ptr<dhashcli> cli,
 		          str desc,
@@ -125,7 +128,7 @@ dhblock_srv::repair_add (ptr<repair_job> job)
 {
   if (!job)
     return false;
-  warn << "dhblock_srv::repair_add for " << job->key << "\n";
+  trace << "dhblock_srv::repair_add for " << job->key << "\n";
   if (repairs_queued[job->key] || repairs_inprogress[job->key]) 
     return false;
   repair_q.push_back (job);
@@ -163,9 +166,9 @@ void
 dhblock_srv::repair_done (blockID key)
 {
   repairs_inprogress.remove (key);
-  warn << "completed repair of " << key << "; "
-       << repairs_inprogress.size () << " in progress, "
-       << repairs_queued.size () << " in queue.\n";
+  trace << "completed repair of " << key << "; "
+	<< repairs_inprogress.size () << " in progress, "
+	<< repairs_queued.size () << " in queue.\n";
   repair_flush_q ();
 }
 
@@ -180,7 +183,8 @@ dhblock_srv::repair_flush_q ()
     repairs_inprogress.insert (job->key);
     job->setdonecb (wrap (this, &dhblock_srv::repair_done, job->key));
     job->start ();
-    warn << "dhblock_srv::repair_flush_q: started repair of " << job->key << "\n";
+    trace << "dhblock_srv::repair_flush_q: started repair of " << job->key 
+	  << "\n";
   }
   assert (repair_q.size () == repairs_queued.size ());
 }

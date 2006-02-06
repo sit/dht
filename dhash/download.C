@@ -65,9 +65,13 @@ dhash_download::sent_request (ptr<dhash_fetchiter_res> res, clnt_stat err)
   fetch_acked = true;
 
   if (err) {
-    fail ("RPC error"); 
+    strbuf e;
+    e << "RPC error, status " << err;
+    fail ((str) e); 
   } else if (res && res->status != DHASH_INPROGRESS) {
-    fail ("bad status");
+    strbuf e;
+    e << "bad status, status " << res->status;
+    fail ((str) e);
   } else
     ;
 
@@ -144,7 +148,7 @@ void
 dhash_download::fail (str errstr)
 {
   warn << "dhash_download failed: " << blckID << ": "
-       << errstr << " at " << source.x << "\n";
+       << errstr << " at " << source << "\n";
   error = true;
 }
 

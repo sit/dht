@@ -566,10 +566,15 @@ dhashcli::sendblock (ptr<location> dst, blockID bid_to_send,
 		     ptr<dhblock_srv> srv,
 		     sendblockcb_t cb, int nonce /* = 0 */)
 {
-  
+
+  trace << clntnode->my_ID () << ": dhashcli::sendblock (" << bid_to_send 
+	<< ") to dest: " << dst << "\n";
   srv->fetch (bid_to_send.ID, 
 		  wrap (this, &dhashcli::sendblock_fetch_cb, dst, 
 			bid_to_send, cb, nonce));
+  trace << clntnode->my_ID () << ": dhashcli::sendblock (" << bid_to_send 
+	<< ") adbd request sent\n";
+
 }
 
 void
@@ -581,6 +586,9 @@ dhashcli::sendblock_fetch_cb (ptr<location> dst, blockID bid_to_send,
     cb (DHASH_NOENT, false);
     return;
   }
+
+  trace << clntnode->my_ID () << ": dhashcli::sendblock_fetch_cb (" 
+	<< bid_to_send << ") has been fetched " << dst << "\n";
 
   dhash_store::execute 
     (clntnode, dst, bid_to_send, data,

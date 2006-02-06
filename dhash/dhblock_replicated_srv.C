@@ -157,7 +157,8 @@ dhblock_replicated_srv::generate_repair_jobs ()
   // must fetch.  then, for the ones where we are in the list, compare
   // with everyone else and update them.
   db->getblockrange (node->my_pred ()->id (), node->my_location ()->id (),
-      -1, -1, wrap (this, &dhblock_replicated_srv::localqueue));
+		     -1, REPAIR_QUEUE_MAX - repair_qlength (),
+		     wrap (this, &dhblock_replicated_srv::localqueue));
 }
 
 void
@@ -168,6 +169,8 @@ dhblock_replicated_srv::localqueue (clnt_stat err, adb_status stat, vec<block_in
   } else if (stat == ADB_ERR) {
     return;
   }
+
+  trace << "rep-localqueue: repairing " << blocks.size() << " blocks\n";
 
   vec<ptr<location> > succs = node->succs ();
   ptr<location> me = node->my_location ();
