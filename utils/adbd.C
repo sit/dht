@@ -68,11 +68,8 @@ dbt_to_id (const DBT &dbt)
 static int
 getnumreplicas (DB *sdb, const DBT *pkey, const DBT *pdata, DBT *skey)
 {
-  // XXX is returning a pointer to this variable ok???
-  //     if we alloc mem here, who would free it???
-  static u_int32_t numreps;
+  u_int32_t *numreps = (u_int32_t *) malloc(sizeof(u_int32_t));
 
-  bzero (skey, sizeof (DBT));
   adb_vbsinfo_t vbs;
   if (!buf2xdr (vbs, pdata->data, pdata->size)) {
     hexdump hd (pdata->data, pdata->size);
@@ -80,9 +77,12 @@ getnumreplicas (DB *sdb, const DBT *pkey, const DBT *pdata, DBT *skey)
           << hd << "\n";
     return -1;
   }
-  numreps = htonl (vbs.d.size ());
-  skey->data = &numreps;
-  skey->size = sizeof (numreps);
+  *numreps = htonl (vbs.d.size ());
+  // this flag should mean that berkeley db will free this memory when it's
+  // done with it.
+  skey->flags = DB_DBT_APPMALLOC;
+  skey->data = numreps;
+  skey->size = sizeof (*numreps);
   return 0;
 }
 // }}}
@@ -474,7 +474,7 @@ dbns::getblockrange_extant (const chordID &start, const chordID &stop,
     adb_vbsinfo_t vbs;
     chordID k = dbt_to_id (key);
     // grab only those keys that are interesting to caller.
-    if (!betweenbothincl (start, stop, k))
+    if (!betweenrightincl (start, stop, k))
       goto next;
     if (buf2xdr (vbs, data.data, data.size)) {
       adb_bsloc_t bsloc;
@@ -599,6 +599,7 @@ dbns::update (const chordID &key, const adb_bsinfo_t &bsinfo, bool present)
       // Nuke the old corrupt, soft state data.
       vbs.d.clear ();
     }
+
     // Find index of bsinfo in vbs.
     size_t dx; 
     for (dx = 0; dx < vbs.d.size (); dx++) 
@@ -812,7 +813,9 @@ do_fetch (ptr<dbmanager> dbm, svccb *sbp)
   }
  
   str data; 
+
   int r = db->lookup (arg->key, data);
+
   if (r) {
     res.set_status ((r == DB_NOTFOUND ? ADB_NOTFOUND : ADB_ERR));
   } else {
@@ -863,6 +866,7 @@ do_delete (ptr<dbmanager> dbm, svccb *sbp)
 void
 do_getblockrange (ptr<dbmanager> dbm, svccb *sbp)
 {
+
   adb_getblockrangearg *arg = sbp->Xtmpl getarg<adb_getblockrangearg> ();
   adb_getblockrangeres res;
   dbns *db = dbm->get (arg->name);
@@ -871,6 +875,7 @@ do_getblockrange (ptr<dbmanager> dbm, svccb *sbp)
     sbp->replyref (res);
     return;
   }
+
   int r (0);
   res.status = ADB_OK;
   if (arg->extant >= 0) {
@@ -888,6 +893,7 @@ do_getblockrange (ptr<dbmanager> dbm, svccb *sbp)
       res.blocks.clear ();
     }
   }
+
   sbp->replyref (res);
 }
 // }}}

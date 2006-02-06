@@ -222,7 +222,7 @@ locationtable::process_pin (pininfo *cpin, int num)
     cur = loclist.closestpred (cpin->n_);
   do {
     if (cur->good ()) {
-      loctrace << "pinning cur " << cur->n_ << "\n";
+      //      loctrace << "pinning cur " << cur->n_ << "\n";
       cur->pinned_ = true;
       to_pin--;
     }
@@ -239,7 +239,7 @@ locationtable::process_pin (pininfo *cpin, int num)
 void
 locationtable::figure_pins (void)
 {
-  loctrace << "locationtable::figure_pins\n";
+  //loctrace << "locationtable::figure_pins\n";
   
   // Set this up front.
   pins_updated_ = true;
@@ -265,13 +265,13 @@ locationtable::figure_pins (void)
     if (cpin->pinpred_ > 0) {
       locwrap *p = loclist.closestpred (cpin->n_);
       p->pinned_ = true;
-      loctrace << "pinning pred " << p->n_ << "\n";
+      //loctrace << "pinning pred " << p->n_ << "\n";
     }
     if (cpin->pinself_) {
       locwrap *p = locs[cpin->n_];
       if (!p) fatal << "expected locwrap for " << cpin->n_ << " for pinself.\n";
       p->pinned_ = true;
-      loctrace << "pinning self " << p->n_ << "\n";
+      //loctrace << "pinning self " << p->n_ << "\n";
     }
     cpin = pinlist.next (cpin);
   }
@@ -290,9 +290,9 @@ locationtable::figure_pins (void)
       process_pin (cpin, -cpin->pinpred_);
 
     cpin = pinlist.next (cpin);
-    if (cpin) 
-      loctrace << "step pin = " << cpin->n_ << " " 
-	       << cpin->pinsucc_ << " " << cpin->pinpred_ << " " << "\n";
+    //    if (cpin) 
+      //loctrace << "step pin = " << cpin->n_ << " " 
+      //       << cpin->pinsucc_ << " " << cpin->pinpred_ << " " << "\n";
   }
 }
   
@@ -341,8 +341,8 @@ locationtable::evict (size_t n)
     }
   }
   if (n > 0 && !all) 
-    loctrace << "evict: failed to evict all requested; "
-	     << n << " more requested.\n";
+    //loctrace << "evict: failed to evict all requested; "
+    //	     << n << " more requested.\n";
 
   pins_updated_ = false;
 }
