@@ -45,9 +45,9 @@ void
 dhash_store::finish (ptr<bool> p_deleted, 
 		     ptr<dhash_storeres> res, int num, clnt_stat err)
 {
+  if (*p_deleted) return;
   trace << clntnode->my_ID () << ": dhash_store::finish (" << bid << ", "
         << *p_deleted << ", ..., " << num << ", " << err << ")\n";
-  if (*p_deleted) return;
 
   npending--;
   
