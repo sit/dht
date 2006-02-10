@@ -14,7 +14,7 @@ class dhblock_noauth_srv : public dhblock_replicated_srv
 public:
   dhblock_noauth_srv (ptr<vnode> node, 
 		      ptr<dhashcli> cli,
-		      str desc, str dbname, str dbext);
+		      str desc, str dbname, str dbext, cbv donecb);
 };
 
 #endif

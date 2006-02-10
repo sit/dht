@@ -103,16 +103,16 @@ DECL_CONFIG_METHOD(dhash_disable_db_env, "dhash.disable_db_env")
 dhash::~dhash () {}
 
 ref<dhash>
-dhash::produce_dhash (ptr<vnode> v, str dbname)
+dhash::produce_dhash (ptr<vnode> v, str dbname, cbv donecb)
 {
-  return New refcounted<dhash_impl> (v, dbname);
+  return New refcounted<dhash_impl> (v, dbname, donecb);
 }
 
 dhash_impl::~dhash_impl ()
 {
 }
 
-dhash_impl::dhash_impl (ptr<vnode> node, str dbname) :
+dhash_impl::dhash_impl (ptr<vnode> node, str dbname, cbv dcb) :
   host_node (node),
   cli (NULL),
   bytes_stored (0),
@@ -122,39 +122,65 @@ dhash_impl::dhash_impl (ptr<vnode> node, str dbname) :
   keys_others (0),
   bytes_served (0),
   keys_served (0),
-  rpc_answered (0)
+  rpc_answered (0),
+  donecb (dcb)
 {
-  // RPC demux
-  trace << host_node->my_ID () << " registered dhash_program_1\n";
-  host_node->addHandler (dhash_program_1, wrap(this, &dhash_impl::dispatch));
-
-  trace << host_node->my_ID () << " registered merklesync_program_1\n";
-  host_node->addHandler (merklesync_program_1, 
-			 wrap(this, &dhash_impl::merkle_dispatch));
-
-  //NULL since we won't use fetch
-  cli = New refcounted<dhashcli> (host_node, mkref(this));
 
   ptr<dhblock_srv> srv;
+
+  cli = New refcounted<dhashcli> (host_node, mkref(this));
+
+  ptr<uint> num_to_go = New refcounted<uint>;
+  (*num_to_go) = 3;
   str ext = strbuf () << host_node->my_ID () << ".c";
   srv = New refcounted<dhblock_chash_srv> (node, cli, "db file",
-      dbname, ext);
+      dbname, ext, wrap (this, &dhash_impl::srv_ready, num_to_go));
   blocksrv.insert (DHASH_CONTENTHASH, srv);
 
   ext = strbuf () << host_node->my_ID () << ".k";
   srv = New refcounted<dhblock_keyhash_srv> (node, cli, "keyhash db file",
-      dbname, ext);
+      dbname, ext, wrap (this, &dhash_impl::srv_ready, num_to_go));
   blocksrv.insert (DHASH_KEYHASH, srv);
 
   ext = strbuf () << host_node->my_ID () << ".n";
   srv = New refcounted<dhblock_noauth_srv> (node, cli, "noauth db file",
-      dbname, ext);
+      dbname, ext, wrap (this, &dhash_impl::srv_ready, num_to_go));
   blocksrv.insert (DHASH_NOAUTH, srv);
+
+}
+
+void
+dhash_impl::srv_ready ( ptr<uint> num_to_go) 
+{
+
+  (*num_to_go)--;
+
+  if( *num_to_go == 0 ) {
+
+    // RPC demux
+    trace << host_node->my_ID () << " registered dhash_program_1\n";
+    host_node->addHandler (dhash_program_1, wrap(this, &dhash_impl::dispatch));
+    
+    trace << host_node->my_ID () << " registered merklesync_program_1\n";
+    host_node->addHandler (merklesync_program_1, 
+			   wrap(this, &dhash_impl::merkle_dispatch));
+
+    start_maint ();
+
+    (*donecb)();
+  }
+
+}
+
+void
+dhash_impl::start_maint () 
+{
 
   int v;
   bool ok = Configurator::only ().get_int ("dhash.start_maintenance", v);
   if (!ok || v)
     start (true);
+
 }
 
 void

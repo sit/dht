@@ -47,8 +47,9 @@ dhblock_replicated_srv::dhblock_replicated_srv (ptr<vnode> node,
 						str desc,
 						str dbname,
 						str dbext,
-						dhash_ctype ctype) :
-  dhblock_srv (node, cli, desc, dbname, dbext, true),
+						dhash_ctype ctype,
+						cbv donecb) :
+  dhblock_srv (node, cli, desc, dbname, dbext, true, donecb),
   ctype (ctype),
   mtree (NULL),
   msrv (NULL)
@@ -67,14 +68,16 @@ dhblock_replicated_srv::populate_mtree (adb_status stat, vec<chordID> keys, vec<
   }
   // aux contains pre-computed hashes of the low-order
   // bytes of the key.
-  for (unsigned int i = 0; i < keys.size (); i++)
+  for (unsigned int i = 0; i < keys.size (); i++) {
     mtree->insert (keys[i], aux[i]);
+  }
 
   if (stat != ADB_COMPLETE) { // more keys
     db->getkeys (incID (keys.back ()), true,
 		 wrap (this, &dhblock_replicated_srv::populate_mtree));
   } else {
     msrv = New merkle_server (mtree);
+    (*donecb)();
   }
 }
 

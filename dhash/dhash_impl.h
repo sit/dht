@@ -124,6 +124,9 @@ class dhash_impl : public dhash, public virtual refcount {
   void fetchcomplete_done (int nonce, chord_node sender,
 			   dhash_stat status, bool present);
 
+  void srv_ready (ptr<uint> num_to_go);
+  void start_maint ();
+
   /* statistics */
   long bytes_stored;
   long keys_stored;
@@ -134,8 +137,10 @@ class dhash_impl : public dhash, public virtual refcount {
   long keys_served;
   long rpc_answered;
 
+  cbv donecb;
+
  public:
-  dhash_impl (ptr<vnode> v, str dbname);
+  dhash_impl (ptr<vnode> v, str dbname, cbv donecb);
   ~dhash_impl ();
 
   vec<dstat> stats ();

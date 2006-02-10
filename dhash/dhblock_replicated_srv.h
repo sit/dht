@@ -56,7 +56,7 @@ protected:
 public:
   dhblock_replicated_srv (ptr<vnode> node, ptr<dhashcli> cli,
 			  str dbname, str dbext, str desc,
-                          dhash_ctype ctype);
+                          dhash_ctype ctype, cbv donecb);
 
   merkle_server *mserv () { return msrv; };
   virtual void store (chordID key, str d, cb_dhstat cb);

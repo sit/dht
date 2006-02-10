@@ -24,7 +24,7 @@ class dhblock_chash_srv : public dhblock_srv {
 
 public:
   dhblock_chash_srv (ptr<vnode> node, ptr<dhashcli> cli, str dbname, str dbext,
-      str desc);
+      str desc, cbv donecb);
   ~dhblock_chash_srv ();
 
   void start (bool randomize);

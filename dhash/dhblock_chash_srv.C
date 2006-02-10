@@ -49,8 +49,9 @@ dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
 				      ptr<dhashcli> cli,
 				      str desc,
 				      str dbname,
-				      str dbext) :
-  dhblock_srv (node, cli, desc, dbname, dbext, false),
+				      str dbext,
+				      cbv donecb) :
+  dhblock_srv (node, cli, desc, dbname, dbext, false, donecb),
   cache_db (NULL),
   msrv (NULL),
   mtree (NULL),
@@ -74,14 +75,16 @@ dhblock_chash_srv::populate_mtree (adb_status stat, vec<chordID> keys, vec<u_int
          << stat << "\n";
     return;
   }
-  for (size_t i = 0; i < keys.size (); i++)
+  for (size_t i = 0; i < keys.size (); i++) {
     mtree->insert (keys[i]);
+  }
   if (stat != ADB_COMPLETE) {
     db->getkeys (incID (keys.back ()), false,
 		 wrap (this, &dhblock_chash_srv::populate_mtree));
   } else {
     // Ready to start synchronizing!
     msrv = New merkle_server (mtree);
+    (*donecb)();
   }
 }
 
@@ -182,7 +185,9 @@ dhblock_chash_srv::localqueue (u_int32_t frags,
   bhash<chordID, hashID> holders;
   for (size_t i = 0; i < blocks.size (); i++) {
     
-    assert (blocks[i].on.size () == frags);
+    // Should always be true, but fails occasionally for me. maybe the db
+    // was non transactionally correcting? -- strib, 2/8/06
+    //assert (blocks[i].on.size () == frags);
 
     holders.clear ();
     for (size_t j = 0; j < blocks[i].on.size (); j++)

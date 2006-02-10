@@ -65,7 +65,7 @@ class dhash {
   
   static u_long dhash_disable_db_env ();
 
-  static ref<dhash> produce_dhash (ptr<vnode> v, str dbname);
+  static ref<dhash> produce_dhash (ptr<vnode> v, str dbname, cbv donecb);
 
   virtual ~dhash () = 0;
 
@@ -74,6 +74,7 @@ class dhash {
   
   virtual void start (bool randomize) = 0;
   virtual void stop () = 0;
+  virtual void start_maint () = 0;
 
   virtual long register_fetch_callback (cbfetch cb) = 0;
   virtual void unregister_fetch_callback (long nonce) = 0;

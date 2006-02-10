@@ -485,6 +485,26 @@ usage ()
   exit (1);
 }
 
+void finish_start();
+
+int ch;
+int ss_mode = -1;
+int lbase = 1;
+
+// ensure enough room for fingers and successors.
+int max_loccache = 0;
+int max_vnodes = 1;
+
+str wellknownhost;
+int wellknownport = 0;
+int nreplica = 0;
+bool replicate = true;
+bool do_daemonize = false;
+str db_name = "/tmp/db-sock";
+str my_name;
+
+char *cffile = NULL;
+
 int
 main (int argc, char **argv)
 {
@@ -504,28 +524,12 @@ main (int argc, char **argv)
   sigcb(SIGTERM, wrap (&halt));
 
   int nmodes = sizeof (modes)/sizeof(modes[0]);
-    
-  int ch;
-  int ss_mode = -1;
-  int lbase = 1;
 
   myport = 0;
-  // ensure enough room for fingers and successors.
-  int max_loccache = 0;
-  int max_vnodes = 1;
-
-  str wellknownhost;
-  int wellknownport = 0;
-  int nreplica = 0;
-  bool replicate = true;
-  bool do_daemonize = false;
-  str db_name = "/tmp/db-sock";
+  my_name = my_addr ();
   p2psocket = "/tmp/chord-sock";
   ctlsocket = "/tmp/lsdctl-sock";
-  str myname = my_addr ();
   mode = MODE_CHORD;
-
-  char *cffile = NULL;
 
   while ((ch = getopt (argc, argv, "b:C:d:fFH:j:l:L:M:m:n:O:Pp:rS:s:T:tv:D"))!=-1)
     switch (ch) {
@@ -579,7 +583,7 @@ main (int argc, char **argv)
     case 'l':
       if (inet_addr (optarg) == INADDR_NONE)
 	fatal << "must specify bind address in dotted decimal form\n";
-      myname = optarg;
+      my_name = optarg;
       break;
     case 'M':
       max_loccache = atoi (optarg);
@@ -701,14 +705,30 @@ main (int argc, char **argv)
 
   assert (mode == modes[mode].m);
 
-  chordnode = New refcounted<chord> (myname,
+  chordnode = New refcounted<chord> (my_name,
 				     myport,
 				     modes[mode].producer,
 				     vnodes,
                                      max_loccache);
   for (int i = 0; i < vnodes; i++) {
     ptr<vnode> v = chordnode->get_vnode (i);
-    dh.push_back (dhash::produce_dhash (v, db_name));
+    dh.push_back (dhash::produce_dhash (v, db_name, wrap(&finish_start)));
+  }
+
+  info << "starting amain.\n";
+
+  amain ();
+
+}
+
+int dhashes_finished = 0;
+void finish_start ()
+{
+
+  dhashes_finished++;
+  info << "DHash " << dhashes_finished << " is ready.\n";
+  if( dhashes_finished != vnodes ) {
+    return;
   }
 
   chordnode->startchord ();
@@ -717,7 +737,7 @@ main (int argc, char **argv)
   time_t now = time (NULL);
   warn << "lsd starting up at " << ctime ((const time_t *)&now);
   warn << " running with options: \n";
-  warn << "  IP/port: " << myname << ":" << myport << "\n";
+  warn << "  IP/port: " << my_name << ":" << myport << "\n";
   warn << "  vnodes: " << vnodes << "\n";
   warn << "  lookup_mode: " << mode << "\n";
   warn << "  ss_mode: " << ss_mode << "\n";
@@ -728,7 +748,7 @@ main (int argc, char **argv)
   Configurator::only ().get_int ("dhash.efrags", parameters.efrags);
   Configurator::only ().get_int ("dhash.dfrags", parameters.dfrags);
   Configurator::only ().get_int ("dhash.replica", parameters.nreplica);
-  parameters.addr.hostname = myname;
+  parameters.addr.hostname = my_name;
   parameters.addr.port     = myport; // chord->get_port ();
 
   if (heartbeatfn)
@@ -738,10 +758,7 @@ main (int argc, char **argv)
     startclntd();
   if (ctlsocket)
     startcontroller ();
-  
-  info << "starting amain.\n";
 
-  amain ();
 }
 
 // This is needed to instantiate recursive routing classes.

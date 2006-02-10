@@ -17,12 +17,14 @@ dhblock_srv::dhblock_srv (ptr<vnode> node,
 		          str desc,
 			  str dbpath,
 			  str dbname,
-			  bool hasaux) :
+			  bool hasaux,
+			  cbv dcb) :
   repair_tcb (NULL),
   db (NULL),
   node (node),
   desc (desc),
-  cli (cli)
+  cli (cli),
+  donecb (dcb)
 {
   db = New refcounted<adb> (dbpath, dbname, hasaux);
   warn << "opened " << dbpath << " with space " << dbname 

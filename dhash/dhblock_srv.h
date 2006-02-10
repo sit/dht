@@ -69,9 +69,11 @@ class dhblock_srv : virtual public refcount {
   virtual void db_store (chordID k, str d, cb_dhstat cb);
   virtual void db_store (chordID k, str d, u_int32_t aux, cb_dhstat cb);
 
+  cbv donecb;
+
  public:
   dhblock_srv (ptr<vnode> node, ptr<dhashcli> cli,
-	       str desc, str dbpath, str dbtype, bool hasaux);
+	       str desc, str dbpath, str dbtype, bool hasaux, cbv donecb);
   virtual ~dhblock_srv ();
 
   virtual void start (bool randomize);
