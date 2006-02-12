@@ -458,8 +458,9 @@ dbns::getblockrange_extant (const chordID &start, const chordID &stop,
   ekey.data = &extant;
   ekey.size = sizeof (extant);
 
-  DBT key;
-  bzero (&key, sizeof (key));
+  str key_str = id_to_str (start);
+  DBT key = str_to_dbt (key_str);
+  chordID cur = start;
   DBT data;
   bzero (&data, sizeof (data));
 
@@ -467,15 +468,28 @@ dbns::getblockrange_extant (const chordID &start, const chordID &stop,
   if (count < 0)
     limit = (asrvbufsize/(sizeof (adb_bsloc_t)/2));
 
-  // Find only those who have extant as requested 
-  r = cursor->c_pget (cursor, &ekey, &key, &data, DB_SET);
+  // Find only those who have extant as requested
+  // find the one with the primary key greater or equal to 
+  // the start key
+  r = cursor->c_pget (cursor, &ekey, &key, &data, DB_GET_BOTH_RANGE);
+  // Also must remember to start to loop around the ring
+  if (r == DB_NOTFOUND) {
+    bzero (&key, sizeof (key));
+    // I guess it didn't work.  Just try any old key with this extant
+    r = cursor->c_pget (cursor, &ekey, &key, &data, DB_SET);
+  }
   while (!r && out.size () < limit)
   {
     adb_vbsinfo_t vbs;
     chordID k = dbt_to_id (key);
-    // grab only those keys that are interesting to caller.
-    if (!betweenrightincl (start, stop, k))
-      goto next;
+    // NOTE: this assumes that the keys are stored in order of the
+    // primary keys in the secondary db.  Also assumes the DB_GET_BOTH_RANGE
+    // call above works as expected.
+    if (!betweenrightincl (cur, stop, k)) {
+      r = DB_NOTFOUND;
+      break;
+    }
+    cur = k;
     if (buf2xdr (vbs, data.data, data.size)) {
       adb_bsloc_t bsloc;
       bsloc.block = k;
@@ -484,10 +498,11 @@ dbns::getblockrange_extant (const chordID &start, const chordID &stop,
     } else {
       warner ("dbns::getblockrange_extant", "XDR unmarshalling failed", 0);
     } 
-  next:
     bzero (&key, sizeof (key));
     bzero (&data, sizeof (data));
     r = cursor->c_pget (cursor, &ekey, &key, &data, DB_NEXT_DUP);
+    if (r == DB_NOTFOUND)
+      r = cursor->c_pget (cursor, &ekey, &key, &data, DB_SET);
   }
   if (r && r != DB_NOTFOUND)
     warner ("dbns::getblockrange_extant", "cursor get", r);

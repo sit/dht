@@ -8,9 +8,11 @@ dbfe_generate_config (str path, unsigned int cachesize)
   strbuf db_config;
   db_config << "# MIT lsd db configuration\n\n";
 
+  db_config << "set_flags DB_AUTO_COMMIT\n";
+
   // clean up old log files not available in old versions
 #if ((DB_VERSION_MAJOR >= 4) && (DB_VERSION_MINOR >= 2))
-  db_config << "set_flags db_log_autoremove\n";
+  db_config << "set_flags DB_LOG_AUTOREMOVE\n";
 #endif
   db_config << "# create " << cachesize << " KB cache\n";
   db_config << "set_cachesize 0 " << cachesize * 1024 << " 1\n";
