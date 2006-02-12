@@ -206,7 +206,7 @@ dhblock_replicated_srv::localqueue (clnt_stat err, adb_status stat, vec<block_in
       stat != ADB_COMPLETE)
   {
     // Expect blocks to be sorted (since DB_DUPSORT is set)
-    chordID nstart = blocks.back ().k;
+    chordID nstart = incID( blocks.back ().k );
     db->getblockrange (nstart, node->my_location ()->id (),
 	-1, REPAIR_QUEUE_MAX - repair_qlength (),
 	wrap (this, &dhblock_replicated_srv::localqueue));

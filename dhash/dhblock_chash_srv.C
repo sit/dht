@@ -214,7 +214,7 @@ dhblock_chash_srv::localqueue (u_int32_t frags,
       frags++;
       nstart = node->my_pred ()->id ();
     } else {
-      nstart = blocks.back ().k;
+      nstart = incID( blocks.back ().k );
     }
     if (frags < dhblock_chash::num_efrags ())
       db->getblockrange (nstart, node->my_location ()->id (),
