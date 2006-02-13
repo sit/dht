@@ -163,7 +163,8 @@ public:
   int getblockrange_extant (const chordID &start, const chordID &stop,
     int extant, int count, rpc_vec<adb_bsloc_t, RPC_INFINITY> &out);
   int getkeyson (const adb_vnodeid &n, const chordID &start,
-      const chordID &stop, rpc_vec<adb_keyaux_t, RPC_INFINITY> &out);
+		 const chordID &stop, int count, 
+		 rpc_vec<adb_keyaux_t, RPC_INFINITY> &out);
   int update (const chordID &block, const adb_bsinfo_t &bsinfo, bool present);
   int getinfo (const chordID &block, rpc_vec<adb_vnodeid, RPC_INFINITY> &out);
 };
@@ -228,7 +229,11 @@ dbns::~dbns ()
 void
 dbns::warner (const char *method, const char *desc, int r)
 {
-  warn << method << ": " << desc << ": " << db_strerror (r) << "\n";
+  timespec ts;
+  strbuf t;
+  clock_gettime (CLOCK_REALTIME, &ts);
+  t.fmt ("%d.%06d ", int (ts.tv_sec), int (ts.tv_nsec/1000));
+  warn << t << ": " << method << ": " << desc << ": " << db_strerror (r) << "\n";
 }
 // }}}
 // {{{ dbns::sync
@@ -411,6 +416,7 @@ dbns::getblockrange_all (const chordID &start, const chordID &stop,
   {
     adb_vbsinfo_t vbs;
     chordID k = dbt_to_id (key);
+    warner ("dbns::getblockrange_all", ( (str) (strbuf() << "fetched key " << k)).cstr(), 0);
     if (!betweenrightincl (cur, stop, k)) {
       r = DB_NOTFOUND;
       break;
@@ -514,7 +520,7 @@ dbns::getblockrange_extant (const chordID &start, const chordID &stop,
 // {{{ dbns::getkeyson
 int
 dbns::getkeyson (const adb_vnodeid &n, const chordID &start,
-    const chordID &stop, rpc_vec<adb_keyaux_t, RPC_INFINITY> &out)
+    const chordID &stop, int count, rpc_vec<adb_keyaux_t, RPC_INFINITY> &out)
 {
   int r = 0;
   DBC *cursor;
@@ -536,6 +542,10 @@ dbns::getkeyson (const adb_vnodeid &n, const chordID &start,
   DBT data;
   bzero (&data, sizeof (data));
 
+  u_int32_t limit = count;
+  if (count < 0)
+    limit = (u_int32_t) (asrvbufsize/(1.5*sizeof (adb_keyaux_t)));
+
   // Position the cursor if possible
   r = cursor->c_get (cursor, &key, &data, DB_SET_RANGE);
   // Also must remember to start to loop around the ring
@@ -544,8 +554,7 @@ dbns::getkeyson (const adb_vnodeid &n, const chordID &start,
     r = cursor->c_get (cursor, &key, &data, DB_FIRST);
   }
   // Each adb_keyaux_t is 24ish bytes; leave some slack
-  while (!r &&
-         out.size () < (asrvbufsize/(1.5*sizeof (adb_keyaux_t))))
+  while (!r && out.size () < limit)
   {
     adb_vbsinfo_t vbs;
     keyaux.key = dbt_to_id (key);
@@ -926,7 +935,8 @@ do_getkeyson (ptr<dbmanager> dbm, svccb *sbp)
   }
   res.resok->hasaux = db->hasaux ();
 
-  int r = db->getkeyson (arg->who, arg->start, arg->stop, res.resok->keyaux);
+  int r = db->getkeyson (arg->who, arg->start, arg->stop, 128, 
+			 res.resok->keyaux);
   res.resok->complete = (r == DB_NOTFOUND);
   if (r && r != DB_NOTFOUND) 
     res.set_status (ADB_ERR);
@@ -947,6 +957,28 @@ do_update (ptr<dbmanager> dbm, svccb *sbp)
   int r = db->update (arg->key, arg->bsinfo, arg->present);
   if (r)
     res = ADB_ERR;
+  sbp->replyref (res);
+}
+// }}}
+// {{{ do_updatebatch
+void
+do_updatebatch (ptr<dbmanager> dbm, svccb *sbp)
+{
+  adb_updatebatcharg *args = sbp->Xtmpl getarg<adb_updatebatcharg> ();
+  adb_status res (ADB_OK);
+  for (u_int32_t i = 0; i < args->args.size(); i++) {
+    adb_updatearg arg = args->args[i];
+    dbns *db = dbm->get (arg.name);
+    if (!db) {
+      sbp->replyref (ADB_ERR);
+      return;
+    }
+    int r = db->update (arg.key, arg.bsinfo, arg.present);
+    if (r) {
+      res = ADB_ERR;
+      break;
+    }
+  }
   sbp->replyref (res);
 }
 // }}}
@@ -1006,6 +1038,9 @@ dispatch (ref<axprt_stream> s, ptr<asrv> a, ptr<dbmanager> dbm, svccb *sbp)
     break;
   case ADBPROC_UPDATE:
     do_update (dbm, sbp);
+    break;
+  case ADBPROC_UPDATEBATCH:
+    do_updatebatch (dbm, sbp);
     break;
   case ADBPROC_GETINFO:
     do_getinfo (dbm, sbp);

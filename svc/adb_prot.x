@@ -124,6 +124,11 @@ struct adb_updatearg {
   bool present;
 };
 /* }}} */
+/* {{{ ADBPROC_UPDATE_BATCH */
+struct adb_updatebatcharg {
+  adb_updatearg args<>;
+};
+/* }}} */
 /* {{{ ADBPROC_GETINFO */
 struct adb_getinfoarg {
   str name;
@@ -171,8 +176,12 @@ program ADB_PROGRAM {
 		ADBPROC_UPDATE (adb_updatearg) = 8;
 		/* Update b to be present on n */
 
+		adb_status
+		ADBPROC_UPDATEBATCH (adb_updatebatcharg) = 9;
+		/* Update b<> to be present on n<> */
+
 		adb_getinfores
-		ADBPROC_GETINFO (adb_getinfoarg) = 9;
+		ADBPROC_GETINFO (adb_getinfoarg) = 10;
 		/* Get list of nodes that have b */
 	} = 1;
 } = 344501;

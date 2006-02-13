@@ -205,7 +205,7 @@ syncer::populate_tree (u_int64_t start,
   if (astat != ADB_COMPLETE) {
     // Get more, picking up from where we left off
     const chordID last (blocks.back ());
-    db->getkeyson (succs[cur_succ], last, succs[0]->id (),
+    db->getkeyson (succs[cur_succ], incID(last), succs[0]->id (),
 	wrap (this, &syncer::populate_tree, start, pred, succs));
     return;
   }
@@ -249,14 +249,14 @@ syncer::missing (ptr<location> from,
   // XXX this switch business is kinda gross.
   switch (ctype) {
   case DHASH_CONTENTHASH:
-    db->update (key, from, missing_local);
+    db->update (key, from, missing_local, true);
     break;
   case DHASH_KEYHASH:
   case DHASH_NOAUTH:
     {
       chordID aux = (key & 0xFFFFFFFF);
       chordID dbkey = (key >> 32) << 32;
-      db->update (dbkey, from, aux.getui (), missing_local);
+      db->update (dbkey, from, aux.getui (), missing_local, true);
     }
     break;
   default:

@@ -19,7 +19,8 @@ make_chord_node (const adb_vnodeid &n)
 
 adb::adb (str sock_name, str name, bool hasaux) :
   name_space (name),
-  hasaux (hasaux)
+  hasaux (hasaux),
+  next_batch (NULL)
 {
   int fd = unixsocket_connect (sock_name);
   if (fd < 0) {
@@ -229,24 +230,56 @@ adb::getkeyson (const ptr<location> n,
 }
 
 void
-adb::update (const chordID &key, const ptr<location> n, bool present)
+adb::batch_update ()
 {
-  update (key, n, 0, present);
+  adb_updatebatcharg args;
+  args.args.setsize( batched_updates.size() );
+  for (u_int32_t i = 0; i < batched_updates.size(); i++ ) {
+    args.args[i] = *(batched_updates[i]);
+  }
+  next_batch = NULL;
+  c->call (ADBPROC_UPDATEBATCH, &args, NULL, aclnt_cb_null);
+  // does this clear() free the memory of all the updateargs?
+  batched_updates.clear();
+}
+
+
+void
+adb::update (const chordID &key, const ptr<location> n, bool present, 
+	     bool batchable)
+{
+  update (key, n, 0, present, batchable);
 }
 
 void
-adb::update (const chordID &key, const ptr<location> n, u_int32_t aux, bool present)
+adb::update (const chordID &key, const ptr<location> n, u_int32_t aux, 
+	     bool present, bool batchable)
 {
   const sockaddr_in s (n->saddr ());
-  adb_updatearg arg;
-  arg.name    = name_space;
-  arg.key   = key;
-  arg.bsinfo.n.machine_order_ipv4_addr = ntohl (s.sin_addr.s_addr);
-  arg.bsinfo.n.machine_order_port_vnnum = (ntohs (s.sin_port) << 16) | n->vnode ();
-  arg.bsinfo.auxdata = aux;
-  arg.present = present;
-  c->call (ADBPROC_UPDATE, &arg, NULL, aclnt_cb_null);
-  /* Throw away void return */
+  adb_updatearg *arg = New adb_updatearg();
+  arg->name    = name_space;
+  arg->key   = key;
+  arg->bsinfo.n.machine_order_ipv4_addr = ntohl (s.sin_addr.s_addr);
+  arg->bsinfo.n.machine_order_port_vnnum = (ntohs (s.sin_port) << 16) | n->vnode ();
+  arg->bsinfo.auxdata = aux;
+  arg->present = present;
+  if( !batchable ) {
+    c->call (ADBPROC_UPDATE, arg, NULL, aclnt_cb_null);
+    /* Throw away void return */
+    delete arg;
+  } else {
+    batched_updates.push_back(arg);
+    if( next_batch != NULL ) {
+      timecb_remove( next_batch );
+    }
+    if( batched_updates.size() < UPDATE_BATCH_MAX_SIZE ) {
+      next_batch = delaycb( UPDATE_BATCH_SECS, 
+			    wrap( this, &adb::batch_update ));
+    } else {
+      next_batch = NULL;
+      batch_update();
+    }
+  }
 }
 
 void
