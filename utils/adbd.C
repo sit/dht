@@ -16,7 +16,7 @@ static int clntfd (-1);
 static const u_int32_t asrvbufsize (1024*1025);
 
 class dbmanager;
-static ptr<dbmanager> dbm;
+static dbmanager *dbm;
 // }}}
 // {{{ DB key conversion
 str
@@ -416,7 +416,6 @@ dbns::getblockrange_all (const chordID &start, const chordID &stop,
   {
     adb_vbsinfo_t vbs;
     chordID k = dbt_to_id (key);
-    warner ("dbns::getblockrange_all", ( (str) (strbuf() << "fetched key " << k)).cstr(), 0);
     if (!betweenrightincl (cur, stop, k)) {
       r = DB_NOTFOUND;
       break;
@@ -775,7 +774,7 @@ static void
 halt ()
 {
   warn << "Exiting on command...\n";
-  dbm = NULL;
+  delete dbm;
   exit (0);
 }
 // }}}
@@ -783,7 +782,7 @@ halt ()
 // {{{ RPC execution
 // {{{ do_initspace
 void
-do_initspace (ptr<dbmanager> dbm, svccb *sbp)
+do_initspace (dbmanager *dbm, svccb *sbp)
 {
   adb_initspacearg *arg = sbp->Xtmpl getarg<adb_initspacearg> ();
   adb_status stat (ADB_OK);
@@ -799,7 +798,7 @@ do_initspace (ptr<dbmanager> dbm, svccb *sbp)
 // }}}
 // {{{ do_store
 void
-do_store (ptr<dbmanager> dbm, svccb *sbp)
+do_store (dbmanager *dbm, svccb *sbp)
 {
   adb_storearg *arg = sbp->Xtmpl getarg<adb_storearg> ();
   dbns *db = dbm->get (arg->name);
@@ -824,7 +823,7 @@ do_store (ptr<dbmanager> dbm, svccb *sbp)
 // }}}
 // {{{ do_fetch
 void
-do_fetch (ptr<dbmanager> dbm, svccb *sbp)
+do_fetch (dbmanager *dbm, svccb *sbp)
 {
   adb_fetcharg *arg = sbp->Xtmpl getarg<adb_fetcharg> ();
   adb_fetchres res (ADB_OK); 
@@ -852,7 +851,7 @@ do_fetch (ptr<dbmanager> dbm, svccb *sbp)
 // }}}
 // {{{ do_getkeys
 void
-do_getkeys (ptr<dbmanager> dbm, svccb *sbp)
+do_getkeys (dbmanager *dbm, svccb *sbp)
 {
   adb_getkeysarg *arg = sbp->Xtmpl getarg<adb_getkeysarg> ();
   adb_getkeysres res (ADB_OK);
@@ -874,7 +873,7 @@ do_getkeys (ptr<dbmanager> dbm, svccb *sbp)
 // }}}
 // {{{ do_delete
 void
-do_delete (ptr<dbmanager> dbm, svccb *sbp)
+do_delete (dbmanager *dbm, svccb *sbp)
 {
   adb_deletearg *arg = sbp->Xtmpl getarg<adb_deletearg> ();
   dbns *db = dbm->get (arg->name);
@@ -888,7 +887,7 @@ do_delete (ptr<dbmanager> dbm, svccb *sbp)
 // }}}
 // {{{ do_getblockrange
 void
-do_getblockrange (ptr<dbmanager> dbm, svccb *sbp)
+do_getblockrange (dbmanager *dbm, svccb *sbp)
 {
 
   adb_getblockrangearg *arg = sbp->Xtmpl getarg<adb_getblockrangearg> ();
@@ -923,7 +922,7 @@ do_getblockrange (ptr<dbmanager> dbm, svccb *sbp)
 // }}}
 // {{{ do_getkeyson
 void
-do_getkeyson (ptr<dbmanager> dbm, svccb *sbp)
+do_getkeyson (dbmanager *dbm, svccb *sbp)
 {
   adb_getkeysonarg *arg = sbp->Xtmpl getarg<adb_getkeysonarg> ();
   adb_getkeysres res (ADB_OK);
@@ -945,7 +944,7 @@ do_getkeyson (ptr<dbmanager> dbm, svccb *sbp)
 // }}}
 // {{{ do_update
 void
-do_update (ptr<dbmanager> dbm, svccb *sbp)
+do_update (dbmanager *dbm, svccb *sbp)
 {
   adb_updatearg *arg = sbp->Xtmpl getarg<adb_updatearg> ();
   adb_status res (ADB_OK);
@@ -962,7 +961,7 @@ do_update (ptr<dbmanager> dbm, svccb *sbp)
 // }}}
 // {{{ do_updatebatch
 void
-do_updatebatch (ptr<dbmanager> dbm, svccb *sbp)
+do_updatebatch (dbmanager *dbm, svccb *sbp)
 {
   adb_updatebatcharg *args = sbp->Xtmpl getarg<adb_updatebatcharg> ();
   adb_status res (ADB_OK);
@@ -984,7 +983,7 @@ do_updatebatch (ptr<dbmanager> dbm, svccb *sbp)
 // }}}
 // {{{ do_getinfo
 void
-do_getinfo (ptr<dbmanager> dbm, svccb *sbp)
+do_getinfo (dbmanager *dbm, svccb *sbp)
 {
   adb_getinfoarg *arg = sbp->Xtmpl getarg<adb_getinfoarg> ();
   adb_getinfores res;
@@ -1006,7 +1005,7 @@ do_getinfo (ptr<dbmanager> dbm, svccb *sbp)
 
 // {{{ RPC accept and dispatch
 void
-dispatch (ref<axprt_stream> s, ptr<asrv> a, ptr<dbmanager> dbm, svccb *sbp)
+dispatch (ref<axprt_stream> s, ptr<asrv> a, dbmanager *dbm, svccb *sbp)
 {
   if (sbp == NULL) {
     warn << "EOF from client\n";
@@ -1052,9 +1051,9 @@ dispatch (ref<axprt_stream> s, ptr<asrv> a, ptr<dbmanager> dbm, svccb *sbp)
   return;
 }
 
-static void accept_cb (int lfd, ptr<dbmanager> dbm);
+static void accept_cb (int lfd, dbmanager *dbm);
 static void
-listen_unix (str sock_name, ptr<dbmanager> dbm)
+listen_unix (str sock_name, dbmanager *dbm)
 {
   unlink (sock_name);
   clntfd = unixsocket (sock_name);
@@ -1071,7 +1070,7 @@ listen_unix (str sock_name, ptr<dbmanager> dbm)
 }
 
 static void 
-accept_cb (int lfd, ptr<dbmanager> dbm)
+accept_cb (int lfd, dbmanager *dbm)
 {
   sockaddr_un sun;
   bzero (&sun, sizeof (sun));
@@ -1127,7 +1126,7 @@ main (int argc, char **argv)
   warn << "db path: " << db_name << "\n";
   warn << "db socket: " << dbsock << "\n";
 
-  ptr<dbmanager> dbm = New refcounted<dbmanager> (db_name);
+  dbm = New dbmanager(db_name);
 
   sigcb (SIGHUP, wrap (&halt));
   sigcb (SIGINT, wrap (&halt));
