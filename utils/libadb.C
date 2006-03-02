@@ -181,9 +181,11 @@ adb::getblockrangecb (ptr<adb_getblockrangeres> res, cbvblock_info_t cb,
   if (!err && res->status != ADB_ERR) {
     for (size_t i = 0; i < res->blocks.size (); i++) {
       block_info block (res->blocks[i].block);
+      block.on.setsize( res->blocks[i].hosts.size () );
+      block.aux.setsize( res->blocks[i].hosts.size () );
       for (size_t j = 0; j < res->blocks[i].hosts.size (); j++) {
-	block.on.push_back (make_chord_node (res->blocks[i].hosts[j].n));
-	block.aux.push_back (res->blocks[i].hosts[j].auxdata);
+	block.on[j] = make_chord_node (res->blocks[i].hosts[j].n);
+	block.aux[j] = res->blocks[i].hosts[j].auxdata;
       }
       blocks.push_back (block);
     }
@@ -239,8 +241,9 @@ adb::batch_update ()
   }
   next_batch = NULL;
   c->call (ADBPROC_UPDATEBATCH, &args, NULL, aclnt_cb_null);
-  // does this clear() free the memory of all the updateargs?
-  batched_updates.clear();
+  while( batched_updates.size() > 0 ) {
+    delete batched_updates.pop_front();
+  }
 }
 
 
