@@ -26,6 +26,15 @@ struct blockID {
     return ((ID == b.ID) &&
 	    (ctype == b.ctype));
   }
+
+  blockID& operator= (const blockID &b) {
+    if( this != &b ) {
+      ID = b.ID;
+      ctype = b.ctype;
+    }
+    return *this;
+  }
+
 };
 
 inline const strbuf &

@@ -150,7 +150,7 @@ dhash_impl::dhash_impl (ptr<vnode> node, str dbname, cbv dcb) :
 }
 
 void
-dhash_impl::srv_ready ( ptr<uint> num_to_go) 
+dhash_impl::srv_ready (ptr<uint> num_to_go) 
 {
 
   (*num_to_go)--;
