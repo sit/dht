@@ -36,8 +36,9 @@ chordID
 incID (const chordID &n)
 {
   chordID s = n + 1;
-  chordID b (1);
-  b = b << NBIT;
+  chordID b;
+  b = 1;
+  b <<= NBIT;
   if (s >= b)
     return s - b;
   else
@@ -48,8 +49,10 @@ chordID
 decID (const chordID &n)
 {
   chordID p = n - 1;
-  chordID b (1);
-  b = (b << NBIT) - 1;
+  chordID b;
+  b = 1;
+  b <<= NBIT;
+  b -= 1;
   p = p & b;
   return p;
 }
@@ -58,14 +61,17 @@ chordID
 successorID (const chordID &n, int p)
 {
   chordID s;
-  chordID t (1);
-  chordID b (1);
-  
-  b = (b << NBIT) - 1;
+  chordID t;
+  chordID b;
+  t = 1;
+  b = 1;
+
+  b <<= NBIT;
+  b -= 1;
   s = n;
-  chordID t1 = t << p;
-  s = s + t1;
-  s = s & b;
+  t <<= p;
+  s += t;
+  s &= b;
   return s;
 }
 
@@ -73,26 +79,32 @@ chordID
 predecessorID (const chordID &n, int p)
 {
   chordID s;
-  chordID t (1);
-  chordID b (1);
+  chordID t;
+  chordID b;
   
-  b = (b << NBIT) - 1;
+  t = 1;
+  b = 1;
+
+  b <<= NBIT;
+  b -= 1;
   s = n;
-  chordID t1 = t << p;
-  s = s - t1;
-  s = s & b;
+  t <<= p;
+  s -= t;
+  s &= b;
   return s;
 }
 
 chordID
 doubleID (const chordID &n, int logbase)
 {
-  chordID s;
-  chordID b (1);
-  
-  b = (b << NBIT) - 1;
-  s = n << logbase;
-  s = s & b;
+  chordID s = n;
+  chordID b;
+  b = 1;
+
+  b <<= NBIT;
+  b -= 1;
+  s <<= logbase;
+  s &= b;
   return s;
 }
 
@@ -162,7 +174,8 @@ distance(const chordID &a, const chordID &b)
 {
   if (a < b) return (b - a);
   else {
-    bigint t = bigint(1) << NBIT;
+    bigint t = bigint(1);
+    t <<= NBIT;
     return (t - a) + b;
   }
 }
@@ -172,7 +185,11 @@ diff (const chordID &a, const chordID &b)
 {
   chordID diff = (b - a);
   if (diff > 0) return diff;
-  else return (bigint(1) << NBIT) - diff;
+  else { 
+    bigint t = bigint(1);
+    t <<= NBIT;
+    return t - diff;
+  }
 }
 
 u_long
@@ -201,9 +218,10 @@ shifttopbitout (u_long n, const chordID &a)
 
   chordID r = a;
   chordID mask = 1;
-  mask = (mask << (NBIT - n)) - 1;
-  r = r & mask;
-  r = r << n;
+  mask <<= (NBIT - n);
+  mask -= 1;
+  r &= mask;
+  r <<= n;
   //  warnx << "shifttopbit " << n << " : a(" << a.nbits() << ") " << a 
   // << " r(" << r.nbits() << ") " << r << "\n";
   return r;
@@ -258,11 +276,13 @@ createbits (chordID n, int pos, chordID x)
 {
   chordID mask = 1;
   int b0x = NBIT - x.nbits ();
-  mask = (mask << ((n.nbits () - pos))) - 1;
-  mask = mask << (pos + 1);
+  mask <<= ((n.nbits () - pos));
+  mask -= 1;
+  mask <<= (pos + 1);
   chordID r = n & mask;
-  chordID xtop = x >> (x.nbits () - (pos + 1 - b0x));
-  r = r | xtop;
+  chordID xtop = x;
+  xtop >>= (x.nbits () - (pos + 1 - b0x));
+  r |= xtop;
   return r;
 }
 
@@ -283,14 +303,20 @@ str2chordID (str c, chordID &newID)
   if (c.len () > NBIT / 4)
     return false;
   
+  //_mpz_realloc( &newID, 6 );
   newID = 0;
+  bigint x;
   for (unsigned int i = 0; i < c.len (); i++) {
+    newID <<= 4;
     if (c[i] >= '0' && c[i] <= '9') {
-      newID = (newID << 4) | (c[i] - '0');
+      x = (c[i] - '0');
+      newID |= x;
     } else if (c[i] >= 'a' && c[i] <= 'f') {
-      newID = (newID << 4) | (c[i] - 'a' + 10);
+      x = (c[i] - 'a' + 10);
+      newID |= x;
     } else if (c[i] >= 'A' && c[i] <= 'F') {
-      newID = (newID << 4) | (c[i] - 'A' + 10);
+      x = (c[i] - 'A' + 10);
+      newID |= x;
     } else {
       return false;
     }
