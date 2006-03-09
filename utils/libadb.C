@@ -179,15 +179,15 @@ adb::getblockrangecb (ptr<adb_getblockrangeres> res, cbvblock_info_t cb,
 {
   vec<block_info> blocks;
   if (!err && res->status != ADB_ERR) {
+    blocks.setsize( res->blocks.size() );
     for (size_t i = 0; i < res->blocks.size (); i++) {
-      block_info block (res->blocks[i].block);
-      block.on.setsize( res->blocks[i].hosts.size () );
-      block.aux.setsize( res->blocks[i].hosts.size () );
+      blocks[i].on.setsize( res->blocks[i].hosts.size () );
+      blocks[i].aux.setsize( res->blocks[i].hosts.size () );
       for (size_t j = 0; j < res->blocks[i].hosts.size (); j++) {
-	block.on[j] = make_chord_node (res->blocks[i].hosts[j].n);
-	block.aux[j] = res->blocks[i].hosts[j].auxdata;
+	blocks[i].on[j] = make_chord_node (res->blocks[i].hosts[j].n);
+	blocks[i].aux[j] = res->blocks[i].hosts[j].auxdata;
       }
-      blocks.push_back (block);
+      blocks[i].k = res->blocks[i].block;
     }
   }
   (*cb) (err, res->status, blocks);

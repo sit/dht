@@ -19,7 +19,19 @@ struct block_info {
   chordID k;
   vec<chord_node> on;
   vec<u_int32_t> aux;
+  block_info () {};
   block_info (chordID k) : k (k) {};
+  block_info (const block_info &b) : k (b.k), on (b.on), aux (b.aux) {};
+
+  block_info& operator= (const block_info &b) {
+    if( this != &b ) {
+      k = b.k;
+      on = b.on;
+      aux = b.aux;
+    }
+    return *this;
+  }
+
 };
 
 class adb {

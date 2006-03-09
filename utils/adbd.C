@@ -353,8 +353,6 @@ dbns::getkeys (const chordID &start, size_t count, bool getaux, rpc_vec<adb_keya
     return r;
   }
 
-  adb_keyaux_t keyaux;
-
   // Could possibly improve efficiency here by using SleepyCat's bulk reads
   str key_str = id_to_str (start);
   DBT key;
@@ -366,17 +364,30 @@ dbns::getkeys (const chordID &start, size_t count, bool getaux, rpc_vec<adb_keya
     data_template.flags = DB_DBT_PARTIAL;
   DBT data = data_template;
 
+  u_int32_t limit = count;
+  if (count < 0)
+    limit = (u_int32_t) (asrvbufsize/(1.5*sizeof (adb_keyaux_t)));
+
+  // since we set a limit, we know the maximum amount we have to allocate
+  out.setsize( limit );
+  u_int32_t elements = 0;
+
   r = cursor->c_get (cursor, &key, &data, DB_SET_RANGE);
-  while (out.size () < count && !r) {
-    keyaux.key = dbt_to_id (key);
+  while (elements < limit && !r) {
+    out[elements].key = dbt_to_id (key);
     if (getaux)
-      keyaux.auxdata = ntohl (*(u_int32_t *)data.data);
-    out.push_back (keyaux);
+      out[elements].auxdata = ntohl (*(u_int32_t *)data.data);
+    elements++;
 
     bzero (&key, sizeof (key));
     data = data_template;
     r = cursor->c_get (cursor, &key, &data, DB_NEXT);
   }
+
+  if( elements < limit ) {
+    out.setsize( elements );
+  }
+
   if (r && r != DB_NOTFOUND)
     warner ("dbns::getkeys", "cursor get", r);
   (void) cursor->c_close (cursor);
@@ -652,7 +663,9 @@ dbns::update (const chordID &key, const adb_bsinfo_t &bsinfo, bool present)
   // append/change
   if (r == DB_NOTFOUND) {
     if (present) {
-      vbs.d.push_back (bsinfo);
+      vbs.d.push_back ();
+      vbs.d.back().n = bsinfo.n;
+      vbs.d.back().auxdata = bsinfo.auxdata;
     } else {
       // Nothing to do, go home.
       dbns_txn_commit (dbe, t);
@@ -672,8 +685,11 @@ dbns::update (const chordID &key, const adb_bsinfo_t &bsinfo, bool present)
     if (present) {
       if (dx < vbs.d.size ())
 	vbs.d[dx].auxdata = bsinfo.auxdata;
-      else
-	vbs.d.push_back (bsinfo);
+      else {
+	vbs.d.push_back ();
+	vbs.d.back().n = bsinfo.n;
+	vbs.d.back().auxdata = bsinfo.auxdata;
+      }
     } else {
       if (dx < vbs.d.size ()) {
 	vbs.d[dx] = vbs.d.back ();
