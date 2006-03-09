@@ -8,11 +8,11 @@ enum merkle_stat {
 };
 
 struct merkle_rpc_node {
-  uint32 depth;
+  u_int32_t depth;
   merkle_hash prefix;	
 
   bool isleaf;
-  uint64 count;
+  u_int64_t count;
   merkle_hash hash;
 
   merkle_hash child_hash<64>;
