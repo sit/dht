@@ -632,7 +632,7 @@ Node::calculate_conncomp(void *)
       old[i] = 99999;
     }
     int alive = 0;
-    for (set<Node*>::iterator i = l->begin(); i != l->end(); ++l) {
+    for (set<Node*>::iterator i = l->begin(); i != l->end(); i++) {
       if(!(*i)->alive())
         continue;
       old[((*i)->first_ip()-1)*sz + (*i)->first_ip()-1] = 0;
