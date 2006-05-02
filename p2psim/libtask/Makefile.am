@@ -6,7 +6,8 @@ libtask_o_SOURCES = \
 	print.c \
 	task.c 
 
-EXTRA_DIST = task.h taskimpl.h tprimes.c COPYRIGHT
+EXTRA_DIST = task.h taskimpl.h 386-ucontext.h power-ucontext.h \
+	tprimes.c COPYRIGHT README
 LIBS =
 libtask_o_LINK = $(LD) -r -o $@
 

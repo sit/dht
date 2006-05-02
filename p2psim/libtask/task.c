@@ -2,13 +2,7 @@
 
 #include "taskimpl.h"
 #include <fcntl.h>
-
-typedef struct Tasklist Tasklist;
-struct Tasklist
-{
-	Task *head;
-	Task *tail;
-};
+#include <stdio.h>
 
 int	taskdebuglevel;
 int	taskcount;
@@ -19,9 +13,10 @@ Task	*taskrunning;
 Context	taskschedcontext;
 Tasklist	taskrunqueue;
 
+Task	**alltask;
+int		nalltask;
+
 static char *argv0;
-static	void		addtask(Tasklist*, Task*);
-static	void		deltask(Tasklist*, Task*);
 static	void		contextswitch(Context *from, Context *to);
 
 static void
@@ -145,8 +140,26 @@ taskcreate(void (*fn)(void*), void *arg, uint stack)
 	t = taskalloc(fn, arg, stack);
 	taskcount++;
 	id = t->id;
+	if(nalltask%64 == 0){
+		alltask = realloc(alltask, (nalltask+64)*sizeof(alltask[0]));
+		if(alltask == nil){
+			fprint(2, "out of memory\n");
+			abort();
+		}
+	}
+	t->alltaskslot = nalltask;
+	alltask[nalltask++] = t;
 	taskready(t);
 	return id;
+}
+
+void
+tasksystem(void)
+{
+	if(!taskrunning->system){
+		taskrunning->system = 1;
+		--taskcount;
+	}
 }
 
 void
@@ -159,6 +172,7 @@ taskswitch(void)
 void
 taskready(Task *t)
 {
+	t->ready = 1;
 	addtask(&taskrunqueue, t);
 }
 
@@ -169,8 +183,9 @@ taskyield(void)
 	
 	n = tasknswitch;
 	taskready(taskrunning);
+	taskstate("yield");
 	taskswitch();
-	return tasknswitch - n;
+	return tasknswitch - n - 1;
 }
 
 int
@@ -205,6 +220,7 @@ contextswitch(Context *from, Context *to)
 static void
 taskscheduler(void)
 {
+	int i;
 	Task *t;
 
 	taskdebug("scheduler enter");
@@ -217,6 +233,7 @@ taskscheduler(void)
 			exit(1);
 		}
 		deltask(&taskrunqueue, t);
+		t->ready = 0;
 		taskrunning = t;
 		tasknswitch++;
 		taskdebug("run %d (%s)", t->id, t->name);
@@ -224,7 +241,11 @@ taskscheduler(void)
 //print("back in scheduler\n");
 		taskrunning = nil;
 		if(t->exiting){
-			taskcount--;
+			if(!t->system)
+				taskcount--;
+			i = t->alltaskslot;
+			alltask[i] = alltask[--nalltask];
+			alltask[i]->alltaskslot = i;
 			free(t);
 		}
 	}
@@ -240,7 +261,7 @@ taskdata(void)
  * debugging
  */
 void
-tasksetname(char *fmt, ...)
+taskname(char *fmt, ...)
 {
 	va_list arg;
 	Task *t;
@@ -258,7 +279,7 @@ taskgetname(void)
 }
 
 void
-tasksetstate(char *fmt, ...)
+taskstate(char *fmt, ...)
 {
 	va_list arg;
 	Task *t;
@@ -267,6 +288,12 @@ tasksetstate(char *fmt, ...)
 	va_start(arg, fmt);
 	vsnprint(t->state, sizeof t->name, fmt, arg);
 	va_end(arg);
+}
+
+char*
+taskgetstate(void)
+{
+	return taskrunning->state;
 }
 
 void
@@ -283,6 +310,28 @@ needstack(int n)
 	}
 }
 
+static void
+taskinfo(int s)
+{
+	int i;
+	Task *t;
+	char *extra;
+
+	fprint(2, "task list:\n");
+	for(i=0; i<nalltask; i++){
+		t = alltask[i];
+		if(t == taskrunning)
+			extra = " (running)";
+		else if(t->ready)
+			extra = " (ready)";
+		else
+			extra = "";
+		fprint(2, "%6d%c %-20s %s%s\n", 
+			t->id, t->system ? 's' : ' ', 
+			t->name, t->state, extra);
+	}
+}
+
 /*
  * startup
  */
@@ -294,12 +343,24 @@ int mainstacksize;
 static void
 taskmainstart(void *v)
 {
+	taskname("taskmain");
 	taskmain(taskargc, taskargv);
 }
 
 int
 main(int argc, char **argv)
 {
+	struct sigaction sa, osa;
+
+	memset(&sa, 0, sizeof sa);
+	sa.sa_handler = taskinfo;
+	sa.sa_flags = SA_RESTART;
+	sigaction(SIGQUIT, &sa, &osa);
+
+#ifdef SIGINFO
+	sigaction(SIGINFO, &sa, &osa);
+#endif
+
 	argv0 = argv[0];
 	taskargc = argc;
 	taskargv = argv;
@@ -316,7 +377,7 @@ main(int argc, char **argv)
 /*
  * hooray for linked lists
  */
-static void
+void
 addtask(Tasklist *l, Task *t)
 {
 	if(l->tail){
@@ -330,7 +391,7 @@ addtask(Tasklist *l, Task *t)
 	t->next = nil;
 }
 
-static void
+void
 deltask(Tasklist *l, Task *t)
 {
 	if(t->prev)

@@ -1,64 +1,85 @@
-/* Copyright (c) 2005 Russ Cox, MIT; see COPYRIGHT */
+/* Copyright (c) 2005-2006 Russ Cox, MIT; see COPYRIGHT */
 
-#if defined(__FreeBSD__) && __FreeBSD_version < 500000
-.globl setmcontext
-setmcontext:
-	movl 4(%esp), %edx
-	movl	8(%edx), %fs
-	movl	12(%edx), %es
-	movl	16(%edx), %ds
-	movl	76(%edx), %ss
-	movl	20(%edx), %edi
-	movl	24(%edx), %esi
-	movl	28(%edx), %ebp
-	movl	%esp, %ecx		 
-	movl	72(%edx), %esp		 
-	pushl	60(%edx)	/* eip */	 
-	pushl	44(%edx)	/* ecx */	 
-	pushl	48(%edx)	/* eax */	 
-	movl	36(%edx), %ebx		 
-	movl	40(%edx), %edx
-	movl	12(%ecx), %eax		 
-	popl	%eax			 
-	popl	%ecx
+#if defined(__FreeBSD__) && defined(__i386__) && __FreeBSD__ < 5
+#define NEEDX86CONTEXT 1
+#define SET setmcontext
+#define GET getmcontext
+#endif
+
+#if defined(__APPLE__) && defined(__i386__)
+#define NEEDX86CONTEXT 1
+#define SET _setmcontext
+#define GET _getmcontext
+#endif
+
+#if defined(__APPLE__) && !defined(__i386__)
+#define NEEDPOWERCONTEXT 1
+#define SET __setmcontext
+#define GET __getmcontext
+#endif
+
+#if defined(__linux__) && defined(__arm__)
+#define NEEDARMCONTEXT 1
+#define SET setmcontext
+#define GET getmcontext
+#endif
+
+#ifdef NEEDX86CONTEXT
+.globl SET
+SET:
+	movl	4(%esp), %eax
+
+	movl	8(%eax), %fs
+	movl	12(%eax), %es
+	movl	16(%eax), %ds
+	movl	76(%eax), %ss
+	movl	20(%eax), %edi
+	movl	24(%eax), %esi
+	movl	28(%eax), %ebp
+	movl	36(%eax), %ebx
+	movl	40(%eax), %edx
+	movl	44(%eax), %ecx
+
+	movl	72(%eax), %esp
+	pushl	60(%eax)	/* new %eip */
+	movl	48(%eax), %eax
 	ret
 
-.globl getmcontext
-getmcontext:
-	pushl	%edx
-	movl	8(%esp), %edx
-	movl	%fs, 8(%edx)
-	movl	%es, 12(%edx)
-	movl	%ds, 16(%edx)
-	movl	%ss, 76(%edx)
-	movl	%edi, 20(%edx)
-	movl	%esi, 24(%edx)
-	movl	%ebp, 28(%edx)
-	movl	%ebx, 36(%edx)
-	movl	$1, 48(%edx)
-	popl	%eax
-	movl	%eax, 40(%edx)		 
-	movl	%ecx, 44(%edx)
-	movl	(%esp), %eax	/* eip */		 
-	movl	%eax, 60(%edx)		 
-	movl	%esp, %eax		 
-	addl	$4, %eax	/* setmcontext will re-push the eip */	 
-	movl	%eax, 72(%edx)
-	movl	40(%edx), %edx		 
-	xorl	%eax, %eax		 
+.globl GET
+GET:
+	movl	4(%esp), %eax
+
+	movl	%fs, 8(%eax)
+	movl	%es, 12(%eax)
+	movl	%ds, 16(%eax)
+	movl	%ss, 76(%eax)
+	movl	%edi, 20(%eax)
+	movl	%esi, 24(%eax)
+	movl	%ebp, 28(%eax)
+	movl	%ebx, 36(%eax)
+	movl	%edx, 40(%eax)		 
+	movl	%ecx, 44(%eax)
+
+	movl	$1, 48(%eax)	/* %eax */
+	movl	(%esp), %ecx	/* %eip */
+	movl	%ecx, 60(%eax)
+	leal	4(%esp), %ecx	/* %esp */
+	movl	%ecx, 72(%eax)
+
+	movl	44(%eax), %ecx	/* restore %ecx */
+	movl	$0, %eax
 	ret
 #endif
 
-#if defined(__APPLE__)
+#ifdef NEEDPOWERCONTEXT
 /* get FPR and VR use flags with sc 0x7FF3 */
 /* get vsave with mfspr reg, 256 */
 
 .text
 .align 2
 
-.globl	__getmcontext
-
-__getmcontext:				/* xxx: instruction scheduling */
+.globl GET
+GET:				/* xxx: instruction scheduling */
 	mflr	r0
 	mfcr	r5
 	mfctr	r6
@@ -96,9 +117,8 @@ __getmcontext:				/* xxx: instruction scheduling */
 	li	r3, 0			/* return */
 	blr
 
-.globl	__setmcontext
-
-__setmcontext:
+.globl SET
+SET:
 	lwz	r13, (0+7)*4(r3)	/* callee-save GPRs */
 	lwz	r14, (1+7)*4(r3)	/* xxx: block move */
 	lwz	r15, (2+7)*4(r3)
@@ -133,4 +153,48 @@ __setmcontext:
 
 	lwz	r3,	6*4(r3)
 	blr
+#endif
+
+#ifdef NEEDARMCONTEXT
+.globl GET
+GET:
+	str	r1, [r0,#4]
+	str	r2, [r0,#8]
+	str	r3, [r0,#12]
+	str	r4, [r0,#16]
+	str	r5, [r0,#20]
+	str	r6, [r0,#24]
+	str	r7, [r0,#28]
+	str	r8, [r0,#32]
+	str	r9, [r0,#36]
+	str	r10, [r0,#40]
+	str	r11, [r0,#44]
+	str	r12, [r0,#48]
+	str	r13, [r0,#52]
+	str	r14, [r0,#56]
+	/* store 1 as r0-to-restore */
+	mov	r1, #1
+	str	r1, [r0]
+	/* return 0 */
+	mov	r0, #0
+	mov	pc, lr
+
+.globl SET
+SET:
+	ldr	r1, [r0,#4]
+	ldr	r2, [r0,#8]
+	ldr	r3, [r0,#12]
+	ldr	r4, [r0,#16]
+	ldr	r5, [r0,#20]
+	ldr	r6, [r0,#24]
+	ldr	r7, [r0,#28]
+	ldr	r8, [r0,#32]
+	ldr	r9, [r0,#36]
+	ldr	r10, [r0,#40]
+	ldr	r11, [r0,#44]
+	ldr	r12, [r0,#48]
+	ldr	r13, [r0,#52]
+	ldr	r14, [r0,#56]
+	ldr	r0, [r0]
+	mov	pc, lr
 #endif
