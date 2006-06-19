@@ -137,6 +137,10 @@ class dbns {
 
   // XXX should have a instance-level lock that governs datadb/auxdatadb.
 
+  // Private updater, for different txn handling
+  int updateone (const chordID &key, const adb_bsinfo_t &bsinfo, bool present,
+	         DB_TXN *t);
+
 public:
   dbns (const str &dbpath, const str &name, bool aux);
   ~dbns ();
@@ -164,6 +168,7 @@ public:
 		 const chordID &stop, int count, 
 		 rpc_vec<adb_keyaux_t, RPC_INFINITY> &out);
   int update (const chordID &block, const adb_bsinfo_t &bsinfo, bool present);
+  int updatebatch (rpc_vec<adb_updatearg, RPC_INFINITY> &uargs);
   int getinfo (const chordID &block, rpc_vec<adb_vnodeid, RPC_INFINITY> &out);
 };
 
@@ -640,9 +645,10 @@ dbns::getkeyson (const adb_vnodeid &n, const chordID &start,
   return r;
 }
 // }}}
-// {{{ dbns::update
+// {{{ dbns::updateone
 int
-dbns::update (const chordID &key, const adb_bsinfo_t &bsinfo, bool present)
+dbns::updateone (const chordID &key, const adb_bsinfo_t &bsinfo, bool present,
+	         DB_TXN *t)
 {
   int r;
   str key_str = id_to_str (key);
@@ -651,13 +657,10 @@ dbns::update (const chordID &key, const adb_bsinfo_t &bsinfo, bool present)
   DBT data; bzero (&data, sizeof (data));
   adb_vbsinfo_t vbs;
 
-  DB_TXN *t = NULL;
-  r = dbns_txn_begin (dbe, &t);
   // get, with a write lock.
   r = bsdb->get (bsdb, t, &skey, &data, DB_RMW);
   if (r && r != DB_NOTFOUND) {
     warner ("dbns::update", "get error", r);
-    dbns_txn_abort (dbe, t);
     return r;
   }
   // append/change
@@ -668,7 +671,6 @@ dbns::update (const chordID &key, const adb_bsinfo_t &bsinfo, bool present)
       vbs.d.back().auxdata = bsinfo.auxdata;
     } else {
       // Nothing to do, go home.
-      dbns_txn_commit (dbe, t);
       return 0;
     }
   } else {
@@ -696,8 +698,7 @@ dbns::update (const chordID &key, const adb_bsinfo_t &bsinfo, bool present)
 	vbs.d.pop_back ();
       } else {
 	// No need to re-write to db; nothing changed.
-	dbns_txn_commit (dbe, t);
-	return r;
+	return 0;
       }
     }
   }
@@ -705,13 +706,44 @@ dbns::update (const chordID &key, const adb_bsinfo_t &bsinfo, bool present)
   str vbsout = xdr2str (vbs);
   str_to_dbt (vbsout, &data);
   r = bsdb->put (bsdb, t, &skey, &data, 0);
-  if (r) {
+  if (r)
     warner ("dbns::update", "put error", r);
+  return r;
+}
+// }}}
+// {{{ dbns::update
+int
+dbns::update (const chordID &key, const adb_bsinfo_t &bsinfo, bool present)
+{
+  int r;
+  DB_TXN *t = NULL;
+  dbns_txn_begin (dbe, &t);
+
+  r = updateone (key, bsinfo, present, t);
+  if (r)
     dbns_txn_abort (dbe, t);
-    return r;
+  else
+    dbns_txn_commit (dbe, t);
+  return r;
+}
+// }}}
+// {{{ dbns::updatebatch
+int
+dbns::updatebatch (rpc_vec<adb_updatearg, RPC_INFINITY> &uargs)
+{
+  int r (0);
+  DB_TXN *t = NULL;
+  dbns_txn_begin (dbe, &t);
+  for (size_t i = 0; i < uargs.size (); i++) {
+    r = updateone (uargs[i].key, uargs[i].bsinfo, uargs[i].present, t);
+    if (r) {
+      dbns_txn_abort (dbe, t);
+      break;
+    }
   }
-  // commit
-  r = dbns_txn_commit (dbe, t);
+  if (!r) {
+    dbns_txn_commit (dbe, t);
+  }
   return r;
 }
 // }}}
@@ -1030,19 +1062,21 @@ do_updatebatch (dbmanager *dbm, svccb *sbp)
 {
   adb_updatebatcharg *args = sbp->Xtmpl getarg<adb_updatebatcharg> ();
   adb_status res (ADB_OK);
-  for (u_int32_t i = 0; i < args->args.size(); i++) {
-    adb_updatearg arg = args->args[i];
-    dbns *db = dbm->get (arg.name);
-    if (!db) {
-      sbp->replyref (ADB_ERR);
-      return;
-    }
-    int r = db->update (arg.key, arg.bsinfo, arg.present);
-    if (r) {
-      res = ADB_ERR;
-      break;
-    }
+  if (!args->args.size ()) {
+    sbp->replyref (res);
+    return;
   }
+  dbns *db = dbm->get (args->args[0].name);
+  // assert: all args have the same namespace because batching
+  //         is done by the adb object in libadb.C and each adb obj
+  //         serves one namespace
+  if (!db) {
+    sbp->replyref (ADB_ERR);
+    return;
+  }
+  int r = db->updatebatch (args->args);
+  if (r)
+    res = ADB_ERR;
   sbp->replyref (res);
 }
 // }}}
