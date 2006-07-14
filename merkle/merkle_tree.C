@@ -3,7 +3,8 @@
 #include "merkle_tree.h"
 #include "dhash_common.h"
 
-merkle_tree::merkle_tree ()
+merkle_tree::merkle_tree () :
+  do_rehash (true)
 {
 }
 
@@ -17,10 +18,64 @@ merkle_tree::~merkle_tree ()
   }
 }
 
+void
+merkle_tree::_hash_tree (u_int depth, const merkle_hash &prefix, merkle_node *n)
+{
+  // Perform a post-order traversal of the entire tree where
+  // at each node the operation is to recalculate the node's SHA1 hash
+  // based on its children.  Children must be recalculated first.
+  sha1ctx sc;
+  if (!n->isleaf ()) {
+    for (int i = 0; i < 64; i++) {
+      merkle_node *child = n->child (i);
+      merkle_hash nprefix (prefix);
+      nprefix.write_slot (depth, i);
+      _hash_tree (depth + 1, nprefix, child);
+      sc.update (child->hash.bytes, child->hash.size);
+    }
+  } else {
+    vec<merkle_hash> keys = database_get_keys (depth, prefix);
+    assert (keys.size () == n->count && n->count <= 64);
+    for (u_int i = 0; i < keys.size (); i++)
+      sc.update (keys[i].bytes, keys[i].size);
+  }
+  merkle_hash nhash;
+  if (n->count)
+    sc.final (nhash.bytes);
+  n->hash = nhash;
+#if 0
+  // If the tree is already populated, this code can be used to verify
+  // that everything is hashed correctly.
+  if (nhash != n->hash) {
+    warn << "nhash   = " << nhash << "\n";
+    warn << "n->hash = " << n->hash << "\n";
+    warn << "n->count= " << n->count << "\n";
+    fatal << "nhash of "
+          << (n->isleaf () ? "leaf" : "non-leaf")
+	  << " didn't match at depth " << depth << " and prefix "
+          << prefix << "\n";
+  }
+#endif /* 0 */
+}
+
+void
+merkle_tree::hash_tree ()
+{
+  merkle_hash prefix (0);
+  _hash_tree (0, prefix, &root);
+}
+
+void
+merkle_tree::set_rehash_on_modification (bool enable)
+{
+  do_rehash = enable;
+}
 
 void
 merkle_tree::rehash (u_int depth, const merkle_hash &key, merkle_node *n)
 {
+  if (!do_rehash)
+    return;
   n->hash = 0;
   if (n->count == 0)
     return;

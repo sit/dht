@@ -34,6 +34,8 @@ struct merkle_key {
 
 class merkle_tree {
 private:
+  bool do_rehash;
+  void _hash_tree (u_int depth, const merkle_hash &key, merkle_node *n);
   void rehash (u_int depth, const merkle_hash &key, merkle_node *n);
   void count_blocks (u_int depth, const merkle_hash &key,
 		     array<u_int64_t, 64> &nblocks);
@@ -64,6 +66,11 @@ public:
   merkle_node *lookup (const merkle_hash &key);
   void clear ();
 
+  // If bulk-modifying the tree, it is undesirable to rehash tree after each
+  // mod.  In that case, users should disable rehashing on modifications
+  // until all modifications are complete, hash_tree, and then re-enable.
+  void set_rehash_on_modification (bool enable);
+  void hash_tree ();
 
   vec<merkle_hash> database_get_keys (u_int depth, const merkle_hash &prefix);
   vec<chordID> database_get_IDs (u_int depth, const merkle_hash &prefix);
