@@ -169,6 +169,7 @@ syncer::sync_replicas_gotsucclist (ptr<location> pred,
   u_int64_t start = getusec ();
 
   tmptree = New merkle_tree ();
+  tmptree->set_rehash_on_modification (false);
   db->getkeyson (succs[cur_succ], pred->id (), succs[0]->id (),
       wrap (this, &syncer::populate_tree, start, pred, succs));
 }
@@ -210,6 +211,8 @@ syncer::populate_tree (u_int64_t start,
     return;
   }
   // move on to tree done
+  tmptree->hash_tree ();
+  tmptree->set_rehash_on_modification (true);
   warn << host_loc->id () << " tree build: " 
        << getusec () - start << " usecs\n";
 
