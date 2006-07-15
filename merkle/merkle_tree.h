@@ -5,7 +5,6 @@
 #include "sha1.h"
 #include "merkle_hash.h"
 #include "merkle_node.h"
-#include "skiplist.h"
 
 class location;
 class merkle_tree;
@@ -26,7 +25,7 @@ struct merkle_tree_stats {
 
 struct merkle_key {
   chordID id;
-  sklist_entry<merkle_key> sk;
+  itree_entry<merkle_key> ik;
 
   merkle_key (chordID id) : id (id) {};
   merkle_key (merkle_hash id) : id (tobigint(id)) {};
@@ -45,7 +44,7 @@ private:
   merkle_node *lookup (u_int *depth, u_int max_depth, 
 		       const merkle_hash &key, merkle_node *n);
 
-  skiplist<merkle_key, chordID, &merkle_key::id, &merkle_key::sk> sk_keys;
+  itree<chordID, merkle_key, &merkle_key::id, &merkle_key::ik> keylist;
 
 public:
   enum { max_depth = merkle_hash::NUM_SLOTS }; // XXX off by one? or two?
@@ -74,7 +73,7 @@ public:
 
   vec<merkle_hash> database_get_keys (u_int depth, const merkle_hash &prefix);
   vec<chordID> database_get_IDs (u_int depth, const merkle_hash &prefix);
-  bool key_exists (chordID key) { return sk_keys.search (key) != NULL; };
+  bool key_exists (chordID key) { return keylist[key] != NULL; };
   vec<chordID> get_keyrange (chordID min, chordID max, u_int n);
 
   void dump ();
