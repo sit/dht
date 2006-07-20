@@ -307,7 +307,13 @@ dhashcli::retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
     
     rs->complete (DHASH_OK, ret_block);
     rs = NULL;
-  } 
+  } else {
+    if (rs->incoming_rpcs == 0 && rs->nextsucc > rs->succs.size ()) {
+      info << myID << ": retrieve (" << rs->key << "): all RPCs returned but no good block.\n";
+      rs->complete (DHASH_NOENT, NULL);
+      rs = NULL;
+    }
+  }
 }
 
 
