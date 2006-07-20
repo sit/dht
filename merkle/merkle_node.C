@@ -1,3 +1,5 @@
+#include "async.h"
+#include "sha1.h"
 #include "merkle_node.h"
 
 static void
@@ -104,43 +106,3 @@ merkle_node::~merkle_node ()
   // not necessary, but helps catch dangling pointers
   bzero (this, sizeof (*this)); 
 }
-
-#if 0
-void
-merkle_node::check_invariants (u_int depth, merkle_hash prefix, ptr<adb> db)
-{
-  sha1ctx sc;
-  merkle_hash mhash = 0;
-  u_int64_t _count = 0;
-
-  if (isleaf ()) {
-    assert (count <= 64);
-
-    vec<merkle_hash> keys = database_get_keys (db, depth, prefix);
-    for (u_int i = 0; i < keys.size (); i++, _count++) 
-      sc.update (keys[i].bytes, keys[i].size);
-  } else {
-    assert (count > 64);
-    for (int i = 0; i < 64; i++) {
-      merkle_node *n = child (i);
-      _count += n->count;
-      sc.update (n->hash.bytes, n->hash.size);
-      prefix.write_slot (depth, i);
-      n->check_invariants (depth+1, prefix, db);
-    }
-  }
-  
-  if (count != _count) {
-    warn << "depth: " << depth << " prefix: " << prefix << "\n";
-    dump (depth);
-    fatal << "[" << strbuf ("0x%x", (u_int)this) << "] cnt " << count << " _cnt " << _count << " is leaf: " << isleaf () << "\n";
-  }
-  if (count == 0)
-    assert (hash == 0);
-  else {
-    sc.final (mhash.bytes);
-    assert (hash == mhash);
-    assert (hash != 0);
-  }
-}
-#endif

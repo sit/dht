@@ -1,8 +1,6 @@
 #ifndef _MERKLE_NODE_H_
 #define _MERKLE_NODE_H_
 
-#include "async.h"
-#include "sha1.h"
 #include "merkle_hash.h"
 #include "merkle_misc.h"
 
@@ -24,12 +22,6 @@ public:
   merkle_node ();
   void initialize (u_int64_t _count);
   ~merkle_node ();
-#if 0
-  void check_invariants (u_int depth, merkle_hash prefix, ptr<adb> db);
-#endif /* 0 */
 };
-
-
-
 
 #endif /* _MERKLE_NODE_H_ */

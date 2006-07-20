@@ -34,7 +34,7 @@ struct merkle_key {
 class merkle_tree {
 private:
   bool do_rehash;
-  void _hash_tree (u_int depth, const merkle_hash &key, merkle_node *n);
+  void _hash_tree (u_int depth, const merkle_hash &key, merkle_node *n, bool check);
   void rehash (u_int depth, const merkle_hash &key, merkle_node *n);
   void count_blocks (u_int depth, const merkle_hash &key,
 		     array<u_int64_t, 64> &nblocks);
