@@ -174,7 +174,7 @@ stp_manager::timeout (rpc_state *C)
   //if there are any RPCs destined for this host, make
   // them fail right away. 
   if (C->rexmits > MAX_REXMIT) {
-    rpc_state *O = pending.first;
+    O = pending.first;
     while (O) {
       if (O->loc->id () == C->loc->id () && O != C) 
 	O->b->timeout ();
@@ -610,7 +610,7 @@ rpccb_chord::timeout_cb (ptr<bool> del)
     sockaddr_in *s = (sockaddr_in *)dest;
     dorpc_arg *args = (dorpc_arg *)in.get ();
 
-    warnx << gettime () << " REXMIT " << xid
+    warnx << gettime () << " REXMIT " << strbuf ("%x", xid)
 	  << " " << args->progno << ":" << args->procno
 	  << " rexmits " << rexmits << ", timeout " 
 	  << sec*1000 + nsec/(1000*1000) << " ms, destined for " 
