@@ -37,7 +37,6 @@ merkle_tree::merkle_tree () :
 
 merkle_tree::~merkle_tree ()
 {
-  merkle_key *kcur, *knext;
   keylist.deleteall ();
 }
 
