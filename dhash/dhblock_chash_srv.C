@@ -61,6 +61,7 @@ dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
   cache_db = New refcounted<adb> (dbname, "ccache");
 
   mtree = New merkle_tree ();
+  mtree->set_rehash_on_modification (false);
   db->getkeys (0, false, wrap (this, &dhblock_chash_srv::populate_mtree));
   // Don't create msrv until populate_mtree is done.
   // Any merkle RPCs will get a MERKLE_ERR from dhash_impl::merkle_dispatch
@@ -82,6 +83,8 @@ dhblock_chash_srv::populate_mtree (adb_status stat, vec<chordID> keys, vec<u_int
     db->getkeys (incID (keys.back ()), false,
 		 wrap (this, &dhblock_chash_srv::populate_mtree));
   } else {
+    mtree->hash_tree ();
+    mtree->set_rehash_on_modification (true);
     // Ready to start synchronizing!
     msrv = New merkle_server (mtree);
     (*donecb)();

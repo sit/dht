@@ -55,6 +55,7 @@ dhblock_replicated_srv::dhblock_replicated_srv (ptr<vnode> node,
   msrv (NULL)
 {
   mtree = New merkle_tree ();
+  mtree->set_rehash_on_modification (false);
   db->getkeys (bigint(0), true, wrap (this, &dhblock_replicated_srv::populate_mtree));
 }
 
@@ -76,6 +77,8 @@ dhblock_replicated_srv::populate_mtree (adb_status stat, vec<chordID> keys, vec<
     db->getkeys (incID (keys.back ()), true,
 		 wrap (this, &dhblock_replicated_srv::populate_mtree));
   } else {
+    mtree->hash_tree ();
+    mtree->set_rehash_on_modification (true);
     msrv = New merkle_server (mtree);
     (*donecb)();
   }
