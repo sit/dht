@@ -145,7 +145,7 @@ void
 syncer::sync_replicas_gotsucclist (ptr<location> pred,
 			   vec<ptr<location> > succs) 
 {
-  if (succs.size () == 0) {
+  if (succs.size () < 2) {
     delaycb (replica_timer, wrap (this, &syncer::sync_replicas)); 
     return;
   }
