@@ -37,7 +37,7 @@ merkle_tree::merkle_tree () :
 
 merkle_tree::~merkle_tree ()
 {
-  keylist.deleteall ();
+  keylist.deleteall_correct ();
 }
 
 void
