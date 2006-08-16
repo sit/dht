@@ -229,6 +229,7 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
 	sl->stats[i].call_bytes   = s->call_bytes;
 	sl->stats[i].rexmit_bytes = s->rexmit_bytes;
 	sl->stats[i].reply_bytes  = s->reply_bytes;
+	sl->stats[i].latency_ewma = s->latency_ewma;
 	s = rpc_stats_tab.next (s);
 	i++;
       }

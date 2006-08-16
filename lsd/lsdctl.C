@@ -250,8 +250,8 @@ lsdctl_getrpcstats_cb (bool formatted, ptr<lsdctl_rpcstatlist> nl, clnt_stat err
   out.fmt ("Interval %llu.%llu s\n",
 	   nl->interval / 1000000, nl->interval % 1000000);
   if (formatted)
-    out.fmt ("%54s | %-15s | %-15s | %-15s\n",
-	     "Proc", "Calls (bytes/#)", "Rexmits", "Replies");
+    out.fmt ("%54s | %-15s | %-15s | %-15s | %s\n",
+	     "Proc", "Calls (bytes/#)", "Rexmits", "Replies", "AvgSvcTime");
   
   lsdctl_rpcstat *ndx = New lsdctl_rpcstat[nl->stats.size ()];
   for (size_t i = 0; i < nl->stats.size (); i++)
@@ -260,9 +260,9 @@ lsdctl_getrpcstats_cb (bool formatted, ptr<lsdctl_rpcstatlist> nl, clnt_stat err
 
   str fmt;
   if (formatted)
-    fmt = "%-54s | %7llu %7llu | %7llu %7llu | %7llu %7llu\n";
+    fmt = "%-54s | %7llu %7llu | %7llu %7llu | %7llu %7llu | %7llu\n";
   else
-    fmt = "%s %llu %llu %llu %llu %llu %llu\n";
+    fmt = "%s %llu %llu %llu %llu %llu %llu %llu\n";
   for (size_t i = 0; i < nl->stats.size (); i++) {
     out.fmt (fmt,
 	     ndx[i].key.cstr (),
@@ -271,7 +271,8 @@ lsdctl_getrpcstats_cb (bool formatted, ptr<lsdctl_rpcstatlist> nl, clnt_stat err
 	     ndx[i].rexmit_bytes,
 	     ndx[i].nrexmit,
 	     ndx[i].reply_bytes,
-	     ndx[i].nreply);
+	     ndx[i].nreply,
+	     ndx[i].latency_ewma);
   }
   delete[] ndx;
   make_sync (1);

@@ -21,23 +21,23 @@ struct rpcstats {
   size_t nrexmit;
   size_t reply_bytes;
   size_t nreply;
+  u_int64_t latency_ewma; 
   ihash_entry<rpcstats> h_link;
 
   rpcstats (str k) :
     key (k),
     call_bytes (0), ncall (0),
     rexmit_bytes (0), nrexmit (0),
-    reply_bytes (0), nreply (0)
+    reply_bytes (0), nreply (0),
+    latency_ewma (0)
   {}
-  void call (size_t bytes) { ncall++; call_bytes += bytes; }
-  void rexmit (size_t bytes) { nrexmit++; rexmit_bytes += bytes; }
-  void reply (size_t bytes) { nreply++; reply_bytes += bytes; }
 };
 
 void track_call (const rpc_program &prog, int procno, size_t b);
 void track_rexmit (const rpc_program &prog, int procno, size_t b);
 void track_rexmit (int progno, int procno, size_t b);
 void track_reply (const rpc_program &prog, int procno, size_t b);
+void track_proctime (const rpc_program &prog, int procno, u_int64_t l);
 
 extern ihash<str, rpcstats, &rpcstats::key, &rpcstats::h_link> rpc_stats_tab;
 extern u_int64_t rpc_stats_lastclear;

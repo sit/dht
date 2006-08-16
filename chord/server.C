@@ -401,8 +401,9 @@ user_args::reply (void *res)
 
   assert (rpc_res->status == DORPC_OK);
 
-  //  u_int64_t diff = getusec () - init_time;
-  //  warn << "user_args: replying after processing time of " <<  diff << "\n";
+  u_int64_t diff = getusec () - init_time;
+  track_proctime (*prog, procno, diff);
+ 
   //reply
   sbp->reply (rpc_res);
   delete rpc_res;
@@ -602,9 +603,13 @@ bool
 vnode_impl::tmo (cbtmo_t cb_tmo, int progno, 
 		 int procno, int args_len, chord_node n, int r)
 {
-  track_rexmit (progno, procno, args_len);
-  if (cb_tmo) return cb_tmo (n, r);
-  else return false;
+  bool cancel = false;
+  if (cb_tmo) cancel = cb_tmo (n, r);
+  // Track the rexmit for the real program;
+  // rpccb_chord::timeout_cb will track for transport_prot.
+  if (!cancel)
+    track_rexmit (progno, procno, args_len);
+  return cancel;
 }
 
 void

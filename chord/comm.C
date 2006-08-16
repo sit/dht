@@ -66,28 +66,44 @@ void
 track_call (const rpc_program &prog, int procno, size_t b)
 {
   rpcstats *stats = getstats (prog.progno, procno);
-  stats->call (b);
+  stats->ncall++;
+  stats->call_bytes += b;
 }
 
 void
 track_rexmit (const rpc_program &prog, int procno, size_t b)
 {
   rpcstats *stats = getstats (prog.progno, procno);
-  stats->rexmit (b);
+  stats->nrexmit++;
+  stats->rexmit_bytes += b;
 }
 
 void
 track_rexmit (int progno, int procno, size_t b)
 {
   rpcstats *stats = getstats (progno, procno);
-  stats->rexmit (b);
+  stats->nrexmit++;
+  stats->rexmit_bytes += b;
 }
 
 void
 track_reply (const rpc_program &prog, int procno, size_t b)
 {
   rpcstats *stats = getstats (prog.progno, procno);
-  stats->reply (b);
+  stats->nreply++;
+  stats->reply_bytes += b;
+}
+
+void
+track_proctime (const rpc_program &prog, int procno, u_int64_t l)
+{
+  rpcstats *stats = getstats (prog.progno, procno);
+  // Don't bother with floats; this comes from getusec which is
+  // probably more resolution that actually makes much sense anyway.
+  if (stats->latency_ewma == 0)
+    stats->latency_ewma = l;
+  else
+    stats->latency_ewma = (9 * stats->latency_ewma + l) / 10;
 }
 
 

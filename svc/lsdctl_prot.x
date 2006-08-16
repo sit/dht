@@ -31,6 +31,7 @@ struct lsdctl_rpcstat {
   u_int64_t rexmit_bytes;
   u_int64_t nreply;
   u_int64_t reply_bytes;
+  u_int64_t latency_ewma;
 };
 
 struct lsdctl_rpcstatlist {
