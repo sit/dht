@@ -19,7 +19,7 @@ int main (int argc, char *argv[])
 
   // w[-1,zeroth] t[0,first] s[1,second] v[2,third]
   
-  srandomdev ();
+  srandom (time (NULL));
 
   // single item case
   item *s = New item (1, "second");

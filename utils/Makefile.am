@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-## $Id: Makefile.am,v 1.18 2006/01/21 15:11:47 sit Exp $
+## $Id: Makefile.am,v 1.19 2006/08/16 16:09:55 sit Exp $
 
 chordlib_LIBRARIES = libutil.a libadb.a
 chordinclude_HEADERS = id_utils.h configurator.h skiplist.h modlogger.h
@@ -52,7 +52,7 @@ test_locationtable_LDADD = ./libutil.a $(LIBSFSCRYPT) $(LIBARPC) $(LIBASYNC) $(L
 test_skiplist_SOURCES = test_skiplist.C
 
 test_adb_SOURCES = test_adb.C
-test_adb_LDADD = libadb.a ../svc/libsvc.la $(LIBARPC)  $(LIBSFSCRYPT) $(LIBGMP)  $(DBLIB) $(LIBASYNC) 
+test_adb_LDADD = libadb.a libutil.a ../svc/libsvc.la $(LIBARPC) $(LIBSFSCRYPT) $(LIBGMP) $(DBLIB) $(LIBASYNC) 
 
 EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo

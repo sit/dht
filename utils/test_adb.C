@@ -1,15 +1,20 @@
+#include <async.h>
 #include "libadb.h"
 
-void res (int, int);
+void res (int, adb_status);
 void res2 (int, adb_status, chordID, str);
-void res3 (adb_status stat, vec<chordID> keys);
+void res3 (adb_status stat, vec<chordID> keys, vec<u_int32_t> v);
 
 adb *db;
 
 int
 main (int argc, char **argv)
 {
-  
+  if (argc < 3) {
+    warn << "Not really testing anything!\n";
+    warn << "Usage: test_adb adbsock namespace\n";
+    exit (0);
+  }
   db = New adb (argv[1], argv[2]);
   for (int i = 0; i < atoi(argv[4]); i++) 
     if (argv[3][0] == 's')
@@ -20,7 +25,7 @@ main (int argc, char **argv)
 }
 
 void 
-res (int i, int error)
+res (int i, adb_status error)
 {
   if (error) warn << "error was " << error << "\n";
   if (i % 1000 < 100) {
@@ -38,15 +43,15 @@ res2 (int i, adb_status stat, chordID key, str data)
 }
 
 void
-res3 (adb_status stat, vec<chordID> keys)
+res3 (adb_status stat, vec<chordID> keys, vec<u_int32_t> v)
 {
   for (unsigned int i = 0; i < keys.size (); i++)
     warn << keys[i] << "\n";
   if (stat == ADB_OK) {
     assert (keys.size () > 0);
-    db->getkeys (keys.back  () + 1, wrap (res3));
+    db->getkeys (keys.back () + 1, false, wrap (res3));
   } else {
     warn << stat << "\n";
-    exit(0);
+    exit (stat == ADB_COMPLETE);
   }
 }
