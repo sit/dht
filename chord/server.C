@@ -790,9 +790,3 @@ vnode_impl::doRPC (const chord_node &n, const rpc_program &prog, int procno,
   ptr<location> l = locations->lookup_or_create (n);
   return doRPC (l, prog, procno, in, out, cb, cb_tmo, stream);
 }
-
-void
-vnode_impl::resendRPC (long seqno)
-{
-  rpcm->rexmit (seqno);
-}

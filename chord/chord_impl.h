@@ -209,7 +209,6 @@ class vnode_impl : public vnode {
 	      ptr<void> in, void *out, aclnt_cb cb,
 	      cbtmo_t cb_tmo = NULL, bool stream = false);
 
-  void resendRPC (long seqno);
   void fill_user_args (user_args *a);
 
   virtual void stats (void) const;

@@ -27,7 +27,6 @@ private:
  public:
   void reset_tmo ();
   void timeout () { finish (RPC_TIMEDOUT); };
-  void user_rexmit ();
   static rpccb_chord *alloc (ptr<aclnt> c,
 			     aclnt_cb cb,
 			     callback<bool>::ptr u_tmo,

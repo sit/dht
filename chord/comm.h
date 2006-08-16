@@ -52,7 +52,6 @@ struct RPC_delay_args {
   void *out;
   aclnt_cb cb;
   cbtmo_t cb_tmo;
-  long fake_seqno;
   u_int64_t now;
 
   tailq_entry<RPC_delay_args> q_link;
@@ -79,7 +78,6 @@ struct rpc_state {
   int progno;
   int procno;
   long seqno;
-  long rexmit_ID;
   bool in_window;
 
   rpccb_chord *b;
@@ -87,7 +85,6 @@ struct rpc_state {
   u_int64_t sendtime;
   cbtmo_t cb_tmo;
 
-  ihash_entry <rpc_state> h_link;
   tailq_entry <rpc_state> q_link;
 
   void *out;
@@ -148,20 +145,17 @@ class rpc_manager {
   void update_latency (ptr<location> from, ptr<location> l, u_int64_t lat);
 
  public:
-  virtual void rexmit (long seqno) {};
   virtual void stats ();
   virtual long doRPC (ptr<location> from, ptr<location> l, 
 		      const rpc_program &prog, int procno,
 		      ptr<void> in, void *out, aclnt_cb cb, 
-		      cbtmo_t cb_tmo = NULL,
-		      long fake_seqno = 0);
+		      cbtmo_t cb_tmo = NULL);
   virtual long doRPC_dead (ptr<location> l, 
 			   const rpc_program &prog, 
 			   int procno,
 			   ptr<void> in, 
 			   void *out, 
-			   aclnt_cb cb, 
-			   long fake_seqno = 0);
+			   aclnt_cb cb);
 
   virtual long doRPC_stream (ptr<location> from,
 			     ptr<location> l, 
@@ -170,7 +164,7 @@ class rpc_manager {
 			     ptr<void> in, 
 			     void *out, 
 			     aclnt_cb cb)
-  { return doRPC (from, l, prog, procno, in, out, cb, NULL, 0); }
+  { return doRPC (from, l, prog, procno, in, out, cb, NULL); }
 
   // the following may not necessarily make sense for all implementations.
   virtual float get_a_lat (ptr<location> l);
@@ -188,12 +182,10 @@ class tcp_manager : public rpc_manager {
   void remove_host (hostinfo *h);
 
  public:
-  void rexmit (long seqno) {};
   long doRPC (ptr<location> from, ptr<location> l, 
 	      const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb, 
-	      cbtmo_t cb_tmo = NULL,
-	      long fake_seqno = 0);
+	      cbtmo_t cb_tmo = NULL);
 
   long doRPC_stream (ptr<location> from, ptr<location> l, 
 		     const rpc_program &prog, 
@@ -201,10 +193,10 @@ class tcp_manager : public rpc_manager {
 		     ptr<void> in, 
 		     void *out, 
 		     aclnt_cb cb)
-  { return doRPC (from, l, prog, procno, in, out, cb, NULL, 0); }
+  { return doRPC (from, l, prog, procno, in, out, cb, NULL); }
   
   long doRPC_dead (ptr<location> l, const rpc_program &prog, int procno,
-		   ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
+		   ptr<void> in, void *out, aclnt_cb cb);
   tcp_manager (ptr<u_int32_t> _nrcv) : rpc_manager (_nrcv) {}
   ~tcp_manager () {}
 };
@@ -232,14 +224,10 @@ class stp_manager : public rpc_manager {
   
   int inflight;
 
-  long fake_seqno;
-
   u_int64_t st;
 
   tailq<RPC_delay_args, &RPC_delay_args::q_link> Q;
   tailq<rpc_state, &rpc_state::q_link> pending;
-
-  ihash<long, rpc_state, &rpc_state::rexmit_ID, &rpc_state::h_link> user_rexmit_table;
 
   timecb_t *idle_timer;
 
@@ -262,14 +250,12 @@ class stp_manager : public rpc_manager {
  public:
   void stats ();
 
-  void rexmit (long seqno);
   long doRPC (ptr<location> from, ptr<location> l, 
 	      const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb, 
-	      cbtmo_t cb_tmo = NULL,
-	      long fake_seqno = 0);
+	      cbtmo_t cb_tmo = NULL);
   long doRPC_dead (ptr<location> l, const rpc_program &prog, int procno,
-		   ptr<void> in, void *out, aclnt_cb cb, long fake_seqno = 0);
+		   ptr<void> in, void *out, aclnt_cb cb);
   long doRPC_stream (ptr<location> from, ptr<location> l, 
 		     const rpc_program &prog, 
 		     int procno,

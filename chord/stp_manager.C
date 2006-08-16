@@ -29,7 +29,6 @@ stp_manager::stp_manager (ptr<u_int32_t> _nrcv)
   delaycb (1, 0, wrap (this, &stp_manager::ratecb));
   reset_idle_timer ();
   st = getusec ();
-  fake_seqno = -1;
   stream_rpcm = New refcounted<tcp_manager> (nrcv);
 }
 
@@ -58,14 +57,13 @@ stp_manager::doRPC_stream (ptr<location> from, ptr<location> l,
 			   const rpc_program &prog, int procno, 
 			   ptr<void> in, void *out, aclnt_cb cb)
 {
-  return stream_rpcm->doRPC (from, l, prog, procno, in, out, cb, NULL, 0);
+  return stream_rpcm->doRPC (from, l, prog, procno, in, out, cb, NULL);
 }
 
 long
 stp_manager::doRPC_dead (ptr<location> l,
 			 const rpc_program &prog, int procno, 
-			 ptr<void> in, void *out, aclnt_cb cb,
-			 long fake_seqno /* = 0 */)
+			 ptr<void> in, void *out, aclnt_cb cb)
 {
 #ifdef VERBOSE_LOG  
   modlogger ("stp_manager") << "dead_rpc "
@@ -88,20 +86,14 @@ long
 stp_manager::doRPC (ptr<location> from, ptr<location> l,
 		    const rpc_program &prog, int procno, 
 		    ptr<void> in, void *out, aclnt_cb cb,
-		    cbtmo_t cb_tmo,
-		    long _fake_seqno /* = 0 */)
+		    cbtmo_t cb_tmo)
 {
   reset_idle_timer ();
   if (!room_in_window ()) {
     RPC_delay_args *args = New RPC_delay_args (from, l, prog, procno,
 					       in, out, cb, cb_tmo);
-    args->fake_seqno = fake_seqno;
-
     enqueue_rpc (args);
-    fake_seqno--;
-    
-    return args->fake_seqno;
-    
+    return 0;
   } else {
 
     ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
@@ -129,13 +121,6 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
     C->b->send (sec, nsec);
     nsent++;
     
-    if (_fake_seqno) 
-      C->rexmit_ID = _fake_seqno;
-    else 
-      C->rexmit_ID = C->seqno;
-    
-
-    user_rexmit_table.insert (C);
     return seqno++;
   }
 }
@@ -143,8 +128,6 @@ stp_manager::doRPC (ptr<location> from, ptr<location> l,
 bool
 stp_manager::timeout (rpc_state *C)
 {
-
-
   //run through the list of pending RPCs and 
   // remove any that are headed for the host
   // that just timed out from the window.
@@ -240,7 +223,6 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
   }
   
   pending.remove (C);
-  user_rexmit_table.remove (C);
   (C->cb) (err);
   if (C->in_window) {
     inflight--;
@@ -268,7 +250,6 @@ stp_manager::rpc_done (long acked_seqno)
     while ((args != next_arg) && (args->l->id () != next_arg->l->id ()))
       args = Q.next (args);
 
-    //    warn << "RPCTIMING: " << getusec () << " fake sequo " << args->fake_seqno << " removed from queue for transmission\n";
     //stats
     u_int64_t now = getusec ();
     u_int64_t diff = now - args->now;
@@ -283,8 +264,7 @@ stp_manager::rpc_done (long acked_seqno)
 	   args->in,
 	   args->out,
 	   args->cb,
-	   args->cb_tmo,
-	   args->fake_seqno);
+	   args->cb_tmo);
     delete args;
     num_qed--;
   }
@@ -308,17 +288,6 @@ stp_manager::idle ()
   cwind_ewma = 1.0;
   ssthresh = 6;
   idle_timer = NULL;
-}
-
-void
-stp_manager::rexmit (long seqno)
-{
-  rpc_state *C = user_rexmit_table[seqno];
-  if (!C) {
-    warn << seqno << "retransmit ID  not present for retransmission\n";
-    return;
-  }
-  C->b->user_rexmit ();
 }
 
 void
@@ -576,17 +545,6 @@ rpccb_chord::reset_tmo ()
        << "; rexmits is " << rexmits << "\n";
 #endif /* VERBOSE_LOG */  
   if (tmo) timecb_remove (tmo);
-  tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
-}
-
-void 
-rpccb_chord::user_rexmit ()
-{
-  //this function does an immediate retransmit.
-  //it doesn't cost you a rexmit counter bump
-  //and doesn't bump the exponential either (but does reset the timeout timer)
-  if (tmo) timecb_remove (tmo);
-  xmit (rexmits);
   tmo = delaycb (sec, nsec, wrap (this, &rpccb_chord::timeout_cb, deleted));
 }
 

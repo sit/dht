@@ -217,8 +217,7 @@ long
 rpc_manager::doRPC (ptr<location> from, ptr<location> l,
 		    const rpc_program &prog, int procno, 
 		    ptr<void> in, void *out, aclnt_cb cb,
-		    cbtmo_t cb_tmo,
-		    long fake_seqno /* = 0 */)
+		    cbtmo_t cb_tmo)
 {
   ref<aclnt> c = aclnt::alloc (dgram_xprt, prog, 
 			       (sockaddr *)&(l->saddr ()));
@@ -235,10 +234,9 @@ rpc_manager::doRPC (ptr<location> from, ptr<location> l,
 long
 rpc_manager::doRPC_dead (ptr<location> l,
 			 const rpc_program &prog, int procno, 
-			 ptr<void> in, void *out, aclnt_cb cb,
-			 long fake_seqno /* = 0 */)
+			 ptr<void> in, void *out, aclnt_cb cb)
 {
-  return doRPC (NULL, l, prog, procno, in, out, cb, NULL, fake_seqno);
+  return doRPC (NULL, l, prog, procno, in, out, cb, NULL);
 }
 
 void
@@ -325,8 +323,7 @@ long
 tcp_manager::doRPC (ptr<location> from, ptr<location> l,
 		    const rpc_program &prog, int procno, 
 		    ptr<void> in, void *out, aclnt_cb cb,
-		    cbtmo_t cb_tmo,
-		    long fake_seqno /* = 0 */)
+		    cbtmo_t cb_tmo)
 {
   // hack to avoid limit on wrap()'s number of arguments
   RPC_delay_args *args = New RPC_delay_args (from, l, prog, procno,
@@ -354,10 +351,9 @@ tcp_manager::doRPC (ptr<location> from, ptr<location> l,
 long
 tcp_manager::doRPC_dead (ptr<location> l,
 			 const rpc_program &prog, int procno, 
-			 ptr<void> in, void *out, aclnt_cb cb,
-			 long fake_seqno /* = 0 */)
+			 ptr<void> in, void *out, aclnt_cb cb)
 {
-  return doRPC (NULL, l, prog, procno, in, out, cb, NULL, fake_seqno);
+  return doRPC (NULL, l, prog, procno, in, out, cb, NULL);
 }
 
 void
