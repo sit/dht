@@ -101,8 +101,8 @@ $PID{lsd}   = spawn ($root, $LSD, "lsd",
 		     "-S", "./dhash-sock",
 		     "-C", "./lsd-sock",
 		     @ARGV);
-# Should wait until lsd is stabilized or something to start.
-sleep 5; 
+# Wait until DHash has started up
+sleep 1 until -e "$root/lsd-sock";
 $PID{syncd} = spawn ($root, $SYNCD, "syncd",
 		     "-C", "./lsd-sock");
 
