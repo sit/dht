@@ -9,6 +9,7 @@ dbfe_generate_config (str path, unsigned int cachesize)
   db_config << "# MIT lsd db configuration\n\n";
 
   db_config << "set_flags DB_AUTO_COMMIT\n";
+  db_config << "set_flags DB_TXN_WRITE_NOSYNC\n";
 
   // clean up old log files not available in old versions
 #if ((DB_VERSION_MAJOR >= 4) && (DB_VERSION_MINOR >= 2))
