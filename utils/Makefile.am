@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-## $Id: Makefile.am,v 1.19 2006/08/16 16:09:55 sit Exp $
+## $Id: Makefile.am,v 1.20 2006/08/28 18:57:52 sit Exp $
 
 chordlib_LIBRARIES = libutil.a libadb.a
 chordinclude_HEADERS = id_utils.h configurator.h skiplist.h modlogger.h
@@ -32,9 +32,13 @@ libutil_a_SOURCES = \
 libadb_a_SOURCES = libadb.C
 
 bin_PROGRAMS = adbd
+noinst_PROGRAMS = adb_benchmark
 
 adbd_SOURCES = adbd.C 
 adbd_LDADD =  libutil.a ../svc/libsvc.la $(LIBARPC)  $(LIBSFSCRYPT) $(LIBGMP) $(DBLIB) $(LIBASYNC) 
+
+adb_benchmark_SOURCES = adb_benchmark.C
+adb_benchmark_LDADD =  libutil.a ../svc/libsvc.la $(LIBARPC)  $(LIBSFSCRYPT) $(LIBGMP) $(DBLIB) $(LIBASYNC) 
 
 # should really figure out how to encode explict rule so that make
 # will run ida-genfield.py to update ida-field.C if ida-genfield.py changes.

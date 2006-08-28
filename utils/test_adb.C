@@ -12,7 +12,7 @@ main (int argc, char **argv)
 {
   if (argc < 3) {
     warn << "Not really testing anything!\n";
-    warn << "Usage: test_adb adbsock namespace\n";
+    warn << "Usage: test_adb adbsock namespace s|f count\n";
     exit (0);
   }
   db = New adb (argv[1], argv[2]);
