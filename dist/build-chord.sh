@@ -9,7 +9,7 @@ if [ -z "$BUILDROOT" ]; then
 fi
 
 # Give up if anything goes bad.
-set -ex
+set -e
 
 umask 022
 
@@ -51,4 +51,4 @@ if [ -d "$PUBLISHROOT" ]; then
     cp chord-0.1.tar.bz2 $PUBLISHROOT/chord-0.1-$today.tar.bz2
     chmod 644 $PUBLISHROOT/chord-0.1-$today.tar.bz2
 fi
-rm -rf sfsnet
+cd .. && rm -rf sfsnet
