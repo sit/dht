@@ -1,8 +1,10 @@
 #include <async.h>
+#include <aios.h>
 #include <crypt.h>
 #include "location.h"
 #include "libadb.h"
 #include "misc_utils.h"
+#include "id_utils.h"
 
 str adbsock;
 ptr<adb> db (NULL);
@@ -11,12 +13,15 @@ size_t count (1024);
 size_t remaining (count);
 bool batch (false);
 
+static const int max_out (128);
+static int ops_out (0);
+
 // This is a little unsatisfactory since we don't have a mechanism
 // to be called back after an update...
 void
 bench_update (void)
 {
-  warn << "Sending " << count << " requests " << (batch ? "" : "not ") << "as batch\n";
+  aout << "Sending " << count << " requests " << (batch ? "" : "not ") << "as batch\n";
   // Throw out a lot of update operations, see how many we can complete.
   for (size_t i = 0; i < count; i++) {
     chordID k     = random_getword ();
@@ -45,7 +50,7 @@ make_block (void *data, size_t datasize)
 {
   char *rd = (char *)data;
   for (unsigned int i = 0; i < datasize; i++) 
-    rd[i] = random();
+    rd[i] = random_getword ();
   rd[datasize - 1] = 0;
 
   return compute_hash (rd, datasize);
@@ -54,12 +59,18 @@ make_block (void *data, size_t datasize)
 void
 bench_store_cb (u_int64_t start, adb_status stat)
 {
+  static u_int32_t frac (count >> 6);
+  static u_int32_t progress (0);
   remaining--;
+  ops_out--;
   if (remaining == 0) {
     u_int64_t finish = getusec ();
-    warn << "Finished " << count << " operations in " 
+    aout << "Finished " << count << " operations in " 
          << (finish-start)/1000 << "ms.\n";
     exit (0);
+  } else if (frac && remaining % frac == 0) {
+    progress++;
+    warnx << progress << "/64\n";
   }
 }
 
@@ -68,12 +79,40 @@ bench_store (void)
 {
   u_int64_t start = getusec ();
   char buf[1024];
-  warn << "Sending " << count << " requests.\n";
+  aout << "Sending " << count << " requests.\n";
   remaining = count;
-  for (size_t i = 0; i < count; i++) {
+  for (size_t i = 0; i < count; i++, ops_out++) {
     chordID k = make_block (buf, sizeof (buf) - 1);
-    db->store (k, str (buf), random (), wrap (&bench_store_cb, start));
+    db->store (k, str (buf), random_getword (), wrap (&bench_store_cb, start));
+    while (ops_out > max_out) 
+      acheck ();
   }
+}
+
+void
+bench_getkeys_cb (u_int64_t start, adb_status stat, vec<chordID> keys, vec<u_int32_t> aux)
+{
+  if (stat != ADB_COMPLETE && stat != ADB_OK) {
+    fatal << "Unexpected getkeys status: " << stat << "\n";
+  }
+  if (stat != ADB_COMPLETE) {
+    remaining += keys.size ();
+    db->getkeys (incID (keys.back ()), 
+		 wrap (&bench_getkeys_cb, start),
+		 count, false);
+    warnx << ".\n";
+    return;
+  }
+  u_int64_t finish = getusec ();
+  aout << "Got " << remaining << " keys in " 
+       << (finish-start)/1000 << "ms.\n";
+  exit (0);
+}
+void
+bench_getkeys (void)
+{
+  remaining = 0;
+  db->getkeys (0, wrap (&bench_getkeys_cb, getusec ()), count, false);
 }
 
 int main (int argc, char *argv[])
@@ -102,7 +141,7 @@ int main (int argc, char *argv[])
   adbsock = argv[1];
 
   db = New refcounted<adb> (adbsock, "test", true);
-  delaycb (1, wrap (&bench_store));
+  delaycb (1, wrap (&bench_getkeys));
 
   amain ();
 }

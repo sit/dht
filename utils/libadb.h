@@ -61,7 +61,7 @@ public:
   void store (chordID key, str data, cb_adbstat cb);
   void fetch (chordID key, cb_fetch cb);
   void remove (chordID key, cb_adbstat cb);
-  void getkeys (chordID start, bool getaux, cb_getkeys cb);
+  void getkeys (chordID start, cb_getkeys cb, u_int32_t batchsize = 128, bool getaux = false);
   void sync ();
 
   void getblockrange (const chordID &start, const chordID &stop,

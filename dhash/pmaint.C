@@ -51,8 +51,7 @@ pmaint::pmaint_next ()
  
   if (pmaint_searching) {
     ptr<adb> db = srv->get_db ();
-    db->getkeys (pmaint_next_key, false,
-	wrap (this, &pmaint::pmaint_gotkey));
+    db->getkeys (pmaint_next_key, wrap (this, &pmaint::pmaint_gotkey), 1);
   } else 
     info << host_node->my_ID () << " in offer phase, delaying\n";
 }

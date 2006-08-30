@@ -62,7 +62,7 @@ dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
 
   mtree = New merkle_tree ();
   mtree->set_rehash_on_modification (false);
-  db->getkeys (0, false, wrap (this, &dhblock_chash_srv::populate_mtree));
+  db->getkeys (0, wrap (this, &dhblock_chash_srv::populate_mtree), 16384, false);
   // Don't create msrv until populate_mtree is done.
   // Any merkle RPCs will get a MERKLE_ERR from dhash_impl::merkle_dispatch
 }
@@ -80,8 +80,9 @@ dhblock_chash_srv::populate_mtree (adb_status stat, vec<chordID> keys, vec<u_int
     mtree->insert (keys[i]);
   }
   if (stat != ADB_COMPLETE) {
-    db->getkeys (incID (keys.back ()), false,
-		 wrap (this, &dhblock_chash_srv::populate_mtree));
+    db->getkeys (incID (keys.back ()), 
+		 wrap (this, &dhblock_chash_srv::populate_mtree),
+		 16384, false);
   } else {
     mtree->hash_tree ();
     mtree->set_rehash_on_modification (true);

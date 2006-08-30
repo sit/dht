@@ -75,11 +75,12 @@ struct adb_deletearg {
   chordID key;
 };
 /* }}} */
-/* {{{ ADBPROC_GETKEYS (and ADBPROC_GETBLOCKSON) */
+/* {{{ ADBPROC_GETKEYS (and ADBPROC_GETKEYSON) */
 struct adb_getkeysarg {
   str name;
   chordID start;
   bool getaux;
+  u_int32_t batchsize;
 };
 struct adb_getkeysresok {
   adb_keyaux_t keyaux<>;

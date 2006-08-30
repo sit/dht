@@ -123,11 +123,12 @@ adb::fetch_cb (adb_fetchres *res, chordID key, cb_fetch cb, clnt_stat err)
 }
 
 void
-adb::getkeys (chordID start, bool getaux, cb_getkeys cb)
+adb::getkeys (chordID start, cb_getkeys cb, u_int32_t batchsize, bool getaux)
 {
   adb_getkeysarg arg;
   arg.start = start;
   arg.name = name_space;
+  arg.batchsize = batchsize;
   arg.getaux = getaux;
 
   adb_getkeysres *res = New adb_getkeysres (ADB_OK);

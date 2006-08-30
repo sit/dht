@@ -953,9 +953,8 @@ do_getkeys (dbmanager *dbm, svccb *sbp)
     sbp->replyref (res);
     return;
   }
-  // Gets up to 128 keys at a time.
   res.resok->hasaux = arg->getaux;
-  int r = db->getkeys (arg->start, 128, arg->getaux, res.resok->keyaux);
+  int r = db->getkeys (arg->start, arg->batchsize, arg->getaux, res.resok->keyaux);
   res.resok->complete = (r == DB_NOTFOUND);
   if (r && r != DB_NOTFOUND) 
     res.set_status (ADB_ERR);
