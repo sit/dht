@@ -85,7 +85,7 @@ if __name__ == "__main__":
 	opts, cmdv = getopt.getopt(sys.argv[1:], "h:n:f:s:o:")
     except getopt.GetoptError:
         # print help information and exit:
-        print "filestore -h host:port -[f|s] -n nops -F file [-f key:level]"
+        print "fetch-block.py -h host:port -f key"
         sys.exit(2)
 
     for o, a in opts:
