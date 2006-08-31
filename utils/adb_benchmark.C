@@ -21,6 +21,16 @@ static int ops_out (0);
 void
 bench_update (void)
 {
+  for (size_t i = 0; i < 30; i++) {
+    chord_node_wire n;
+    n.machine_order_ipv4_addr = random_getword ();
+    n.machine_order_port_vnnum = (random_getword () % 65536) << 16;
+    n.machine_order_port_vnnum |= (random_getword () % 1024);
+    
+    ptr<location> v = New refcounted<location> (make_chord_node (n));
+    population.push_back (v);
+  }
+
   aout << "Sending " << count << " requests " << (batch ? "" : "not ") << "as batch\n";
   // Throw out a lot of update operations, see how many we can complete.
   for (size_t i = 0; i < count; i++) {
@@ -95,8 +105,8 @@ bench_getkeys_cb (u_int64_t start, adb_status stat, vec<chordID> keys, vec<u_int
   if (stat != ADB_COMPLETE && stat != ADB_OK) {
     fatal << "Unexpected getkeys status: " << stat << "\n";
   }
+  remaining += keys.size ();
   if (stat != ADB_COMPLETE) {
-    remaining += keys.size ();
     db->getkeys (incID (keys.back ()), 
 		 wrap (&bench_getkeys_cb, start),
 		 count, false);
@@ -115,33 +125,38 @@ bench_getkeys (void)
   db->getkeys (0, wrap (&bench_getkeys_cb, getusec ()), count, false);
 }
 
+void
+usage ()
+{
+  warnx << "Usage: " << progname << " dbsock update|store|getkeys [count] [batch]\n";
+  exit (1);
+}
+
 int main (int argc, char *argv[])
 {
   setprogname (argv[0]);
   
-  if (argc < 2) {
-    warnx << "Usage: " << progname << " dbsock [count] [batch]\n";
-    exit (1);
-  }
+  if (argc < 3)
+    usage ();
 
-  for (size_t i = 0; i < 30; i++) {
-    chord_node_wire n;
-    n.machine_order_ipv4_addr = random_getword ();
-    n.machine_order_port_vnnum = (random_getword () % 65536) << 16;
-    n.machine_order_port_vnnum |= (random_getword () % 1024);
-    
-    ptr<location> v = New refcounted<location> (make_chord_node (n));
-    population.push_back (v);
-  }
-
-  if (argc >= 3) 
-    count = atoi (argv[2]);
-  if (argc >= 4)
-    batch = atoi (argv[3]);
   adbsock = argv[1];
+  str mode (argv[2]);
+  if (mode == "update") {
+    delaycb (1, wrap (&bench_update));
+  } else if (mode == "store") {
+    delaycb (1, wrap (&bench_store));
+  } else if (mode == "getkeys") {
+    delaycb (1, wrap (&bench_getkeys));
+  } else {
+    usage ();
+  }
+
+  if (argc >= 4) 
+    count = atoi (argv[3]);
+  if (argc >= 5)
+    batch = atoi (argv[4]);
 
   db = New refcounted<adb> (adbsock, "test", true);
-  delaycb (1, wrap (&bench_getkeys));
 
   amain ();
 }
