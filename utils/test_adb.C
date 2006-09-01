@@ -49,7 +49,7 @@ res3 (adb_status stat, vec<chordID> keys, vec<u_int32_t> v)
     warn << keys[i] << "\n";
   if (stat == ADB_OK) {
     assert (keys.size () > 0);
-    db->getkeys (keys.back () + 1, false, wrap (res3));
+    db->getkeys (keys.back () + 1, wrap (res3));
   } else {
     warn << stat << "\n";
     exit (stat == ADB_COMPLETE);
