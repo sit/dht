@@ -34,7 +34,7 @@ private:
 
   //state
   bool pmaint_searching;
-  bigint pmaint_next_key;
+  u_int32_t pmaint_getkeys_id;
 
   timecb_t *active_cb;
 
@@ -47,7 +47,7 @@ private:
   void pmaint_handoff (chord_node dst, bigint key, cbi cb);
   void pmaint_handoff_cb (bigint key, cbi cb, dhash_stat err, bool present);
   void handed_off_cb (bigint key, int status);
-  void pmaint_gotkey (adb_status stat, vec<chordID> keys, vec<u_int32_t>);
+  void pmaint_gotkey (adb_status stat, u_int32_t id, vec<adb_keyaux_t> keys);
 };
 
 #endif

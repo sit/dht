@@ -1,4 +1,5 @@
 #include <arpc.h>
+#include <crypt.h>
 
 #include <location.h>
 #include <misc_utils.h>
@@ -123,13 +124,26 @@ adb::fetch_cb (adb_fetchres *res, chordID key, cb_fetch cb, clnt_stat err)
 }
 
 void
-adb::getkeys (chordID start, cb_getkeys cb, u_int32_t batchsize, bool getaux)
+adb::getkeys (u_int32_t id, cb_getkeys cb, bool ordered, u_int32_t batchsize, bool getaux)
 {
   adb_getkeysarg arg;
-  arg.start = start;
   arg.name = name_space;
+  arg.ordered = ordered;
   arg.batchsize = batchsize;
   arg.getaux = getaux;
+
+  if (id == 0) {
+    arg.continuation = 0;
+  } else {
+    chordID *x = getkeystab[id];
+    if (x) {
+      arg.continuation = *x;
+      getkeystab.remove (id);
+    }
+    else {
+      delaycb (0, wrap (this, &adb::getkeys_cb, getaux, (adb_getkeysres *) NULL, cb, RPC_FAILED));
+    }
+  }
 
   adb_getkeysres *res = New adb_getkeysres (ADB_OK);
   c->call (ADBPROC_GETKEYS, &arg, res,
@@ -139,25 +153,22 @@ adb::getkeys (chordID start, cb_getkeys cb, u_int32_t batchsize, bool getaux)
 void
 adb::getkeys_cb (bool getaux, adb_getkeysres *res, cb_getkeys cb, clnt_stat err)
 {
+  u_int32_t id (0);
+  vec<adb_keyaux_t> keys;
   if (err || (res && res->status == ADB_ERR)) {
-    vec<chordID> nokeys;
-    vec<u_int32_t> nostr;
-    cb (ADB_ERR, nokeys, nostr);
+    cb (ADB_ERR, id, keys);
   } else {
-    vec<chordID> keys;
-    vec<u_int32_t> auxdata;
-    if (getaux) {
-      for (unsigned int i = 0; i < res->resok->keyaux.size (); i++) {
-	keys.push_back (res->resok->keyaux[i].key);
-	auxdata.push_back (res->resok->keyaux[i].auxdata);
-      }
-    } else {
-      for (unsigned int i = 0; i < res->resok->keyaux.size (); i++)
-	keys.push_back (res->resok->keyaux[i].key);
+    for (unsigned int i = 0; i < res->resok->keyaux.size (); i++) {
+      adb_keyaux_t ka;
+      ka.key = res->resok->keyaux[i].key;
+      ka.auxdata = res->resok->keyaux[i].auxdata;
+      keys.push_back (ka);
     }
+    id = random_getword ();
+    getkeystab.insert (id, res->resok->continuation);
 
     adb_status ret = (res->resok->complete) ? ADB_COMPLETE : ADB_OK;
-    cb (ret, keys, auxdata);
+    cb (ret, id, keys);
   }
   delete res;
 }
@@ -217,7 +228,7 @@ void
 adb::getkeyson (const ptr<location> n,
 		  const chordID &start,
 		  const chordID &stop,
-		  cb_getkeys cb)
+		  cb_getkeyson cb)
 {
   const sockaddr_in s (n->saddr ());
   adb_getkeysonarg arg;
@@ -229,7 +240,33 @@ adb::getkeyson (const ptr<location> n,
 
   adb_getkeysres *res = New adb_getkeysres (ADB_OK); 
   c->call (ADBPROC_GETKEYSON, &arg, res,
-           wrap (this, &adb::getkeys_cb, true, res, cb));
+           wrap (this, &adb::getkeyson_cb, true, res, cb));
+}
+
+void
+adb::getkeyson_cb (bool getaux, adb_getkeysres *res, cb_getkeyson cb, clnt_stat err)
+{
+  if (err || (res && res->status == ADB_ERR)) {
+    vec<chordID> nokeys;
+    vec<u_int32_t> nostr;
+    cb (ADB_ERR, nokeys, nostr);
+  } else {
+    vec<chordID> keys;
+    vec<u_int32_t> auxdata;
+    if (getaux) {
+      for (unsigned int i = 0; i < res->resok->keyaux.size (); i++) {
+        keys.push_back (res->resok->keyaux[i].key);
+        auxdata.push_back (res->resok->keyaux[i].auxdata);
+      }
+    } else {
+      for (unsigned int i = 0; i < res->resok->keyaux.size (); i++)
+        keys.push_back (res->resok->keyaux[i].key);
+    }
+
+    adb_status ret = (res->resok->complete) ? ADB_COMPLETE : ADB_OK;
+    cb (ret, keys, auxdata);
+  }
+  delete res;
 }
 
 void

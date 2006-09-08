@@ -78,14 +78,17 @@ struct adb_deletearg {
 /* {{{ ADBPROC_GETKEYS (and ADBPROC_GETKEYSON) */
 struct adb_getkeysarg {
   str name;
-  chordID start;
   bool getaux;
+  bool ordered;
   u_int32_t batchsize;
+  chordID continuation;
 };
 struct adb_getkeysresok {
   adb_keyaux_t keyaux<>;
   bool hasaux;
+  bool ordered;
   bool complete;
+  chordID continuation;
 };
 union adb_getkeysres switch (adb_status status) {
  case ADB_ERR:

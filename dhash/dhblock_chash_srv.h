@@ -5,6 +5,7 @@ class merkle_tree;
 class merkle_server;
 struct block_info;
 
+struct adb_keyaux_t;
 enum adb_status;
 
 // Internal implementation of content hash repair_job logic.
@@ -19,7 +20,7 @@ class dhblock_chash_srv : public dhblock_srv {
 
   pmaint *pmaint_obj;
 
-  void populate_mtree (adb_status err, vec<chordID> keys, vec<u_int32_t> aux);
+  void populate_mtree (adb_status err, u_int32_t done, vec<adb_keyaux_t> keys);
   void localqueue (u_int32_t frags, clnt_stat err, adb_status stat, vec<block_info> keys);
 
 public:

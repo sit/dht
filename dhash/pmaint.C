@@ -21,7 +21,7 @@ pmaint::pmaint (dhashcli *cli, ptr<vnode> host_node,
   host_node (host_node),
   srv (srv),
   pmaint_searching (true),
-  pmaint_next_key (0),
+  pmaint_getkeys_id (0),
   active_cb (NULL)
 {
 }
@@ -48,20 +48,21 @@ pmaint::stop ()
 void
 pmaint::pmaint_next ()
 {
- 
   if (pmaint_searching) {
     ptr<adb> db = srv->get_db ();
-    db->getkeys (pmaint_next_key, wrap (this, &pmaint::pmaint_gotkey), 1);
+    db->getkeys (pmaint_getkeys_id, wrap (this, &pmaint::pmaint_gotkey),
+	/* ordered */ true,
+	/* batchsize */ 1);
   } else 
     info << host_node->my_ID () << " in offer phase, delaying\n";
 }
 
 void
-pmaint::pmaint_gotkey (adb_status stat, vec<chordID> keys, vec<u_int32_t> auxdata)
+pmaint::pmaint_gotkey (adb_status stat, u_int32_t id, vec<adb_keyaux_t> keys)
 {
   if (stat == ADB_OK && keys.size () > 0) {
-    chordID key = keys[0];
-    pmaint_next_key = key;
+    chordID key = keys[0].key;
+    pmaint_getkeys_id = id;
     vec<ptr<location> > preds = host_node->preds ();
   
     if (preds.size () >= dhblock_chash::num_efrags () &&
@@ -71,7 +72,7 @@ pmaint::pmaint_gotkey (adb_status stat, vec<chordID> keys, vec<u_int32_t> auxdat
       active_cb = delaycb (PRTTMTINY, wrap (this, &pmaint::pmaint_next));
       return;
     }
-    cli->lookup (key, wrap (this, &pmaint::pmaint_lookup, pmaint_next_key));
+    cli->lookup (key, wrap (this, &pmaint::pmaint_lookup, key));
     active_cb = NULL;
   } else { 
     //data base is empty
@@ -120,7 +121,6 @@ pmaint::pmaint_lookup (bigint key, dhash_stat err, vec<chord_node> sl, route r)
 	 << "\n";
     //case I: we are a replica of the key. 
     //i.e. in the successor list. Do nothing.
-    pmaint_next_key = incID (pmaint_next_key);
     //next time we'll do a lookup with the next key
     active_cb = delaycb (PRTTMTINY, wrap (this, &pmaint::pmaint_next));
   } else {
@@ -173,7 +173,12 @@ pmaint::pmaint_offer_cb (chord_node dst, bigint key,
 {
 
   if (err) {
-    warning << host_node->my_ID () << " error offering key " << key << "\n";    
+    warning << host_node->my_ID () << " error offering key " << key << ", retrying.\n";    
+    vec<adb_keyaux_t> keys;
+    adb_keyaux_t dummy;
+    dummy.key = key;
+    delaycb (PRTTMSHORT, wrap (this, &pmaint::pmaint_gotkey, ADB_OK, pmaint_getkeys_id, keys));
+    return;
   } else {
     
     switch (res->resok->accepted[0]) {
@@ -197,8 +202,6 @@ pmaint::pmaint_offer_cb (chord_node dst, bigint key,
     }
   }
   
-
-  pmaint_next_key = incID (key);
   pmaint_searching = true;
   active_cb = delaycb (PRTTMSHORT, wrap (this, &pmaint::pmaint_next));
   return;
@@ -209,9 +212,8 @@ pmaint::handed_off_cb (bigint key, int status)
 {
   if (status == PMAINT_HANDOFF_ERROR) {
     warning << host_node->my_ID () << " error handing off key " << key << "\n";    
-    pmaint_next_key = decID (key);
+    return;
   }  else {
-    pmaint_next_key = incID (key); //use next key only if no error on this one
     strbuf buf;
     buf << host_node->my_ID () << " handed off key " << key << " ";
     if (status == PMAINT_HANDOFF_NOTPRESENT) 

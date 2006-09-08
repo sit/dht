@@ -4,13 +4,16 @@
 #include "chord_types.h"
 #include "adb_prot.h"
 
+#include <qhash.h>
+
 class aclnt;
 class location;
 struct block_info;
 
 typedef callback<void, adb_status, chordID, str>::ptr cb_fetch;
 typedef callback<void, adb_status>::ptr cb_adbstat;
-typedef callback<void, adb_status, vec<chordID>, vec<u_int32_t> >::ptr cb_getkeys;
+typedef callback<void, adb_status, u_int32_t, vec<adb_keyaux_t> >::ptr cb_getkeys;
+typedef callback<void, adb_status, vec<chordID>, vec<u_int32_t> >::ptr cb_getkeyson;
 
 typedef callback<void, clnt_stat, adb_status, vec<block_info> >::ref cbvblock_info_t;
 typedef callback<void, clnt_stat, adb_status, block_info>::ref cbblock_info_t;
@@ -31,13 +34,14 @@ struct block_info {
     }
     return *this;
   }
-
 };
 
 class adb {
   ptr<aclnt> c;
   str name_space;
   bool hasaux;
+
+  qhash<u_int32_t, chordID> getkeystab;
 
   vec<adb_updatearg *> batched_updates;
   timecb_t *next_batch;
@@ -50,6 +54,7 @@ class adb {
   void generic_cb (adb_status *res, cb_adbstat cb, clnt_stat err);
   void fetch_cb (adb_fetchres *res, chordID key, cb_fetch cb, clnt_stat err);
   void getkeys_cb (bool getaux, adb_getkeysres *res, cb_getkeys cb, clnt_stat err);
+  void getkeyson_cb (bool getaux, adb_getkeysres *res, cb_getkeyson cb, clnt_stat err);
   void getblockrangecb (ptr<adb_getblockrangeres> res, cbvblock_info_t cb, clnt_stat err);
   void getinfocb (chordID block, ptr<adb_getinfores> res, cbblock_info_t cb, clnt_stat err);
   void batch_update ();
@@ -61,13 +66,13 @@ public:
   void store (chordID key, str data, cb_adbstat cb);
   void fetch (chordID key, cb_fetch cb);
   void remove (chordID key, cb_adbstat cb);
-  void getkeys (chordID start, cb_getkeys cb, u_int32_t batchsize = 128, bool getaux = false);
+  void getkeys (u_int32_t id, cb_getkeys cb, bool ordered = false, u_int32_t batchsize = 16384, bool getaux = false);
   void sync ();
 
   void getblockrange (const chordID &start, const chordID &stop,
       int extant, int count, cbvblock_info_t cb);
   void getkeyson (const ptr<location> n, const chordID &start,
-      const chordID &stop, cb_getkeys cb);
+      const chordID &stop, cb_getkeyson cb);
   void update (const chordID &block, const ptr<location> n, bool present, 
 	       bool batchable = false);
   void update (const chordID &block, const ptr<location> n, u_int32_t auxdata, 

@@ -5,6 +5,7 @@
 #include <sha1.h>
 
 #include <adb_prot.h>
+#include <keyauxdb.h>
 #include <id_utils.h>
 #include <dbfe.h>
 
@@ -60,6 +61,14 @@ dbt_to_id (const DBT &dbt)
  *                vnodeid -> [chordID, ...])
  * with potentially the ability to (3) ordered by len([vnodeid...]).
  * This object encapsulates all that stuff.
+ *
+ * The goal is to support the following operations:
+ *   A. lsd merkle tree: fast read, any order key+auxdata, all keys from 1, 2
+ *   B. syncd merkle tree: fast read, any order key+auxdata, one vnode, from 3
+ *   C. pmaint: slow read ok, find next key in order
+ *   D. repair: find $n$ least replicated blocks between (a, b], from 3
+ * cursor reads of 1 and 2 will be sorted.
+ *
  */ 
 
 // {{{ getnumreplicas: Secondary key extractor for bsm data
@@ -121,7 +130,7 @@ dbns_txn_commit (DB_ENV *dbe, DB_TXN *t)
   return r;
 }
 // }}}
-
+// {{{ dbns declarations
 class dbns {
   friend class dbmanager;
 
@@ -134,6 +143,8 @@ class dbns {
   DB *auxdatadb;
   DB *bsdb;
   DB *bsdx;
+
+  keyauxdb *kdb;
 
   // XXX should have a instance-level lock that governs datadb/auxdatadb.
 
@@ -152,12 +163,15 @@ public:
   bool hasaux () { return auxdatadb != NULL; };
 
   // Primary data management
-  int insert (const chordID &key, const str data, u_int32_t auxdata);
+  int kinsert (const chordID &key, u_int32_t auxdata);
   int insert (const chordID &key, DBT &data, DBT &auxdata);
   int lookup (const chordID &key, str &data);
   int del (const chordID &key);
+  int kgetkeys (u_int32_t start, size_t count, bool getaux,
+      rpc_vec<adb_keyaux_t, RPC_INFINITY> &out); 
   int getkeys (const chordID &start, size_t count, bool getaux,
       rpc_vec<adb_keyaux_t, RPC_INFINITY> &out); 
+  int migrate_getkeys (void);
 
   // Block status information
   int getblockrange_all (const chordID &start, const chordID &stop,
@@ -171,7 +185,7 @@ public:
   int updatebatch (rpc_vec<adb_updatearg, RPC_INFINITY> &uargs);
   int getinfo (const chordID &block, rpc_vec<adb_vnodeid, RPC_INFINITY> &out);
 };
-
+// }}}
 // {{{ dbns::dbns
 dbns::dbns (const str &dbpath, const str &name, bool aux) :
   name (name),
@@ -179,7 +193,8 @@ dbns::dbns (const str &dbpath, const str &name, bool aux) :
   datadb (NULL),
   auxdatadb (NULL),
   bsdb (NULL),
-  bsdx (NULL)
+  bsdx (NULL),
+  kdb (NULL)
 {
 #define DBNS_ERRCHECK(desc) \
   if (r) {		  \
@@ -207,6 +222,14 @@ dbns::dbns (const str &dbpath, const str &name, bool aux) :
   r = bsdb->associate (bsdb, NULL, bsdx, getnumreplicas, DB_AUTO_COMMIT);
   DBNS_ERRCHECK ("bsdb->associate (bsdx)");
   warn << "dbns::dbns (" << dbpath << ", " << name << ", " << aux << ")\n";
+
+  fullpath << "/kdb.db";
+  kdb = New keyauxdb (fullpath);
+  u_int32_t dummy;
+  if (NULL == kdb->getkeys (0, 1, &dummy) ) {
+    // This could take a very long time if there's a lot of data.
+    migrate_getkeys ();
+  }
 }
 // }}}
 // {{{ dbns::~dbns
@@ -248,6 +271,19 @@ dbns::sync ()
 #else
    dbe->txn_checkpoint (dbe, 0, 0, 0);
 #endif
+   kdb->sync ();
+}
+// }}}
+// {{{ dbns::kinsert (chordID, u_int32_t)
+int
+dbns::kinsert (const chordID &key, u_int32_t auxdata)
+{
+  // We don't really deal well with updating these auxiliary
+  // databases yet, so just ignore them for now.  The auxdatadb
+  // should iterate much faster than the full database anyway.
+  // if (!auxdatadb)
+    return kdb->addkey (key, auxdata);
+  // return 0;
 }
 // }}}
 // {{{ dbns::insert (chordID, DBT, DBT)
@@ -286,20 +322,6 @@ dbns::insert (const chordID &key, DBT &data, DBT &auxdata)
   return r;
 }
 // }}}
-// {{{ dbns::insert (chordID, str, u_int32_t)
-int
-dbns::insert (const chordID &key, const str data, u_int32_t auxdata)
-{
-  DBT datadbt;
-  str_to_dbt (data, &datadbt);
-  DBT auxdatadbt;
-  bzero (&auxdatadbt, sizeof (auxdatadbt));
-  auxdatadbt.size = sizeof (u_int32_t);
-  u_int32_t nauxdata = htonl (auxdata);
-  auxdatadbt.data = &nauxdata; 
-  return insert (key, data, auxdata);
-}
-// }}}
 // {{{ dbns::lookup
 int
 dbns::lookup (const chordID &key, str &data)
@@ -334,6 +356,7 @@ dbns::del (const chordID &key)
   str_to_dbt (key_str, &skey);
   // Implicit transaction
   r = datadb->del (datadb, NULL, &skey, DB_AUTO_COMMIT);
+  // XXX Should delkey from kdb.
 
   if (r && r != DB_NOTFOUND)
     warner ("dbns::del", "del error", r);
@@ -346,11 +369,11 @@ dbns::getkeys (const chordID &start, size_t count, bool getaux, rpc_vec<adb_keya
 {
   int r = 0;
   DBC *cursor;
-  // Fully serialized reads of auxdatadb
-  if (auxdatadb) 
+  if (auxdatadb) {
     r = auxdatadb->cursor (auxdatadb, NULL, &cursor, 0);
-  else
+  } else {
     r = datadb->cursor (datadb, NULL, &cursor, 0);
+  }
 
   if (r) {
     warner ("dbns::getkeys", "cursor open", r);
@@ -395,6 +418,76 @@ dbns::getkeys (const chordID &start, size_t count, bool getaux, rpc_vec<adb_keya
 
   if (r && r != DB_NOTFOUND)
     warner ("dbns::getkeys", "cursor get", r);
+  (void) cursor->c_close (cursor);
+
+  return r;
+}
+// }}}
+// {{{ dbns::kgetkeys
+int
+dbns::kgetkeys (u_int32_t start, size_t count, bool getaux, rpc_vec<adb_keyaux_t, RPC_INFINITY> &out)
+{
+  u_int32_t n (0);
+  const keyaux_t *v = kdb->getkeys (start, count, &n);
+  if (!v)
+    return DB_NOTFOUND;
+  out.setsize (n);
+  for (u_int32_t i = 0; i < n; i++) {
+    keyaux_unmarshall (&v[i], &out[i].key, &out[i].auxdata);
+  }
+  return 0;
+}
+// }}}
+// {{{ dbns::migrate_getkeys
+int
+dbns::migrate_getkeys (void)
+{
+  warn << "migrate_getkeys (" << name << ")\n";
+  int r = 0;
+  DBC *cursor;
+  // Fully serialized reads of auxdatadb
+  if (auxdatadb) 
+    r = auxdatadb->cursor (auxdatadb, NULL, &cursor, 0);
+  else
+    r = datadb->cursor (datadb, NULL, &cursor, 0);
+
+  if (r) {
+    warner ("dbns::migrate_getkeys", "cursor open", r);
+    (void) cursor->c_close (cursor);
+    return r;
+  }
+
+  // Could possibly improve efficiency here by using SleepyCat's bulk reads
+  str key_str = id_to_str (chordID (0));
+  DBT key;
+  str_to_dbt (key_str, &key);
+  DBT data_template;
+  bzero (&data_template, sizeof (data_template));
+  // If DB_DBT_PARTIAL and data.dlen == 0, no data is returned.
+  // Of course, since BerkeleyDB BTree's puts data and keys
+  // on the leaf pages, we are left reading lots of data anyway.
+  if (!auxdatadb)
+    data_template.flags = DB_DBT_PARTIAL;
+  DBT data = data_template;
+
+  u_int32_t elements = 0;
+
+  r = cursor->c_get (cursor, &key, &data, DB_FIRST);
+  while (!r) {
+    chordID k = dbt_to_id (key);
+    u_int32_t auxdata (0);
+    if (auxdatadb)
+      auxdata = ntohl (*(u_int32_t *)data.data);
+
+    kdb->addkey (k, auxdata);
+
+    bzero (&key, sizeof (key));
+    data = data_template;
+    r = cursor->c_get (cursor, &key, &data, DB_NEXT);
+  }
+
+  if (r && r != DB_NOTFOUND)
+    warner ("dbns::migrate_getkeys", "cursor get", r);
   (void) cursor->c_close (cursor);
 
   return r;
@@ -897,6 +990,9 @@ do_store (dbmanager *dbm, svccb *sbp)
     sbp->replyref (ADB_ERR);
     return;
   }
+
+  db->kinsert (arg->key, arg->auxdata);
+
   DBT data;
   bzero (&data, sizeof (data));
   data.data = arg->data.base ();
@@ -953,8 +1049,20 @@ do_getkeys (dbmanager *dbm, svccb *sbp)
     sbp->replyref (res);
     return;
   }
-  res.resok->hasaux = arg->getaux;
-  int r = db->getkeys (arg->start, arg->batchsize, arg->getaux, res.resok->keyaux);
+  res.resok->hasaux = db->hasaux () && arg->getaux;
+  res.resok->ordered = arg->ordered;
+
+  int r (-1);
+  if (db->hasaux () || arg->ordered) {
+    r = db->getkeys (arg->continuation, arg->batchsize, arg->getaux, res.resok->keyaux);
+    if (!r)
+      res.resok->continuation = incID (res.resok->keyaux.back ().key);
+  } else {
+    u_int32_t start = arg->continuation.getui ();
+    r = db->kgetkeys (start, arg->batchsize, arg->getaux, res.resok->keyaux);
+    if (!r)
+      res.resok->continuation = bigint (start + res.resok->keyaux.size ());
+  }
   res.resok->complete = (r == DB_NOTFOUND);
   if (r && r != DB_NOTFOUND) 
     res.set_status (ADB_ERR);

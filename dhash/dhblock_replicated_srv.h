@@ -2,13 +2,14 @@
 #define __DHBLOCK_REPLICATED_SRV__
 
 #include <dhblock_srv.h>
-#include <chord.h>
-#include <adb_prot.h>
 
 class location;
 class merkle_tree;
 class merkle_server;
 class dhblock_replicated_srv;
+
+struct adb_keyaux_t;
+enum adb_status;
 
 struct rjrep : public repair_job {
   rjrep (blockID key, ptr<location> w, ptr<dhblock_replicated_srv> bsrv);
@@ -44,7 +45,7 @@ protected:
 
   qhash<chordID, vec<cbv> *, hashID> _paused_stores;
 
-  virtual void populate_mtree (adb_status stat, vec<chordID> keys, vec<u_int32_t> aux);
+  virtual void populate_mtree (adb_status stat, u_int32_t id, vec<adb_keyaux_t> keys);
 
   // Mutable blocks require Merkle key tweaking
   virtual chordID idaux_to_mkey (chordID key, u_int32_t aux);

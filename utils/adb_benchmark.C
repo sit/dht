@@ -93,23 +93,24 @@ bench_store (void)
   remaining = count;
   for (size_t i = 0; i < count; i++, ops_out++) {
     chordID k = make_block (buf, sizeof (buf) - 1);
-    db->store (k, str (buf), random_getword (), wrap (&bench_store_cb, start));
+    db->store (k, str (buf), wrap (&bench_store_cb, start));
     while (ops_out > max_out) 
       acheck ();
   }
 }
 
 void
-bench_getkeys_cb (u_int64_t start, adb_status stat, vec<chordID> keys, vec<u_int32_t> aux)
+bench_getkeys_cb (u_int64_t start, adb_status stat, u_int32_t id, vec<adb_keyaux_t> keys)
 {
   if (stat != ADB_COMPLETE && stat != ADB_OK) {
     fatal << "Unexpected getkeys status: " << stat << "\n";
   }
   remaining += keys.size ();
   if (stat != ADB_COMPLETE) {
-    db->getkeys (incID (keys.back ()), 
+    db->getkeys (id,
 		 wrap (&bench_getkeys_cb, start),
-		 count, false);
+		 /* ordered */ false,
+		 /* batchsize */ count);
     warnx << ".\n";
     return;
   }
@@ -122,7 +123,7 @@ void
 bench_getkeys (void)
 {
   remaining = 0;
-  db->getkeys (0, wrap (&bench_getkeys_cb, getusec ()), count, false);
+  db->getkeys (0, wrap (&bench_getkeys_cb, getusec ()), false, count);
 }
 
 void
@@ -156,7 +157,7 @@ int main (int argc, char *argv[])
   if (argc >= 5)
     batch = atoi (argv[4]);
 
-  db = New refcounted<adb> (adbsock, "test", true);
+  db = New refcounted<adb> (adbsock, "test", false);
 
   amain ();
 }

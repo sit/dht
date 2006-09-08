@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-## $Id: Makefile.am,v 1.20 2006/08/28 18:57:52 sit Exp $
+## $Id: Makefile.am,v 1.21 2006/09/08 19:40:37 sit Exp $
 
 chordlib_LIBRARIES = libutil.a libadb.a
 chordinclude_HEADERS = id_utils.h configurator.h skiplist.h modlogger.h
@@ -8,6 +8,7 @@ noinst_HEADERS = \
 	coord.h \
 	ida.h \
 	id_utils.h \
+	keyauxdb.h \
 	location.h \
 	locationtable.h \
 	misc_utils.h \
@@ -21,6 +22,7 @@ libutil_a_SOURCES = \
 	coord.C \
 	ida.C \
 	id_utils.C \
+	keyauxdb.C \
 	location.C \
 	locationtable.C \
 	misc_utils.C \
@@ -44,8 +46,11 @@ adb_benchmark_LDADD =  libutil.a ../svc/libsvc.la $(LIBARPC)  $(LIBSFSCRYPT) $(L
 # will run ida-genfield.py to update ida-field.C if ida-genfield.py changes.
 
 
-TESTS = test_ida test_skiplist test_locationtable test_adb
+TESTS = test_ida test_skiplist test_locationtable test_adb test_keyauxdb
 check_PROGRAMS = $(TESTS)
+
+test_keyauxdb_SOURCES = test_keyauxdb.C
+test_keyauxdb_LDADD = keyauxdb.o $(LIBSFSCRYPT) $(LIBASYNC) $(LIBGMP)
 
 test_ida_SOURCES = test_ida.C
 test_ida_LDADD = ./libutil.a $(LIBSFSCRYPT) $(LIBARPC) $(LIBASYNC) $(LIBGMP)

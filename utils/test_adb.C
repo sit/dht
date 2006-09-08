@@ -3,7 +3,6 @@
 
 void res (int, adb_status);
 void res2 (int, adb_status, chordID, str);
-void res3 (adb_status stat, vec<chordID> keys, vec<u_int32_t> v);
 
 adb *db;
 
@@ -40,18 +39,4 @@ res2 (int i, adb_status stat, chordID key, str data)
   warn << "fetch: " << i << " " << key << " " << data << "\n";
   if (i % 1000 < 100) 
     db->fetch (bigint(1 + i), wrap (res2, 1 + i));
-}
-
-void
-res3 (adb_status stat, vec<chordID> keys, vec<u_int32_t> v)
-{
-  for (unsigned int i = 0; i < keys.size (); i++)
-    warn << keys[i] << "\n";
-  if (stat == ADB_OK) {
-    assert (keys.size () > 0);
-    db->getkeys (keys.back () + 1, wrap (res3));
-  } else {
-    warn << stat << "\n";
-    exit (stat == ADB_COMPLETE);
-  }
 }
