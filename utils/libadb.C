@@ -159,10 +159,9 @@ adb::getkeys_cb (bool getaux, adb_getkeysres *res, cb_getkeys cb, clnt_stat err)
     cb (ADB_ERR, id, keys);
   } else {
     for (unsigned int i = 0; i < res->resok->keyaux.size (); i++) {
-      adb_keyaux_t ka;
-      ka.key = res->resok->keyaux[i].key;
-      ka.auxdata = res->resok->keyaux[i].auxdata;
-      keys.push_back (ka);
+      keys.push_back ();
+      keys.back().key = res->resok->keyaux[i].key;
+      keys.back().auxdata = res->resok->keyaux[i].auxdata;
     }
     id = random_getword ();
     getkeystab.insert (id, res->resok->continuation);
