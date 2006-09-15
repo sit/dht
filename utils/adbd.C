@@ -248,6 +248,8 @@ dbns::~dbns ()
   // Shut down the environment
   DBNS_DBCLOSE(dbe);
 #undef DBNS_DBCLOSE
+  delete kdb;
+  kdb = NULL;
   warn << "dbns::~dbns (" << name << ")\n";
 }
 // }}}
