@@ -159,9 +159,13 @@ stp_manager::timeout (rpc_state *C)
   if (C->rexmits > MAX_REXMIT) {
     O = pending.first;
     while (O) {
-      if (O->loc->id () == C->loc->id () && O != C) 
+      if (O->loc->id () == C->loc->id () && O != C) {
+	rpc_state *N = pending.next (O);
 	O->b->timeout ();
-      O = pending.next (O);
+	O = N;
+      } else {
+	O = pending.next (O);
+      }
     }
   }
   
