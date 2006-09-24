@@ -139,9 +139,9 @@ adb::getkeys (u_int32_t id, cb_getkeys cb, bool ordered, u_int32_t batchsize, bo
     if (x) {
       arg.continuation = *x;
       getkeystab.remove (id);
-    }
-    else {
+    } else {
       delaycb (0, wrap (this, &adb::getkeys_cb, getaux, (adb_getkeysres *) NULL, cb, RPC_FAILED));
+      return;
     }
   }
 
