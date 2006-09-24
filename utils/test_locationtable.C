@@ -30,6 +30,7 @@ main (int argc, char *argv[])
   n.r.hostname = "192.168.0.1";
   n.r.port = 11977;
   n.vnode_num = 0;
+  n.age = 0;
   n.x = make_chordID (n.r.hostname, n.r.port, n.vnode_num);
   n.coords.setsize (NCOORD);
   warnx << "base insert... ";

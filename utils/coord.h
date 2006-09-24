@@ -27,7 +27,7 @@ struct Coord {
   Coord ();
   Coord (const chord_node &n);
   Coord (const chord_node_wire &n);
-  Coord (const Coord &c) : coords (c.coords), ht (c.ht) {};
+  Coord (const Coord &c) : coords (c.coords), ht (c.ht), pred_err (c.pred_err) {};
   float err () const { return pred_err/PRED_ERR_MULT; };
   void update_err (float x) {  pred_err = (int)(x*PRED_ERR_MULT); };
 

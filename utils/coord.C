@@ -38,6 +38,7 @@ Coord::set (const Coord &c)
 {
   SET_COORDS (c.size (), c.coords[i]);
   if (USING_HT) ht = c.ht; 
+  pred_err = c.pred_err;
 }
 
 void
@@ -45,6 +46,7 @@ Coord::set (const chord_node &n)
 {
   SET_COORDS (NCOORD, n.coords[i]);
   if (USING_HT) ht = n.coords[NCOORD]; 
+  pred_err = n.e;
 }
 
 void 
@@ -55,7 +57,6 @@ Coord::fill_node (chord_node &data) const
     data.coords[i] = static_cast<int> (coords[i]);
   if (USING_HT) data.coords[NCOORD] = ( static_cast<int> (ht));
   data.e = pred_err;
-  
 }
 
 void 

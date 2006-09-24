@@ -141,6 +141,9 @@ route_recchord::first_hop (cbhop_t cbi, ptr<chordID> guess)
   trace << v->my_ID () << ": new route_recchord::first_hop: desired = "
 	<< desired_ << "\n";
 
+  ra->upcall_prog = 0;
+  ra->upcall_proc = 0;
+  ra->upcall_args.setsize (0);
 
   ptr<location> p = v->closestpred (x, failed_nodes);
   recroute_route_stat *res = New recroute_route_stat (RECROUTE_ACCEPTED);
