@@ -568,8 +568,6 @@ vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno,
     ref<dorpc_res> res = New refcounted<dorpc_res> (DORPC_OK);
     xdrproc_t outproc = prog.tbl[procno].xdr_res;
     u_int32_t xid = random_getword ();
-    aclnt_cb cbw = wrap (this, &vnode_impl::doRPC_cb, 
-			l, outproc, out, cb, res);
 
     // Stolen (mostly) from aclnt::init_call
     if (aclnttrace >= 2) {
@@ -584,8 +582,10 @@ vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno,
       if (aclnttrace >= 5 && rtp->print_arg)
 	rtp->print_arg (in, NULL, aclnttrace - 4, "ARGS", "");
       if (aclnttrace >= 3 && cb != aclnt_cb_null)
-	cbw = wrap (printreply, cbw, name, out, rtp->print_res);
+	cb = wrap (printreply, cb, name, out, rtp->print_res);
     }
+    aclnt_cb cbw = wrap (this, &vnode_impl::doRPC_cb, 
+			l, outproc, out, cb, res);
   
     if (!stream)
       return rpcm->doRPC (me_, l, transport_program_1, TRANSPORTPROC_DORPC, 
