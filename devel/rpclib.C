@@ -43,17 +43,16 @@ doRPC (const chord_node &n, const rpc_program &prog,
   
   //form the transport RPC
   ptr<dorpc_arg> arg = New refcounted<dorpc_arg> ();
+  bzero (arg, sizeof (*arg));
 
   //header
   struct sockaddr_in saddr;
-  bzero(&saddr, sizeof (sockaddr_in));
+  bzero (&saddr, sizeof (sockaddr_in));
   saddr.sin_family = AF_INET;
   inet_aton (n.r.hostname.cstr (), &saddr.sin_addr);
 
   arg->dest.machine_order_ipv4_addr = ntohl (saddr.sin_addr.s_addr);
   arg->dest.machine_order_port_vnnum = (n.r.port << 16) | n.vnode_num;
-  //leave coords as random.
-  bzero (&arg->src, sizeof (arg->src));
   arg->progno = prog.progno;
   arg->procno = procno;
   
