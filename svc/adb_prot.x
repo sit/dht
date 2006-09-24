@@ -58,7 +58,6 @@ struct adb_fetcharg {
 struct adb_fetchresok {
   chordID key;
   opaque data<>;
-  u_int32_t auxdata;
 };
 union adb_fetchres switch (adb_status status) {
  case ADB_NOTFOUND:
