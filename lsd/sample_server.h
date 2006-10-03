@@ -1,0 +1,23 @@
+#ifndef _SAMPLE_SERVER_H_
+#define _SAMPLE_SERVER_H_
+
+#include "sampler.h"
+#include <dhash_types.h>
+
+class sample_server {
+ public:
+  sample_server (int port, int num_vnodes);
+  void set_sampler( int vnode, dhash_ctype ctype, sampler *s );
+
+ private:
+  sampler ***_samplers;
+
+  void dispatch (ptr<asrv> s, svccb *sbp);
+  void client_accept_socket( int lfd );
+  void init_listen( int port );
+  void client_listen( int fd );
+
+};
+
+
+#endif /* _SAMPLE_SERVER_H_ */
