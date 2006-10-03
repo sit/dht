@@ -55,9 +55,9 @@ union sendnode_sample_res switch (sample_stat status) {
 program SAMPLE_PROGRAM {
 	version SAMPLE_VERSION {
 	        sendnode_sample_res
-		SAMPLE_SENDNODE (sendnode_sample_arg) = 5;
+		SAMPLE_SENDNODE (sendnode_sample_arg) = 0;
 
                 getkeys_sample_res
-                SAMPLE_GETKEYS (getkeys_sample_arg) = 6;
+                SAMPLE_GETKEYS (getkeys_sample_arg) = 1;
 	} = 1;
-} = 344450;
+} = 344455;
