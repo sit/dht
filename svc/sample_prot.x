@@ -17,7 +17,7 @@ struct getkeys_sample_arg {
 };
 
 struct getkeys_sample_res_ok {
-  bigint keys<64>;
+  bigint keys<>;
   bool morekeys;
 };
 
@@ -30,22 +30,21 @@ union getkeys_sample_res switch (sample_stat status) {
 
 
 /***********************************************************/
-/* SENDNODE */
+/* GETDATA */
 
-struct sendnode_sample_arg {
+struct getdata_sample_arg {
   dhash_ctype ctype;
   u_int32_t vnode;
-  bigint rngmin;
-  bigint rngmax;
+  bigint keys<>;
 };
 
-struct sendnode_sample_resok {
-  u_int32_t xxx;
+struct getdata_sample_resok {
+  dhash_value data<>;
 };
 
-union sendnode_sample_res switch (sample_stat status) {
+union getdata_sample_res switch (sample_stat status) {
  case SAMPLE_OK:
-   sendnode_sample_resok resok;
+   getdata_sample_resok resok;
  default:
    void;
 };
@@ -54,8 +53,8 @@ union sendnode_sample_res switch (sample_stat status) {
 
 program SAMPLE_PROGRAM {
 	version SAMPLE_VERSION {
-	        sendnode_sample_res
-		SAMPLE_SENDNODE (sendnode_sample_arg) = 0;
+	        getdata_sample_res
+		SAMPLE_GETDATA (getdata_sample_arg) = 0;
 
                 getkeys_sample_res
                 SAMPLE_GETKEYS (getkeys_sample_arg) = 1;

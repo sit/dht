@@ -99,9 +99,16 @@ adb::generic_cb (adb_status *res, cb_adbstat cb, clnt_stat err)
 void
 adb::fetch (chordID key, cb_fetch cb)
 {
+  fetch( key, false, cb );
+}
+
+void
+adb::fetch (chordID key, bool nextkey, cb_fetch cb)
+{
   adb_fetcharg arg;
   arg.key = key;
   arg.name = name_space;
+  arg.nextkey = nextkey;
 
   adb_fetchres *res = New adb_fetchres (ADB_OK);
   c->call (ADBPROC_FETCH, &arg, res,
@@ -115,7 +122,8 @@ adb::fetch_cb (adb_fetchres *res, chordID key, cb_fetch cb, clnt_stat err)
     str nodata = "";
     cb ((err ? ADB_ERR : res->status) , key, nodata);
   } else {
-    assert (key == res->resok->key);
+    // Not true if nextkey is true
+    // assert (key == res->resok->key);
     str data (res->resok->data.base (), res->resok->data.size ());
     cb (ADB_OK, res->resok->key, data);
   }
@@ -308,16 +316,15 @@ adb::update (const chordID &key, const ptr<location> n, u_int32_t aux,
     /* Throw away void return */
     delete arg;
   } else {
+    // Force RPC to be issued if enough in batch or after enough time
     batched_updates.push_back(arg);
-    if( next_batch != NULL ) {
-      timecb_remove( next_batch );
-    }
-    if( batched_updates.size() < UPDATE_BATCH_MAX_SIZE ) {
-      next_batch = delaycb( UPDATE_BATCH_SECS, 
-			    wrap( this, &adb::batch_update ));
-    } else {
+    if( batched_updates.size() > UPDATE_BATCH_MAX_SIZE ) {
+      timecb_remove(next_batch);
       next_batch = NULL;
       batch_update();
+    } else if( batched_updates.size() && !next_batch ) {
+      next_batch = delaycb (UPDATE_BATCH_SECS, 
+			    wrap( this, &adb::batch_update));
     }
   }
 }

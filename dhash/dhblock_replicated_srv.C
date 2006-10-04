@@ -103,7 +103,7 @@ dhblock_replicated_srv::store (chordID key, str new_data, cb_dhstat cb)
 
   if( _paused_stores[dbKey] != NULL ) {
     vec<cbv> *waiters = *(_paused_stores[dbKey]);
-    waiters->push_back (wrap (db, &adb::fetch, dbKey,
+    waiters->push_back (wrap (db, &adb::fetch, dbKey, false,
 			      wrap (this, 
 				    &dhblock_replicated_srv::store_after_fetch_cb, 
 				    new_data, cb)));

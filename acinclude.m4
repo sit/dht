@@ -1,4 +1,4 @@
-dnl $Id: acinclude.m4,v 1.18 2006/01/21 16:24:05 sit Exp $
+dnl $Id: acinclude.m4,v 1.19 2006/10/04 23:05:09 strib Exp $
 
 
 
@@ -665,6 +665,8 @@ if test "$with_gmp"; then
     if test -f ${with_gmp}/include/gmp.h; then
 	test "${with_gmp}" = /usr \
 	    || CPPFLAGS="$CPPFLAGS -I${with_gmp}/include"
+    elif test -f ${with_gmp}/gmp.h; then
+	CPPFLAGS="$CPPFLAGS -I${with_gmp}"
     elif test -f ${with_gmp}/include/gmp3/gmp.h; then
 	CPPFLAGS="$CPPFLAGS -I${with_gmp}/include/gmp3"
     elif test -f ${with_gmp}/include/gmp2/gmp.h; then
@@ -675,10 +677,12 @@ if test "$with_gmp"; then
 
     #LDFLAGS="$LDFLAGS -L${with_gmp}/lib"
     #LIBGMP=-lgmp
-    if test -f "${with_gmp}/lib/libgmp.la"; then
-	LIBGMP="${with_gmp}/lib/libgmp.la"
-    else
+    if test -f "${with_gmp}/libgmp.la"; then
+	LIBGMP="${with_gmp}/libgmp.la"
+    elif test -f "${with_gmp}/lib/libgmp.a"; then
 	LIBGMP="${with_gmp}/lib/libgmp.a"
+    else
+	LIBGMP="${with_gmp}/libgmp.a"
     fi
     AC_MSG_RESULT([$LIBGMP])
 elif test "$GMP_DIR"; then
@@ -689,6 +693,8 @@ else
     AC_MSG_RESULT(yes)
     if test -f /usr/lib/libgmp.la; then
 	LIBGMP=/usr/lib/libgmp.la
+    elif test -f "/usr/local//lib/libgmp.a"; then
+	LIBGMP="/usr/local/lib/libgmp.a"
     elif test -f /usr/lib/libgmp.a; then
 	# FreeBSD (among others) has a broken gmp shared library
 	LIBGMP=/usr/lib/libgmp.a
@@ -1211,6 +1217,7 @@ if test -f ${with_sfs}/Makefile -a -f ${with_sfs}/autoconf.h; then
     LIBSVC=${with_sfs}/svc/libsvc.la
     MALLOCK=${with_sfs}/sfsmisc/mallock.o
     RPCC=${with_sfs}/rpcc/rpcc
+    TAME=${with_sfs}/tame/tame
 elif test -f ${with_sfs}/include/sfs/autoconf.h \
 	-a -f ${with_sfs}/lib/sfs/libasync.la; then
     sfsincludedir="${with_sfs}/include/sfs"
@@ -1228,6 +1235,7 @@ elif test -f ${with_sfs}/include/sfs/autoconf.h \
     LIBSVC=${sfslibdir}/libsvc.la
     MALLOCK=${sfslibdir}/mallock.o
     RPCC=${with_sfs}/bin/rpcc
+    TAME=${with_sfs}/bin/tame
 else
     AC_MSG_ERROR("Can\'t find SFS libraries")
 fi
@@ -1255,6 +1263,7 @@ AC_SUBST(LIBSFSCRYPT)
 AC_SUBST(LIBSFSMISC)
 AC_SUBST(LIBSVC)
 AC_SUBST(RPCC)
+AC_SUBST(TAME)
 AC_SUBST(MALLOCK)
 AC_SUBST(NOPAGING)
 

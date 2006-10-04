@@ -4,6 +4,7 @@
 #include "dhash_types.h"
 #include "libadb.h"
 #include <sample_prot.h>
+#include <tame.h>
 
 class locationtable;
 class location;
@@ -49,21 +50,18 @@ private:
   void update_pred (cb_location cb);
   void update_pred_cb (cb_location cb,  chord_noderes *res, clnt_stat err);
   
-  void get_succlist (cb_locationlist cb);
-  void get_succlist_cb (chord_nodelistres *res,
+  void get_predlist (cb_locationlist cb);
+  void get_predlist_cb (chord_nodelistres *res,
 			cb_locationlist cb,
 			clnt_stat status);
   
   void sample_replicas ();
   void sample_replicas_predupdated (ptr<location> pred);
-  void sample_replicas_gotsucclist (ptr<location> pred,
+  void sample_replicas_gotpredlist (ptr<location> pred,
 				  vec<ptr<location> > succs);
 
-  void tcp_connect_cb( callback<void>::ptr cb, int fd );
-  void call_getkeys( ptr<location> pred );
-  void getkeys_done( ref<getkeys_sample_arg> arg, 
-		     ref<getkeys_sample_res> res, 
-		     clnt_stat err );
+  void call_getkeys( ptr<location> pred, chordID rngmin, CLOSURE );
+
 };
 
 #endif // __SAMPLER_H

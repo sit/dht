@@ -166,6 +166,7 @@ public:
   int kinsert (const chordID &key, u_int32_t auxdata);
   int insert (const chordID &key, DBT &data, DBT &auxdata);
   int lookup (const chordID &key, str &data);
+  int lookup_nextkey (const chordID &key, chordID &nextkey);
   int del (const chordID &key);
   int kgetkeys (u_int32_t start, size_t count, bool getaux,
       rpc_vec<adb_keyaux_t, RPC_INFINITY> &out); 
@@ -345,6 +346,47 @@ dbns::lookup (const chordID &key, str &data)
     return r;
   }
   data.setbuf ((const char *) (content.data), content.size);
+  return 0;
+}
+// }}}
+// {{{ dbns::lookup_next
+int
+dbns::lookup_nextkey (const chordID &key, chordID &nextkey)
+{
+  int r = 0;
+
+  str key_str = id_to_str (key);
+  DBT skey;
+  str_to_dbt (key_str, &skey);
+
+  DBT content;
+  bzero (&content, sizeof (content));
+
+  DBC *cursor;
+  r = datadb->cursor (datadb, NULL, &cursor, 0);
+
+  if (r) {
+    warner ("dbns::lookup_nextkey", "cursor open", r);
+    (void) cursor->c_close (cursor);
+    return r;
+  }
+
+  // Implicit transaction
+  r = cursor->c_get (cursor, &skey, &content, DB_SET_RANGE);
+  // Loop around the ring if at end.
+  if (r == DB_NOTFOUND) {
+    bzero (&skey, sizeof (skey));
+    r = cursor->c_get (cursor, &skey, &content, DB_FIRST);
+  }
+
+  if (r) {
+    if (r != DB_NOTFOUND)
+      warner ("dbns::fetch", "get error", r);
+    (void) cursor->c_close (cursor);
+    return r;
+  }
+  nextkey = dbt_to_id(skey);
+  (void) cursor->c_close (cursor);
   return 0;
 }
 // }}}
@@ -749,7 +791,8 @@ dbns::updateone (const chordID &key, const adb_bsinfo_t &bsinfo, bool present,
   str key_str = id_to_str (key);
   DBT skey;
   str_to_dbt (key_str, &skey);
-  DBT data; bzero (&data, sizeof (data));
+  DBT data; 
+  bzero (&data, sizeof (data));
   adb_vbsinfo_t vbs;
 
   // get, with a write lock.
@@ -1026,12 +1069,20 @@ do_fetch (dbmanager *dbm, svccb *sbp)
  
   str data; 
 
-  int r = db->lookup (arg->key, data);
+  int r;
+  chordID key;
+  if( arg->nextkey ) {
+    r = db->lookup_nextkey (arg->key, key);
+    data = "";
+  } else {
+    r = db->lookup (arg->key, data);
+    key = arg->key;
+  }
 
   if (r) {
     res.set_status ((r == DB_NOTFOUND ? ADB_NOTFOUND : ADB_ERR));
   } else {
-    res.resok->key = arg->key;
+    res.resok->key = key;
     res.resok->data = data;
   }
 
@@ -1304,6 +1355,7 @@ usage ()
 int 
 main (int argc, char **argv)
 {
+
   setprogname (argv[0]);
 
   char ch;

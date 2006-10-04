@@ -65,6 +65,7 @@ public:
   void store (chordID key, str data, u_int32_t auxdata, cb_adbstat cb);
   void store (chordID key, str data, cb_adbstat cb);
   void fetch (chordID key, cb_fetch cb);
+  void fetch (chordID key, bool nextkey, cb_fetch cb);
   void remove (chordID key, cb_adbstat cb);
   void getkeys (u_int32_t id, cb_getkeys cb, bool ordered = false, u_int32_t batchsize = 16384, bool getaux = false);
   void sync ();

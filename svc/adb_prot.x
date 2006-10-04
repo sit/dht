@@ -54,6 +54,7 @@ struct adb_storearg {
 struct adb_fetcharg {
   str name;
   chordID key;
+  bool nextkey;
 };
 struct adb_fetchresok {
   chordID key;

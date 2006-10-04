@@ -1,7 +1,11 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.29 2006/10/03 19:11:43 strib Exp $
+# $Id: Makefile.am,v 1.30 2006/10/04 23:05:09 strib Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
+
+SUFFIXES = .T .x .C .h
+.T.C:
+	-$(TAME) -o $@ $< || rm -f $@
 
 bin_PROGRAMS = lsdctl lsd syncd sampled
 bin_SCRIPTS = start-dhash
@@ -19,6 +23,8 @@ syncd_LDADD =  ../dhash/libdhash.a  ../merkle/libmerkle.a \
 	    $(DBLIB) ${LDADD} 
 
 sampled_SOURCES = sampled.C sampler.C sampler.h sample_server.C sample_server.h
+sample_server.C: sample_server.T
+sampler.C: sampler.T
 sampled_LDADD =  ../dhash/libdhash.a \
 		 ../chord/libchord.a ../utils/libutil.a ../devel/rpclib.o \
 		 ../svc/libsvc.la  \

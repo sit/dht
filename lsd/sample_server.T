@@ -1,3 +1,5 @@
+// -*-c++-*-
+
 #include <chord.h>
 #include "sample_server.h"
 #include <libadb.h>
@@ -5,6 +7,7 @@
 #include <location.h>
 #include <locationtable.h>
 #include <comm.h>
+#include <id_utils.h>
 
 // ---------------------------------------------------------------------------
 // sample_server
@@ -82,18 +85,17 @@ sample_server::dispatch (ptr<asrv> s, svccb *sbp)
   // --------------------------------------------------------------
 
   switch (sbp->proc()) {
-  case SAMPLE_SENDNODE:
+  case SAMPLE_GETDATA:
     // request a node of the sample tree
     {
-      sendnode_sample_arg *arg = sbp->Xtmpl getarg<sendnode_sample_arg> ();
+      getdata_sample_arg *arg = sbp->Xtmpl getarg<getdata_sample_arg> ();
 
       // use the vnode and ctype to direct this to the right db
       assert( _samplers[arg->vnode][arg->ctype] != NULL );
       ptr<adb> db = _samplers[arg->vnode][arg->ctype]->get_db();
 
-      // do something interesting?
-      sendnode_sample_res res (SAMPLE_OK);
-      sbp->reply (&res);
+      do_getdata( s, sbp, db );
+
       break;
     }
      
@@ -107,9 +109,8 @@ sample_server::dispatch (ptr<asrv> s, svccb *sbp)
 
       warn << "getkeys called!\n";
 
-      // do something interesting?
-      getkeys_sample_res res (SAMPLE_OK);
-      sbp->reply (&res);
+      do_getkeys( s, sbp, db, arg->rngmin, arg->rngmax );
+
       break;
     }
   default:
@@ -119,4 +120,103 @@ sample_server::dispatch (ptr<asrv> s, svccb *sbp)
   }
 }
 
+TAMED
+void sample_server::do_getkeys( ptr<asrv> s, svccb *sbp, ptr<adb> db,
+				chordID min, chordID max ) {
 
+  VARS {
+    vec<chordID> ids;
+    chordID rand;
+    adb_status stat;
+    chordID key;
+    str data;
+    uint i;
+    uint trials;
+    qhash< str, void * > keys_picked;
+  }
+  // for now just return 50 random keys in that space
+  trials = 0;
+  for( i = 0; i < 5; i++ ) {
+
+    do {
+      rand = make_randomID();
+    } while( !betweenrightincl( min, max, rand ) );
+
+    warn << "picked random key " << rand << " to go between " << min 
+	 << " and " << max << "\n";
+
+    BLOCK {
+      db->fetch( rand, true, @(stat, key, data) );
+    }
+
+    if( stat != ADB_OK ) {
+      break;
+    } else {
+
+      trials++;
+
+      if( !betweenrightincl(min, max, key) || 
+	  keys_picked[strbuf() << key] != NULL ) {
+	i--;
+
+	if( trials > 100 ) {
+	  // give up
+	  break;
+	}
+
+      } else {
+	warn << "data key " << key << " followed random key " << rand << "\n";
+	ids.push_back(key);
+	keys_picked.insert( strbuf() << key, (void *) 1 );
+      }
+    }
+  }
+
+  getkeys_sample_res res (SAMPLE_OK);
+  res.resok->keys.setsize(ids.size());
+
+  for( i = 0; i < ids.size(); i++ ) {
+    res.resok->keys[i] = ids[i];
+  }
+  res.resok->morekeys = false;
+
+  sbp->reply (&res);
+  
+}
+
+TAMED
+void sample_server::do_getdata( ptr<asrv> s, svccb *sbp, ptr<adb> db ) {
+
+  VARS {
+    getdata_sample_arg *arg;
+    vec<str> data;
+    str curr_data;
+    uint i;
+    adb_status stat;
+    chordID key_ret;
+  }
+
+  arg = sbp->Xtmpl getarg<getdata_sample_arg> ();
+  
+  for( i = 0; i < arg->keys.size(); i++ ) {
+    BLOCK {
+      db->fetch( arg->keys[i], @(stat, key_ret, curr_data) );
+    }
+    if( stat == ADB_OK ) {
+      data.push_back( curr_data );
+    } else {
+      // TODO: fail more gracefully
+      fatal << "We don't actually have block " << arg->keys[i] << "\n";
+    }
+  }
+
+  getdata_sample_res res (SAMPLE_OK);
+  
+  res.resok->data.setsize(data.size());
+  for( i = 0; i < data.size(); i++ ) {
+    res.resok->data[i] = data[i];
+  }
+
+  sbp->reply (&res);
+  
+}

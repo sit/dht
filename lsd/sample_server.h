@@ -3,6 +3,7 @@
 
 #include "sampler.h"
 #include <dhash_types.h>
+#include <tame.h>
 
 class sample_server {
  public:
@@ -16,6 +17,11 @@ class sample_server {
   void client_accept_socket( int lfd );
   void init_listen( int port );
   void client_listen( int fd );
+
+  void do_getkeys( ptr<asrv> s, svccb *sbp, ptr<adb> db,
+		   chordID min, chordID max, CLOSURE );
+
+  void do_getdata( ptr<asrv> s, svccb *sbp, ptr<adb> db, CLOSURE );
 
 };
 
