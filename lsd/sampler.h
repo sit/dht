@@ -42,25 +42,25 @@ public:
   
 private:
 
-  ptr<aclnt> _client;
+  ptr<aclnt> _pred_client;
   ptr<location> _last_pred;
+  ptr<aclnt> _succ_client;
+  ptr<location> _last_succ;
 
   void doRPC (const rpc_program &prog,
 	      int procno, const void *in, void *out, aclnt_cb cb);
-  void update_pred (cb_location cb);
-  void update_pred_cb (cb_location cb,  chord_noderes *res, clnt_stat err);
-  
-  void get_predlist (cb_locationlist cb);
-  void get_predlist_cb (chord_nodelistres *res,
-			cb_locationlist cb,
-			clnt_stat status);
   
   void sample_replicas ();
-  void sample_replicas_predupdated (ptr<location> pred);
-  void sample_replicas_gotpredlist (ptr<location> pred,
-				  vec<ptr<location> > succs);
+  void resched();
+  void update_neighbors (CLOSURE);
+  void sample_replicas_gotneighbors (ptr<location> pred,
+				     ptr<location> succ,
+				     vec<ptr<location> > preds);
 
-  void call_getkeys( ptr<location> pred, chordID rngmin, CLOSURE );
+  void wrap_call_getkeys( ptr<location> pred, bool pred, chordID rngmin, 
+			  callback<void>::ref cb );
+  void call_getkeys( ptr<location> pred, bool pred, chordID rngmin, 
+		     callback<void>::ref cb, CLOSURE );
 
 };
 

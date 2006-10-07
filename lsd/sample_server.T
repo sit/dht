@@ -12,6 +12,8 @@
 // ---------------------------------------------------------------------------
 // sample_server
 
+const uint sample_server::NUM_KEYS_AT_A_TIME = 50;
+
 //next two methods lifted from lsd
 void sample_server::client_accept_socket( int lfd ) {
   sockaddr_un sun;
@@ -136,14 +138,14 @@ void sample_server::do_getkeys( ptr<asrv> s, svccb *sbp, ptr<adb> db,
   }
   // for now just return 50 random keys in that space
   trials = 0;
-  for( i = 0; i < 5; i++ ) {
+  for( i = 0; i < NUM_KEYS_AT_A_TIME; i++ ) {
 
     do {
       rand = make_randomID();
     } while( !betweenrightincl( min, max, rand ) );
 
-    warn << "picked random key " << rand << " to go between " << min 
-	 << " and " << max << "\n";
+    //warn << "picked random key " << rand << " to go between " << min 
+    // << " and " << max << "\n";
 
     BLOCK {
       db->fetch( rand, true, @(stat, key, data) );
@@ -159,13 +161,13 @@ void sample_server::do_getkeys( ptr<asrv> s, svccb *sbp, ptr<adb> db,
 	  keys_picked[strbuf() << key] != NULL ) {
 	i--;
 
-	if( trials > 100 ) {
+	if( trials > NUM_KEYS_AT_A_TIME*5 ) {
 	  // give up
 	  break;
 	}
 
       } else {
-	warn << "data key " << key << " followed random key " << rand << "\n";
+	//warn << "data key " << key << " followed random key " << rand << "\n";
 	ids.push_back(key);
 	keys_picked.insert( strbuf() << key, (void *) 1 );
       }

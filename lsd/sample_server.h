@@ -11,6 +11,7 @@ class sample_server {
   void set_sampler( int vnode, dhash_ctype ctype, sampler *s );
 
  private:
+  const static uint NUM_KEYS_AT_A_TIME;
   sampler ***_samplers;
 
   void dispatch (ptr<asrv> s, svccb *sbp);

@@ -23,7 +23,8 @@ sampler::sampler (ptr<locationtable> locations,
     host_loc (h),
     db (New refcounted<adb> (dbpath, dbname)),
     cur_succ (0),
-    replica_timer (60), _client(NULL), _last_pred(NULL)
+    replica_timer (60), _pred_client(NULL), _last_pred(NULL), 
+    _succ_client(NULL), _last_succ(NULL)
 { 
   
   warn << "new sampler: \n" 
@@ -57,110 +58,128 @@ sampler::doRPC (const rpc_program &prog,
   ::doRPC (dst, prog, procno, in, out, cb);
 }
 
-void
-sampler::update_pred (cb_location cb)
-{
-  ptr<chordID> id = New refcounted<chordID> (host_loc->id ());
+TAMED
+void sampler::update_neighbors() {
 
-  chord_noderes *res = New chord_noderes ();
-  doRPC (chord_program_1, CHORDPROC_GETPREDECESSOR,
-	 id, res,
-	 wrap (this, &sampler::update_pred_cb, cb, res) );
-}
+  VARS {
+    ptr<chordID> id;
+    chord_noderes *res;
+    clnt_stat err;
+    ptr<location> pred;
+    ptr<location> succ;
+    chord_nodelistres *lst;
+    vec<ptr<location> > predlist;
+  }
+  // predecessor
+  id = New refcounted<chordID> (host_loc->id ());
 
-void
-sampler::update_pred_cb (cb_location cb, chord_noderes *res, clnt_stat err)
-{
+  res = New chord_noderes ();
+  BLOCK {
+    doRPC (chord_program_1, CHORDPROC_GETPREDECESSOR,
+	   id, res, @(err) );
+  }
   if (err) {
     warn << "my local node is down?\n";
-    (*cb) (NULL);
+    delaycb (replica_timer, wrap(this, &sampler::sample_replicas));
+    return;
   } else {
     chord_node n = make_chord_node (*res->resok);
     ptr<location> x = locations->lookup_or_create (n);
     locations->insert (x);
-    cb (x);
+    pred = x;
   }
   delete res;
-}
 
+  // get predlist
+  lst = New chord_nodelistres ();
+  BLOCK {
+    doRPC (chord_program_1,
+	   CHORDPROC_GETPREDLIST, 
+	   id, lst, @(err));
+  }
 
-void
-sampler::get_predlist (cb_locationlist cb)
-{
-  ptr<chordID> ga = New refcounted<chordID> (host_loc->id ());
-  chord_nodelistres *lst = New chord_nodelistres ();
-  doRPC (chord_program_1,
-	 CHORDPROC_GETPREDLIST, 
-	 ga, lst, wrap (this, &sampler::get_predlist_cb, lst, cb));
-}
-
-void
-sampler::get_predlist_cb (chord_nodelistres *res,
-		 cb_locationlist cb,
-		 clnt_stat status)
-{
-  vec<ptr<location> > ret;
-  if (!status) {
-    size_t sz = res->resok->nlist.size ();
+  if (!err) {
+    size_t sz = lst->resok->nlist.size ();
     for (size_t i = 0; i < sz; i++) {
-      chord_node n = make_chord_node (res->resok->nlist[i]);
+      chord_node n = make_chord_node (lst->resok->nlist[i]);
       ptr<location> s = locations->lookup_or_create (n);
       locations->insert (s);
-      ret.push_back (s);
+      predlist.push_back (s);
     }
+  } else {
+    warn << "my local node is down?\n";
+    delaycb (replica_timer, wrap(this, &sampler::sample_replicas));
+    return;
   }
 
-  cb (ret);
+  // get successor
+  res = New chord_noderes ();
+  BLOCK {
+    doRPC (chord_program_1, CHORDPROC_GETSUCCESSOR,
+	   id, res, @(err) );
+  }
+  if (err) {
+    warn << "my local node is down?\n";
+    delaycb (replica_timer, wrap(this, &sampler::sample_replicas));
+    return;
+  } else {
+    chord_node n = make_chord_node (*res->resok);
+    ptr<location> x = locations->lookup_or_create (n);
+    locations->insert (x);
+    succ = x;
+  }
   delete res;
-}
 
+  sample_replicas_gotneighbors(pred, succ, predlist);
+
+}
 
 void
 sampler::sample_replicas ()
 {
   if (0 /* XXX */) {
     // still working on the last sample
-    delaycb (replica_timer, wrap(this, &sampler::sample_replicas)); 
+    resched();
   } else {
     warn << "sample_replicas: starting (ctype = " << ctype << ")\n";
-    update_pred (wrap (this, &sampler::sample_replicas_predupdated)); 
+    update_neighbors(); 
   } 
 }
 
-void
-sampler::sample_replicas_predupdated (ptr<location> pred)
-{
-  if (!pred) {
-    delaycb (replica_timer, wrap (this, &sampler::sample_replicas)); 
-    return;
-  }
-  warn << "sample_replicas: my pred is " << pred << "\n";
-  get_predlist (wrap (this, &sampler::sample_replicas_gotpredlist, pred));
-}
+void sampler::sample_replicas_gotneighbors (ptr<location> pred,
+					    ptr<location> succ,
+					    vec<ptr<location> > preds) {
 
-void
-sampler::sample_replicas_gotpredlist (ptr<location> pred,
-				      vec<ptr<location> > preds) 
-{
   if (preds.size () < 2) {
-    delaycb (replica_timer, wrap (this, &sampler::sample_replicas)); 
+    resched();
     return;
   }
-    
-  // succs[0] is the vnode we are working for
-  // pred = locations->closestpredloc (succs[0]);
+
   assert (pred);
+  assert (succ);
   assert (preds[preds.size()-1]);
   assert (host_loc);
 
   chordID rngmin = (preds[preds.size()-1])->id();
 
-  call_getkeys( pred, rngmin );
+  wrap_call_getkeys( succ, false, rngmin,
+		     wrap( this, &sampler::wrap_call_getkeys, pred, true, 
+			   rngmin, wrap( this, &sampler::resched ) ) );
 
 }
 
+void sampler::resched() {
+  delaycb (replica_timer, wrap(this, &sampler::sample_replicas));
+}
+
+void sampler::wrap_call_getkeys( ptr<location> neighbor, bool pred, 
+				 chordID rngmin, callback<void>::ref cb ) {
+  call_getkeys( neighbor, pred, rngmin, cb );
+}
+
 TAMED
-void sampler::call_getkeys( ptr<location> pred, chordID rngmin ) {
+void sampler::call_getkeys( ptr<location> neighbor, bool pred, 
+			    chordID rngmin, callback<void>::ref cb ) {
 
   VARS {
     vec<chordID> to_fetch;
@@ -175,37 +194,59 @@ void sampler::call_getkeys( ptr<location> pred, chordID rngmin ) {
     int fd;
     clnt_stat err;
     clnt_stat err2;
+    ptr<aclnt> client;
   }
 
   // establish a TCP connection to your predecessor and ask for
   // a sampling of keys
-  if( _last_pred == NULL || _client == NULL || 
-      _last_pred->id() != pred->id() ) {
-    _client = NULL;
-    warn << host_loc << ":" << ctype << " new pred " << pred << "\n";
+  if( pred && (_last_pred == NULL || _pred_client == NULL || 
+	       _last_pred->id() != neighbor->id()) ||
+      !pred && (_last_succ == NULL || _succ_client == NULL || 
+	       _last_succ->id() != neighbor->id()) ) {
+
+    if( pred ) {
+      _pred_client = NULL;
+    } else {
+      _succ_client = NULL;
+    }
+
+    warn << host_loc << ":" << ctype << " new neighbor " << neighbor 
+	 << ", "  << pred << "\n";
 
     BLOCK {
-      tcpconnect( pred->address().hostname,
-		  pred->address().port+2, // LAME CONVENTION
+      tcpconnect( neighbor->address().hostname,
+		  neighbor->address().port+2, // LAME CONVENTION
 		  @(fd) );
     }
 
     if (fd < 0) {
       warn << "connect to remote sample_server failed\n";
-      delaycb (replica_timer, wrap(this, &sampler::sample_replicas));
+      (*cb)();
       return;
     }
     ptr<axprt_stream> xprt = axprt_stream::alloc( fd );
-    _client = aclnt::alloc( xprt, sample_program_1 );
+    ptr<aclnt> newclient = aclnt::alloc( xprt, sample_program_1 );
+
+    if( pred ) {
+      _pred_client = newclient;
+    } else {
+      _succ_client = newclient;
+    } 
 
   }
 
   // now we're connected to the latest pred, commence RPCing
 
-  _last_pred = pred;
+  if( pred ) {
+    _last_pred = neighbor;
+    client = _pred_client;
+  } else {
+    _last_succ = neighbor;
+    client = _succ_client;
+  }
   arg = New refcounted<getkeys_sample_arg>();
   arg->ctype = ctype;
-  arg->vnode = pred->vnode();
+  arg->vnode = neighbor->vnode();
   arg->rngmin = rngmin;
   arg->rngmax = host_loc->id();
   res = New refcounted<getkeys_sample_res>();
@@ -215,13 +256,18 @@ void sampler::call_getkeys( ptr<location> pred, chordID rngmin ) {
 
   BLOCK {
 
-    _client->call( SAMPLE_GETKEYS, arg, res, @(err) );
+    client->call( SAMPLE_GETKEYS, arg, res, @(err) );
 
   }
 
   if( err ) {
     warn << "RPC to remote sample_server failed\n";
-    delaycb (replica_timer, wrap(this, &sampler::sample_replicas));
+    if( pred ) {
+      _pred_client = NULL;
+    } else {
+      _succ_client = NULL;
+    }
+    (*cb)();
     return;
   }
 
@@ -234,8 +280,8 @@ void sampler::call_getkeys( ptr<location> pred, chordID rngmin ) {
     // TODO: going to need special mechanisms for NOAUTH blocks
 
     if( stat != ADB_OK ) {
-      warn << host_loc << ":" << ctype << " going to get key " 
-	   << res->resok->keys[i] << "\n";
+      //warn << host_loc << ":" << ctype << " going to get key " 
+      //   << res->resok->keys[i] << "\n";
       to_fetch.push_back(res->resok->keys[i]);
     }
 
@@ -243,7 +289,7 @@ void sampler::call_getkeys( ptr<location> pred, chordID rngmin ) {
 
   if( to_fetch.size() == 0 ) {
     // didn't get no keys back
-    delaycb (replica_timer, wrap(this, &sampler::sample_replicas));
+    (*cb)();
     return;  
   }
 
@@ -252,7 +298,7 @@ void sampler::call_getkeys( ptr<location> pred, chordID rngmin ) {
   data_res = New refcounted<getdata_sample_res>();
   
   data_arg->ctype = ctype;
-  data_arg->vnode = _last_pred->vnode();  
+  data_arg->vnode = neighbor->vnode();  
   data_arg->keys.setsize(to_fetch.size());
 
   for( i = 0; i < to_fetch.size(); i++ ) {
@@ -260,13 +306,13 @@ void sampler::call_getkeys( ptr<location> pred, chordID rngmin ) {
   }
 
   BLOCK {
-    _client->call( SAMPLE_GETDATA, data_arg, data_res, @(err2) );
+    client->call( SAMPLE_GETDATA, data_arg, data_res, @(err2) );
   }
 
   if( err2 ) {
     warn << "Data RPC to remote sample_server failed\n";
-    delaycb (replica_timer, wrap(this, &sampler::sample_replicas));
-    return;    
+    (*cb)();
+    return;
   }
 
   // now insert them all into our db
@@ -282,6 +328,5 @@ void sampler::call_getkeys( ptr<location> pred, chordID rngmin ) {
     // TODO: check for errors
   }
 
-  delaycb (replica_timer, wrap(this, &sampler::sample_replicas));
+  (*cb)();
 }
-
