@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.53 2005/12/21 07:41:52 sit Exp $
+# $Id: Makefile.am,v 1.54 2006/10/08 23:07:46 strib Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
@@ -7,7 +7,7 @@ if GTK_AVAILABLE
 VIS = vis
 endif
 
-bin_PROGRAMS = dbm walk findroute filestore nodeq dbdump  lsdping dbm_noauth adbmigrate $(VIS) 
+bin_PROGRAMS = dbm walk findroute filestore nodeq dbdump  lsdping dbm_noauth adbmigrate kdb_stats $(VIS) 
 bin_SCRIPTS = dbm.py usenetlsdmon.py nodeq-filter
 chorddata_DATA =  RPC.py RPCProto.py vischat.py
 
@@ -48,6 +48,9 @@ findroute_LDADD = ../chord/libchord.a ../svc/libsvc.la ../utils/libutil.a $(LDAD
 
 nodeq_SOURCES = nodeq.C rpclib.C
 nodeq_LDADD = ../svc/libsvc.la ../utils/libutil.a ../merkle/libmerkle.a $(LDADD)
+
+kdb_stats_SOURCES = kdb_stats.C
+kdb_stats_LDADD = ../utils/libutil.a ../svc/libsvc.la $(LIBARPC)  $(LIBSFSCRYPT) $(LIBGMP) $(DBLIB) $(LIBASYNC) 
 
 if GTK_AVAILABLE
 vis_SOURCES = vis.C vis.h vis_update.C vis_cmd.C
