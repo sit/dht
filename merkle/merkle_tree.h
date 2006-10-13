@@ -32,19 +32,19 @@ struct merkle_key {
 };
 
 class merkle_tree {
-private:
+protected:
   bool do_rehash;
   void _hash_tree (u_int depth, const merkle_hash &key, merkle_node *n, bool check);
   void rehash (u_int depth, const merkle_hash &key, merkle_node *n);
   void count_blocks (u_int depth, const merkle_hash &key,
 		     array<u_int64_t, 64> &nblocks);
   void leaf2internal (u_int depth, const merkle_hash &key, merkle_node *n);
-  void remove (u_int depth, merkle_hash &key, merkle_node *n);
-  int insert (u_int depth, merkle_hash &key, merkle_node *n);
-  merkle_node *lookup (u_int *depth, u_int max_depth, 
-		       const merkle_hash &key, merkle_node *n);
 
   itree<chordID, merkle_key, &merkle_key::id, &merkle_key::ik> keylist;
+  virtual void remove (u_int depth, merkle_hash &key, merkle_node *n);
+  virtual int insert (u_int depth, merkle_hash &key, merkle_node *n);
+  virtual merkle_node *lookup (u_int *depth, u_int max_depth, 
+		       const merkle_hash &key, merkle_node *n);
 
 public:
   enum { max_depth = merkle_hash::NUM_SLOTS }; // XXX off by one? or two?
@@ -52,7 +52,7 @@ public:
   merkle_tree_stats stats;
 
   merkle_tree ();
-  ~merkle_tree ();
+  virtual ~merkle_tree ();
   void remove (merkle_hash &key);
   void remove (const chordID &id);
   void remove (const chordID &id, const u_int32_t aux);

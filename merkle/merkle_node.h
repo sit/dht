@@ -12,16 +12,16 @@ public:
   merkle_hash hash;
 
   const merkle_node *child (u_int i) const;
-  merkle_node *child (u_int i);
-  bool isleaf () const;
+  virtual merkle_node *child (u_int i);
+  virtual bool isleaf () const;
   bool leaf_is_full () const;
-  void internal2leaf ();
-  void leaf2internal ();
+  virtual void internal2leaf ();
+  virtual void leaf2internal ();
   void dump (u_int depth) const;
 
   merkle_node ();
   void initialize (u_int64_t _count);
-  ~merkle_node ();
+  virtual ~merkle_node ();
 };
 
 #endif /* _MERKLE_NODE_H_ */
