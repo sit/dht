@@ -33,6 +33,7 @@ closestsucc (itree<chordID, merkle_key, &merkle_key::id, &merkle_key::ik> &keyli
 merkle_tree::merkle_tree () :
   do_rehash (true)
 {
+  root = New merkle_node();
 }
 
 merkle_tree::~merkle_tree ()
@@ -94,7 +95,7 @@ void
 merkle_tree::hash_tree ()
 {
   merkle_hash prefix (0);
-  _hash_tree (0, prefix, &root);
+  _hash_tree (0, prefix, root);
 }
 
 void
@@ -104,7 +105,7 @@ merkle_tree::check_invariants ()
   if (!do_rehash)
     return;
   merkle_hash prefix (0);
-  _hash_tree (0, prefix, &root, true);
+  _hash_tree (0, prefix, root, true);
 }
 
 void
@@ -236,7 +237,7 @@ merkle_tree::insert (merkle_hash &key)
   if (keylist[tobigint (key)])
     fatal << "merkle_tree::insert: key already exists " << key << "\n";
 
-  return insert (0, key, &root);
+  return insert (0, key, root);
 }
 
 int
@@ -270,7 +271,7 @@ merkle_tree::remove (merkle_hash &key)
   if (!keylist[tobigint (key)])
     fatal << (u_int) this << " merkle_tree::remove: key does not exist " << key << "\n";
 
-  remove (0, key, &root);
+  remove (0, key, root);
 }
 
 void
@@ -313,7 +314,7 @@ merkle_node *
 merkle_tree::lookup_exact (u_int depth, const merkle_hash &key)
 {
   u_int realdepth = 0;
-  merkle_node *n = lookup (&realdepth, depth, key, &root);
+  merkle_node *n = lookup (&realdepth, depth, key, root);
   assert (realdepth <= depth);
   return  (realdepth != depth) ? NULL : n;
 }
@@ -325,14 +326,14 @@ merkle_node *
 merkle_tree::lookup (u_int depth, const merkle_hash &key)
 {
   u_int depth_ignore = 0;
-  return lookup (&depth_ignore, depth, key, &root);
+  return lookup (&depth_ignore, depth, key, root);
 }
 
 merkle_node *
 merkle_tree::lookup (u_int *depth, u_int max_depth, const merkle_hash &key)
 {
   *depth = 0;
-  return lookup (depth, max_depth, key, &root);
+  return lookup (depth, max_depth, key, root);
 }
 
 // return the deepest node whose prefix matches key
@@ -388,7 +389,7 @@ merkle_tree::get_keyrange (chordID min, chordID max, u_int n)
 void
 merkle_tree::dump ()
 {
-  root.dump (0);
+  root->dump (0);
 }
 
 void
@@ -422,7 +423,7 @@ void
 merkle_tree::compute_stats ()
 {
   bzero (&stats, sizeof (stats));
-  stats_helper (0, &root);
+  stats_helper (0, root);
   
   warn.fmt ("      %10s %10s %10s %10s\n", "leaves", "MT leaves", "internals", "nodes");
 
@@ -462,15 +463,15 @@ merkle_tree::compute_stats ()
   snprintf (buf, sizeof (buf), "depth ave %f\n", ave);
   warn << buf;
 
-  warn << "blocks: " << root.count << "\n";
+  warn << "blocks: " << root->count << "\n";
   snprintf (buf, sizeof (buf), 
 	    "blocks/node: %f\n"
 	    "blocks/leaf: %f\n"
 	    "blocks/non-empty-leaf: %f\n"
 	    "blocks/internal: %f\n",
-	    root.count / (float)stats.num_nodes,
-	    root.count / (float)stats.num_leaves,
-	    root.count / (float)(stats.num_leaves - stats.num_empty_leaves),
-	    root.count / (float)stats.num_internals);
+	    root->count / (float)stats.num_nodes,
+	    root->count / (float)stats.num_leaves,
+	    root->count / (float)(stats.num_leaves - stats.num_empty_leaves),
+	    root->count / (float)stats.num_internals);
   warn << buf;
 }

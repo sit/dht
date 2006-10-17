@@ -48,7 +48,7 @@ protected:
 
 public:
   enum { max_depth = merkle_hash::NUM_SLOTS }; // XXX off by one? or two?
-  merkle_node root; // public for testing only
+  merkle_node *root; // public for testing only
   merkle_tree_stats stats;
 
   merkle_tree ();
