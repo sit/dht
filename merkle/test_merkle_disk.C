@@ -16,6 +16,6 @@ int main (int argc, char **argv) {
 
   tree->dump();
 
-  ((merkle_node_disk*) tree->root)->write_out();
+  warn << "leaf size: " << sizeof(merkle_leaf_node) << "\n";
 
 }

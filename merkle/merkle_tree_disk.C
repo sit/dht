@@ -89,7 +89,7 @@ void merkle_node_disk::write_out() {
     }
 
     int seekval = fseek( _leaf, _block_no*sizeof(merkle_leaf_node), SEEK_SET );
-    if( !seekval ) {
+    if( seekval != 0 ) {
       // couldn't seek that far, it must be the last block in the file
       fseek( _leaf, 0, SEEK_END );
     }
