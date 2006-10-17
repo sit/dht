@@ -56,7 +56,7 @@ public:
   void remove (merkle_hash &key);
   void remove (const chordID &id);
   void remove (const chordID &id, const u_int32_t aux);
-  int insert (merkle_hash &key);
+  virtual int insert (merkle_hash &key);
   int insert (const chordID &id);
   int insert (const chordID &id, const u_int32_t aux);
   merkle_node *lookup_exact (u_int depth, const merkle_hash &key);
@@ -65,16 +65,19 @@ public:
   merkle_node *lookup (const merkle_hash &key);
   void clear ();
 
+  virtual merkle_node *get_root() { return root; }
+
   // If bulk-modifying the tree, it is undesirable to rehash tree after each
   // mod.  In that case, users should disable rehashing on modifications
   // until all modifications are complete, hash_tree, and then re-enable.
   void set_rehash_on_modification (bool enable);
   void hash_tree ();
 
-  vec<merkle_hash> database_get_keys (u_int depth, const merkle_hash &prefix);
+  virtual vec<merkle_hash> database_get_keys (u_int depth, 
+					      const merkle_hash &prefix);
   vec<chordID> database_get_IDs (u_int depth, const merkle_hash &prefix);
-  bool key_exists (chordID key) { return keylist[key] != NULL; };
-  vec<chordID> get_keyrange (chordID min, chordID max, u_int n);
+  virtual bool key_exists (chordID key) { return keylist[key] != NULL; };
+  virtual vec<chordID> get_keyrange (chordID min, chordID max, u_int n);
 
   void dump ();
   void check_invariants ();
