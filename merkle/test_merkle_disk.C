@@ -1,4 +1,5 @@
 #include "merkle_tree_disk.h"
+#include <id_utils.h>
 
 int main (int argc, char **argv) {
 
@@ -6,16 +7,14 @@ int main (int argc, char **argv) {
 					    "/tmp/internal.mrk",
 					    "/tmp/leaf.mrk", true );
 
-
-  warn << "\ninserting " << 12 << "\n";
-  tree->insert(12);
-  warn << "\ninserting " << 100 << "\n";
-  tree->insert(100);
-  warn << "\ninserting " << 47464 << "\n";
-  tree->insert(47464);
-
   tree->dump();
 
-  warn << "leaf size: " << sizeof(merkle_leaf_node) << "\n";
+  for( uint i = 0; i < 5000; i++ ) {
+    chordID c = make_randomID();
+    warn << "\ninserting " << c << " (" << i << ")\n";
+    tree->insert( c );
+  }
+
+    tree->dump();
 
 }

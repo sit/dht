@@ -42,6 +42,7 @@ class merkle_node_disk : public merkle_node {
   FILE *_leaf;
   MERKLE_DISK_TYPE _type;
   uint32 _block_no;
+  vec<merkle_node_disk *> to_delete;
 
  public:
 
@@ -50,9 +51,10 @@ class merkle_node_disk : public merkle_node {
   merkle_node *child (u_int i);
   void leaf2internal ();
   void internal2leaf ();
-  bool isleaf ();
+  bool isleaf () const;
   void add_key( chordID key );
   void add_key( merkle_hash key );
+  void set_child( merkle_node_disk *n, u_int i);
   void write_out();
   void set_block_no( uint32 block_no ) { _block_no = block_no; }
   uint32 get_block_no() { return _block_no; }
@@ -75,6 +77,8 @@ private:
   merkle_index_metadata _md;
   vec<uint32> _free_leafs;
   vec<uint32> _free_internals;
+  vec<uint32> _future_free_leafs;
+  vec<uint32> _future_free_internals;
 
   FILE *_index;
   FILE *_internal;
@@ -91,6 +95,7 @@ private:
   uint32 alloc_free_block( MERKLE_DISK_TYPE type );
   void free_block( uint32 block_no, MERKLE_DISK_TYPE type );
   void write_metadata();
+  void leaf2internal( uint depth, merkle_node_disk *n );
 
 public:
 

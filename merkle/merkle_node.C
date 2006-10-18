@@ -9,7 +9,7 @@ indent (u_int depth)
     warnx << " ";
 }
 
-const merkle_node *
+merkle_node *
 merkle_node::child (u_int i) const
 {
   return &(*entry)[i];
@@ -57,7 +57,7 @@ merkle_node::leaf2internal ()
 
 
 void
-merkle_node::dump (u_int depth) const
+merkle_node::dump (u_int depth)
 {
   warnx << "[NODE " 
 	<< strbuf ("0x%x", (u_int)this)
@@ -67,10 +67,10 @@ merkle_node::dump (u_int depth) const
 	<< ">\n";
   err_flush ();
   
-  const merkle_node *n = this;
+  merkle_node *n = this;
   if (!n->isleaf ()) {
     for (int i = 0; i < 64; i++) {
-      const merkle_node *child = n->child (i);
+      merkle_node *child = n->child (i);
       if (child->count) {
 	indent (depth + 1);
 	warnx << "[" << i << "]: ";
