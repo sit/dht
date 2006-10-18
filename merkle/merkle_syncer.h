@@ -59,7 +59,7 @@ class merkle_syncer {
 
 void
 format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
-		const merkle_node *node, merkle_rpc_node *rpcnode);
+		merkle_node *node, merkle_rpc_node *rpcnode);
 
 void
 compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax, 

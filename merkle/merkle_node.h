@@ -11,7 +11,7 @@ public:
   u_int64_t count;
   merkle_hash hash;
 
-  merkle_node *child (u_int i) const;
+  virtual merkle_hash child_hash (u_int i);
   virtual merkle_node *child (u_int i);
   virtual bool isleaf () const;
   bool leaf_is_full () const;

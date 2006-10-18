@@ -48,6 +48,7 @@ class merkle_node_disk : public merkle_node {
 
   itree<chordID, merkle_key, &merkle_key::id, &merkle_key::ik> keylist;
 
+  merkle_hash child_hash (u_int i);
   merkle_node *child (u_int i);
   void leaf2internal ();
   void internal2leaf ();
@@ -88,14 +89,13 @@ private:
 
   void remove (u_int depth, merkle_hash &key, merkle_node *n);
   int insert (u_int depth, merkle_hash &key, merkle_node *n);
-  merkle_node *lookup (u_int *depth, u_int max_depth, 
-		       const merkle_hash &key, merkle_node *n);
   merkle_node *make_node( uint32 pointer );
   merkle_node *make_node( uint32 block_no, MERKLE_DISK_TYPE type );
   uint32 alloc_free_block( MERKLE_DISK_TYPE type );
   void free_block( uint32 block_no, MERKLE_DISK_TYPE type );
   void write_metadata();
   void leaf2internal( uint depth, merkle_node_disk *n );
+  void switch_root( merkle_node_disk *n );
 
 public:
 
@@ -109,6 +109,10 @@ public:
   ~merkle_tree_disk ();
   int insert (merkle_hash &key);
   merkle_node *get_root();
+  merkle_node *lookup_exact (u_int depth, const merkle_hash &key);
+  merkle_node *lookup (u_int depth, const merkle_hash &key);
+  merkle_node *lookup (u_int *depth, u_int max_depth, const merkle_hash &key);
+  void lookup_release( merkle_node *n );
 
 };
 

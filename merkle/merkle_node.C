@@ -10,18 +10,21 @@ indent (u_int depth)
 }
 
 merkle_node *
-merkle_node::child (u_int i) const
-{
-  return &(*entry)[i];
-}
-
-merkle_node *
 merkle_node::child (u_int i)
 {
   assert (!isleaf ());
   assert (entry);
   assert (i >= 0 && i < 64);
   return &(*entry)[i];
+}
+
+merkle_hash
+merkle_node::child_hash (u_int i)
+{
+  assert (!isleaf ());
+  assert (entry);
+  assert (i >= 0 && i < 64);
+  return (*entry)[i].hash;
 }
 
 bool

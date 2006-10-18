@@ -43,7 +43,7 @@ protected:
   itree<chordID, merkle_key, &merkle_key::id, &merkle_key::ik> keylist;
   virtual void remove (u_int depth, merkle_hash &key, merkle_node *n);
   virtual int insert (u_int depth, merkle_hash &key, merkle_node *n);
-  virtual merkle_node *lookup (u_int *depth, u_int max_depth, 
+  merkle_node *lookup (u_int *depth, u_int max_depth, 
 		       const merkle_hash &key, merkle_node *n);
 
 public:
@@ -59,10 +59,12 @@ public:
   virtual int insert (merkle_hash &key);
   int insert (const chordID &id);
   int insert (const chordID &id, const u_int32_t aux);
-  merkle_node *lookup_exact (u_int depth, const merkle_hash &key);
-  merkle_node *lookup (u_int depth, const merkle_hash &key);
-  merkle_node *lookup (u_int *depth, u_int max_depth, const merkle_hash &key);
+  virtual merkle_node *lookup_exact (u_int depth, const merkle_hash &key);
+  virtual merkle_node *lookup (u_int depth, const merkle_hash &key);
+  virtual merkle_node *lookup (u_int *depth, u_int max_depth, 
+			       const merkle_hash &key);
   merkle_node *lookup (const merkle_hash &key);
+  virtual void lookup_release( merkle_node *n ) {} // do nothing
   void clear ();
 
   virtual merkle_node *get_root() { return root; }

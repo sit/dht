@@ -157,6 +157,12 @@ merkle_node *merkle_node_disk::child (u_int i) {
 
 }
 
+merkle_hash merkle_node_disk::child_hash (u_int i) {
+  assert (!isleaf ());
+  assert (i >= 0 && i < 64);
+  return (*hashes)[i];
+}
+
 void merkle_node_disk::set_child( merkle_node_disk *n, u_int i) {
   assert (!isleaf ());
   assert (i >= 0 && i < 64);
@@ -209,8 +215,6 @@ merkle_tree_disk::merkle_tree_disk( str index, str internal, str leaf,
 
   _internal = open_file( _internal_name );
   _leaf = open_file( _leaf_name );
-
-  get_root();
 
 }
 
@@ -455,8 +459,6 @@ int
 merkle_tree_disk::insert (u_int depth, merkle_hash& key, merkle_node *n)
 {
 
-  assert( _writer );
-
   int ret = 0;
     
   MERKLE_DISK_TYPE old_type;
@@ -502,38 +504,81 @@ merkle_tree_disk::insert (u_int depth, merkle_hash& key, merkle_node *n)
   return ret;
 }
 
-int merkle_tree_disk::insert (merkle_hash &key) {
-
-  merkle_node_disk *curr_root = (merkle_node_disk *) get_root();
-  int ret = insert( 0, key, curr_root );
-  uint32 newroot = curr_root->get_block_no();
+void merkle_tree_disk::switch_root( merkle_node_disk *n ) {
+  assert(_writer);
+  uint32 newroot = n->get_block_no();
   warn << "new root block num " << newroot << "\n";
   newroot <<= 1;
-  if( curr_root->isleaf() ) {
+  if( n->isleaf() ) {
     newroot |= 0x00000001;
   }
-  delete curr_root;
   _md.root = newroot;
   // NOTE: there should only be one thread on the machine that is
   // inserting or removing blocks and writing metadata.  Any others
   // need to be readonly
   write_metadata();
+}
+
+int merkle_tree_disk::insert (merkle_hash &key) {
+
+  assert( _writer );
+  merkle_node_disk *curr_root = (merkle_node_disk *) get_root();
+  int ret = insert( 0, key, curr_root );
+  switch_root(curr_root);
+  delete curr_root;
+  return ret;
+
+}
+
+void merkle_tree_disk::lookup_release( merkle_node *n ) {
+  delete n;
+}
+
+merkle_node *
+merkle_tree_disk::lookup( u_int *depth, u_int max_depth,
+			  const merkle_hash &key ) {
+
+  *depth = 0;
+  merkle_node *curr_root = get_root();
+  merkle_node *ret = merkle_tree::lookup( depth, max_depth, key, 
+					       curr_root );
+  ret = make_node(((merkle_node_disk *) ret)->get_block_no(),
+		  ret->isleaf()?MERKLE_DISK_LEAF:MERKLE_DISK_INTERNAL);
+  delete curr_root;
   return ret;
 
 }
 
 merkle_node *
-merkle_tree_disk::lookup (u_int *depth, u_int max_depth, 
-		     const merkle_hash &key, merkle_node *n)
-{
-  // recurse down as much as possible
-  if (*depth == max_depth || n->isleaf ())
-    return n;
-  u_int32_t branch = key.read_slot (*depth); 
-  //the [6*depth, 6*(depth +1) bits determine which branch to follow
-  // for a given key
-  *depth += 1;
-  return lookup (depth, max_depth, key, n->child (branch));
+merkle_tree_disk::lookup( u_int depth, const merkle_hash &key ) {
+
+  u_int depth_ignore = 0;
+  merkle_node *curr_root = get_root();
+  merkle_node *ret = merkle_tree::lookup( &depth_ignore, depth, key, 
+					       curr_root );
+  ret = make_node(((merkle_node_disk *) ret)->get_block_no(),
+		  ret->isleaf()?MERKLE_DISK_LEAF:MERKLE_DISK_INTERNAL);
+  delete curr_root;
+  return ret;
+
+}
+
+merkle_node *
+merkle_tree_disk::lookup_exact( u_int depth, const merkle_hash &key ) {
+
+  u_int realdepth = 0;
+  merkle_node *curr_root = get_root();
+  merkle_node *ret = merkle_tree::lookup( &realdepth, depth, key, curr_root );
+  assert( realdepth <= depth );
+  if( realdepth != depth ) {
+    ret = NULL;
+  } else {
+    ret = make_node(((merkle_node_disk *) ret)->get_block_no(), 
+		    ret->isleaf()?MERKLE_DISK_LEAF:MERKLE_DISK_INTERNAL);
+  }
+  delete curr_root;
+  return ret;
+
 }
 
 vec<merkle_hash>

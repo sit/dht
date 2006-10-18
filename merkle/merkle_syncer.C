@@ -164,7 +164,7 @@ merkle_syncer::next (void)
       trace << "CHECKING: " << i;
 
       bigint remote = tobigint (rnode->child_hash[i]);
-      bigint local = tobigint (lnode->child (i)->hash);
+      bigint local = tobigint (lnode->child_hash(i));
 
       u_int depth = rnode->depth + 1;
 
@@ -186,6 +186,7 @@ merkle_syncer::next (void)
 	  tr << " .. sending\n";
 	  sendnode (depth, prefix);
 	  trace << tr;
+	  ltree->lookup_release(lnode);
 	  return;
 	} else {
 	  tr << " .. not sending\n";
@@ -195,7 +196,8 @@ merkle_syncer::next (void)
       }
       trace << tr;
     }
-    
+
+    ltree->lookup_release(lnode);
     assert (p.second == 64);
     st.pop_back ();
   }
@@ -225,6 +227,7 @@ merkle_syncer::sendnode (u_int depth, const merkle_hash &prefix)
   arg->ctype = ctype;
   arg->rngmin = local_rngmin;
   arg->rngmax = local_rngmax;
+  ltree->lookup_release(lnode);
   doRPC (MERKLESYNC_SENDNODE, arg, res,
 	 wrap (this, &merkle_syncer::sendnode_cb, deleted, arg, res));
 }
@@ -259,6 +262,8 @@ merkle_syncer::sendnode_cb (ptr<bool> deleted,
     trace << "I vs I\n";
     st.push_back (pair<merkle_rpc_node, int> (*rnode, 0));
   }
+
+  ltree->lookup_release(lnode);
 
   next ();
 }
@@ -415,7 +420,7 @@ compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax,
 
 void
 format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
-		const merkle_node *node, merkle_rpc_node *rpcnode)
+		merkle_node *node, merkle_rpc_node *rpcnode)
 {
   rpcnode->depth = depth;
   rpcnode->prefix = prefix;
@@ -426,7 +431,7 @@ format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
   if (!node->isleaf ()) {
     rpcnode->child_hash.setsize (64);
     for (int i = 0; i < 64; i++)
-      rpcnode->child_hash[i] = node->child (i)->hash;
+      rpcnode->child_hash[i] = node->child_hash(i);
   } else {
     vec<merkle_hash> keys = ltree->database_get_keys (depth, prefix);
 

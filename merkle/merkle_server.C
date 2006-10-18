@@ -50,6 +50,7 @@ merkle_server::dispatch (user_args *sbp)
 		      lnode, &res.resok->node);
       // and reply
       sbp->reply (&res);
+      ltree->lookup_release(lnode);
       break;
     }
      
