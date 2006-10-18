@@ -53,7 +53,7 @@ public:
 
   merkle_tree ();
   virtual ~merkle_tree ();
-  void remove (merkle_hash &key);
+  virtual void remove (merkle_hash &key);
   void remove (const chordID &id);
   void remove (const chordID &id, const u_int32_t aux);
   virtual int insert (merkle_hash &key);

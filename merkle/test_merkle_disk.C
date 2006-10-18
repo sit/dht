@@ -11,12 +11,16 @@ int main (int argc, char **argv) {
 
   tree->dump();
 
+  // inserts
+
   chordID c;
-  for( uint i = 0; i < 500; i++ ) {
+  for( uint i = 0; i < 65; i++ ) {
     c = make_randomID();
     warn << "\ninserting " << c << " (" << i << ")\n";
     tree->insert( c );
   }
+
+  // lookups
 
   merkle_node_disk *n = (merkle_node_disk *) tree->lookup(to_merkle_hash(c));
 
@@ -31,6 +35,10 @@ int main (int argc, char **argv) {
   }
 
   tree->lookup_release(n);
+
+  // remove
+
+  tree->remove(c);
 
   tree->dump();
 

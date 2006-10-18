@@ -134,8 +134,8 @@ merkle_tree::rehash (u_int depth, const merkle_hash &key, merkle_node *n)
       sc.update (keys[i].bytes, keys[i].size);
   } else {
     for (int i = 0; i < 64; i++) {
-      merkle_node *child = n->child (i); 
-      sc.update (child->hash.bytes, child->hash.size);
+      merkle_hash child = n->child_hash(i); 
+      sc.update (child.bytes, child.size);
       ///warn << "INTE: update " << child->hash << "\n";
     }
   }
