@@ -230,6 +230,7 @@ merkle_tree_disk::merkle_tree_disk( str index, str internal, str leaf,
 
   _internal = open_file( _internal_name );
   _leaf = open_file( _leaf_name );
+  _index = open_file( _index_name );
 
 }
 
@@ -237,16 +238,14 @@ merkle_tree_disk::~merkle_tree_disk ()
 {
   fclose( _internal );
   fclose( _leaf );
+  fclose( _index );
 }
 
 void merkle_tree_disk::write_metadata() {
 
   assert( _writer );
 
-  _index = fopen( _index_name, "w" );
-  if( _index == NULL ) {
-    fatal << "Couldn't open or create " << _index_name << " for read/write\n";
-  }
+  fseek( _index, 0, SEEK_SET );
   
   assert( _free_leafs.size() == _md.num_leaf_free );
   assert( _free_internals.size() == _md.num_internal_free );
@@ -282,15 +281,14 @@ void merkle_tree_disk::write_metadata() {
   _future_free_leafs.clear();
   _future_free_internals.clear();
 
-  fclose( _index );
-
 }
 
 merkle_node *merkle_tree_disk::get_root() {
 
+  fseek( _index, 0, SEEK_SET );
+
   // figure out where the root node is, given the index file
   // the first 32 bytes of the file tells us where it is
-  _index = open_file( _index_name );
   int num_read = fread( &_md, sizeof(merkle_index_metadata), 1, _index );
 
   if( num_read <= 0 ) {
@@ -328,8 +326,6 @@ merkle_node *merkle_tree_disk::get_root() {
     }
 
   }
-
-  fclose( _index );
 
   return make_node(_md.root);
 
