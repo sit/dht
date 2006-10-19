@@ -3,18 +3,23 @@
 
 int main (int argc, char **argv) {
 
+  uint num_keys = 150;
+  if( argc > 1 ) {
+    num_keys = atoi(argv[1]);
+  }
+
   srandom(time(NULL));
 
   merkle_tree *tree = New merkle_tree_disk( "/tmp/index.mrk", 
 					    "/tmp/internal.mrk",
 					    "/tmp/leaf.mrk", true );
 
-  tree->dump();
+  //tree->dump();
 
   // inserts
 
   chordID c;
-  for( uint i = 0; i < 65; i++ ) {
+  for( uint i = 0; i < num_keys; i++ ) {
     c = make_randomID();
     warn << "\ninserting " << c << " (" << i << ")\n";
     tree->insert( c );
@@ -36,10 +41,14 @@ int main (int argc, char **argv) {
 
   tree->lookup_release(n);
 
+  assert( tree->key_exists(c) );
+
   // remove
 
   tree->remove(c);
 
-  tree->dump();
+  assert( !tree->key_exists(c) );
+
+  //tree->dump();
 
 }

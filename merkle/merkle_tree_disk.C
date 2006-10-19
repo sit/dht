@@ -23,6 +23,9 @@ merkle_node_disk::merkle_node_disk (FILE *internal, FILE *leaf,
 
   if( isleaf() ) {
 
+    children = NULL;
+    hashes = NULL;
+
     merkle_leaf_node leaf;
     int seekval = fseek( _leaf, _block_no*sizeof(merkle_leaf_node), SEEK_SET );
     assert( seekval == 0 );
@@ -68,6 +71,9 @@ merkle_node_disk::~merkle_node_disk () {
   for( uint i = 0; i < to_delete.size(); i++ ) {
     delete to_delete[i];
   }
+
+  delete children;
+  delete hashes;
 
   // not necessary, but helps catch dangling pointers
   bzero (this, sizeof (*this)); 
@@ -196,7 +202,9 @@ void merkle_node_disk::internal2leaf () {
   assert( !isleaf() );
   _type = MERKLE_DISK_LEAF;
   delete children;
+  children = NULL;
   delete hashes;
+  hashes = NULL;
 
 }
 
@@ -209,7 +217,7 @@ void merkle_node_disk::leaf2internal () {
   _type = MERKLE_DISK_INTERNAL;
   children = New array<uint32, 64>();
   hashes = New array<merkle_hash, 64>();
-  keylist.clear();
+  keylist.deleteall_correct();
   assert( !isleaf() );
 }
 
@@ -487,14 +495,14 @@ void merkle_tree_disk::leaf2internal( uint depth, merkle_node_disk *n ) {
 
   assert( n->isleaf() && n->count == 64 );
   merkle_key *k = n->keylist.first();
-  array< vec<merkle_key *>, 64> keys;
+  array< vec<chordID>, 64> keys;
   uint added = 9;
   while( k != NULL ) {
     merkle_hash h = to_merkle_hash(k->id);
     u_int32_t branch = h.read_slot( depth );
     //warn << "picked branch " << branch << " for key " << k->id << ", hash " 
     // << h << "\n";
-    keys[branch].push_back(k);
+    keys[branch].push_back(k->id);
     k = n->keylist.next(k);
     added++;
   }
@@ -517,9 +525,9 @@ void merkle_tree_disk::leaf2internal( uint depth, merkle_node_disk *n ) {
     merkle_node_disk *child = 
       (merkle_node_disk *) make_node( block_no, MERKLE_DISK_LEAF );
 
-    vec<merkle_key *> v = keys[i];
+    vec<chordID> v = keys[i];
     for( uint j = 0; j < v.size(); j++ ) {
-      child->add_key( v[j]->id );
+      child->add_key( v[j] );
     }
     added += child->count;
     n->rehash();
@@ -561,9 +569,10 @@ merkle_tree_disk::insert (u_int depth, merkle_hash& key, merkle_node *n)
     type = MERKLE_DISK_INTERNAL;
     u_int32_t branch = key.read_slot(depth);
     merkle_node *child = n->child(branch);
-    //warn << "inserting into child " 
-    //	 << ((merkle_node_disk *) child)->get_block_no() << " on branch " 
-    //	 << branch << " and leaf " << child->isleaf() << "\n";
+    warn << "inserting " << key << " into child " 
+    	 << ((merkle_node_disk *) child)->get_block_no() << " on branch " 
+    	 << branch << " at depth " << depth << " and leaf " 
+	 << child->isleaf() << "\n";
     ret = insert( depth+1, key, child );
     nd->set_child( (merkle_node_disk *) child, branch );
     n->count++;
@@ -699,6 +708,16 @@ merkle_tree_disk::get_keyrange (chordID min, chordID max, u_int n)
 }
 
 bool merkle_tree_disk::key_exists (chordID key) {
-  assert(0); // not implemented yet
-  return false;
+
+  merkle_node_disk *n = 
+    (merkle_node_disk *) merkle_tree::lookup( to_merkle_hash(key) );
+  merkle_key *mkey = n->keylist[key];
+  lookup_release(n);
+
+  if( mkey == NULL ) {
+    return false;
+  } else {
+    return true;
+  }
+
 }
