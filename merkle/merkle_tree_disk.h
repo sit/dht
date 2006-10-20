@@ -32,10 +32,15 @@ struct merkle_leaf_node {
   uint32 key_count;
 };
 
+struct merkle_hash_id {
+  merkle_hash hash;
+  chordID id;
+};
+
 class merkle_node_disk : public merkle_node {
 
  private:
-  array<merkle_hash, 64> *hashes;
+  array<merkle_hash_id, 64> *hashes;
   array<uint32, 64> *children;
 
   FILE *_internal;
