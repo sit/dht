@@ -51,4 +51,12 @@ int main (int argc, char **argv) {
 
   //tree->dump();
 
+  chordID min = c;
+  chordID max = ((chordID) 1) << 156;
+  vec<chordID> keys = tree->get_keyrange( min, max, 65 );
+  for( uint i = 0; i < keys.size(); i++ ) {
+    warn << "Found key " << keys[i] << " in range [" 
+	 << min << "," << max << "]\n";
+  }
+
 }

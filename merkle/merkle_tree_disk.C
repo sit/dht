@@ -719,11 +719,74 @@ merkle_tree_disk::database_get_keys (u_int depth, const merkle_hash &prefix)
   return keys;
 }
 
+bool get_keyrange_recurs( merkle_hash min, chordID max, u_int n, 
+			  uint depth, vec<chordID> *keys, 
+			  merkle_node_disk *node ) {
+
+  // go down until you find the leaf responsible for min
+  // add all of its keys up to n, less than max.  If you haven't
+  // found more than n keys, set min to the last key and keep
+  // going
+
+  bool over_max = false;
+
+  if( node->isleaf() ) {
+
+    chordID min_id = tobigint(min);
+    merkle_key *k = node->keylist.first();
+    merkle_key *last_key = NULL;
+
+    while( k != NULL && keys->size() < n ) {
+      if( betweenbothincl( min_id, max, k->id) ) {
+	keys->push_back(k->id);
+      }
+      last_key = k;
+      k = node->keylist.next(k);
+    }
+    
+    if( last_key != NULL && betweenbothincl( min_id, last_key->id, max) ) {
+      over_max = true;
+    } else {
+      over_max = false;
+    }
+
+    // don't need a special case here, since we look at all the keys
+
+  } else {
+
+    bool over_max = false;
+    u_int32_t branch = min.read_slot(depth);
+
+    while( keys->size() < n && branch < 64 && !over_max ) {
+      merkle_node_disk *child = (merkle_node_disk *) node->child(branch);
+      over_max = get_keyrange_recurs( min, max, n, depth+1, keys, child );
+      branch++;
+    }
+
+    // special case for when we hit the right edge of the ring
+    if( depth == 0 && !over_max && keys->size() < n && 
+	betweenrightincl( tobigint(min), max, 0 )  ) {
+      over_max = get_keyrange_recurs( 0, max, n, depth, keys, node );
+    }
+
+  }
+
+  return over_max;
+
+}
+
 vec<chordID> 
 merkle_tree_disk::get_keyrange (chordID min, chordID max, u_int n)
 {
-  assert(0); // not implemented yet
   vec<chordID> keys;
+
+  merkle_node *root = get_root();
+  if( root->count > 0 ) {
+    get_keyrange_recurs( to_merkle_hash(min), max, n, 0, &keys, 
+			 (merkle_node_disk *) root );
+  }
+  delete root;
+
   return keys;
 }
 
