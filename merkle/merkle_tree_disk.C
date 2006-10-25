@@ -1,11 +1,33 @@
 #include <chord_types.h>
 #include <id_utils.h>
+#include <rxx.h>
 #include "merkle_tree_disk.h"
 #include "dhash_common.h"
 
 //////////////// merkle_node_disk /////////////////
 
 FILE *open_file( str name ) {
+
+  // make all the parent directories if applicable
+
+  vec<str> dirs;
+  static const rxx dirsplit("\\/");
+  uint num_dirs = split( &dirs, dirsplit, name );
+  strbuf filestrbuf;
+  for( uint i = 0; i < dirs.size()-1; i++ ) {
+    filestrbuf << "/" << dirs[i];
+    
+    str dirpath( filestrbuf );
+    // check for existence, make if necessary
+    struct stat st;
+    if( stat( dirpath, &st ) < 0 ) {
+      if( mkdir( dirpath, S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH ) != 0 ) {
+	fatal << "Couldn't make dir " << dirpath << "; bailing.\n";
+      }
+    }
+    
+  }
+
   FILE *f = fopen( name, "r+" );
   if( f == NULL ) {
     f = fopen( name, "w+" );
@@ -227,6 +249,11 @@ merkle_tree_disk::merkle_tree_disk( str index, str internal, str leaf,
   _internal = open_file( _internal_name );
   _leaf = open_file( _leaf_name );
   _index = open_file( _index_name );
+
+  // make sure the root is created correctly:
+  merkle_node *n = get_root();
+  delete n;
+  write_metadata();
 
 }
 

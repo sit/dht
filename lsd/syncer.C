@@ -6,6 +6,7 @@
 #include <locationtable.h>
 #include <location.h>
 #include <merkle_tree.h>
+#include <merkle_tree_disk.h>
 #include <merkle_syncer.h>
 
 #include <syncer.h>
@@ -14,6 +15,7 @@ static int sync_trace (getenv ("SYNC_TRACE") ? atoi (getenv ("SYNC_TRACE")) : 0)
 
 syncer::syncer (ptr<locationtable> locations,
 		ptr<location> h,
+		str dbdir,
 		str dbpath,
 		str dbname,
 		dhash_ctype ctype,
@@ -21,6 +23,7 @@ syncer::syncer (ptr<locationtable> locations,
   : locations (locations), ctype (ctype), dfrags (dfrags), efrags (efrags),
     tmptree (NULL), host_loc (h),
     db (New refcounted<adb> (dbpath, dbname)),
+    db_prefix (strbuf() << dbdir << "/" << dbname),
     cur_succ (0),
     replica_timer (300)
 { 
@@ -44,7 +47,6 @@ syncer::syncer (ptr<locationtable> locations,
 
 syncer::~syncer ()
 {
-  delete tmptree;
   tmptree = NULL;
   replica_syncer = NULL;
   db = NULL;
@@ -163,63 +165,35 @@ syncer::sync_replicas_gotsucclist (ptr<location> pred,
   assert(succs[cur_succ]);
 
   //sync with the next node
-  if (tmptree) {
-    delete tmptree;
-  }
   u_int64_t start = getusec ();
 
-  tmptree = New merkle_tree ();
-  tmptree->set_rehash_on_modification (false);
-  db->getkeyson (succs[cur_succ], pred->id (), succs[0]->id (),
-      wrap (this, &syncer::populate_tree, start, pred, succs));
-}
-
-void
-syncer::populate_tree (u_int64_t start,
-    ptr<location> pred, vec<ptr<location> > succs,
-    adb_status astat, vec<chordID> blocks, vec<u_int32_t> aux)
-{
-  if (astat != ADB_OK && astat != ADB_COMPLETE) {
-    warn << "syncer adbd error: " << astat << "\n";
-    delete tmptree; tmptree = NULL;
-    delaycb (replica_timer, wrap (this, &syncer::sync_replicas)); 
-    return;
-  }
-
-  // XXX ugh
-  switch (ctype) {
+  str ext;
+  switch(ctype) {
   case DHASH_CONTENTHASH:
-    for (size_t i = 0; i < blocks.size (); i++) {
-      tmptree->insert (blocks[i]);
-    }
+    ext = "c";
     break;
   case DHASH_KEYHASH:
+    ext = "k";
+    break;
   case DHASH_NOAUTH:
-    for (size_t i = 0; i < blocks.size (); i++) {
-      tmptree->insert (blocks[i], aux[i]);
-    }
+    ext = "n";
     break;
   default:
-    fatal << "syncer::populate_tree: unexpected ctype " << ctype << "\n";
-    break;
+    fatal << "bad ctype\n";
   }
-  if (astat != ADB_COMPLETE) {
-    // Get more, picking up from where we left off
-    const chordID last (blocks.back ());
-    db->getkeyson (succs[cur_succ], incID(last), succs[0]->id (),
-	wrap (this, &syncer::populate_tree, start, pred, succs));
-    return;
-  }
-  // move on to tree done
-  tmptree->hash_tree ();
-  tmptree->set_rehash_on_modification (true);
-  warn << host_loc->id () << " tree build: " 
-       << getusec () - start << " usecs\n";
+
+  str merkle_file = strbuf() << db_prefix << "/" << succs[cur_succ]->id()
+			     << "." << ext << "/";
+
+  tmptree = New refcounted<merkle_tree_disk>
+    ( strbuf() << merkle_file << "index.mrk",
+      strbuf() << merkle_file << "internal.mrk",
+      strbuf() << merkle_file << "leaf.mrk", true );
 
   replica_syncer = New refcounted<merkle_syncer> 
     (ctype, tmptree, 
      wrap (this, &syncer::doRPC_unbundler, succs[cur_succ]),
-     wrap (this, &syncer::missing, succs[cur_succ]));
+     wrap (this, &syncer::missing, succs[cur_succ], tmptree));
   
   bigint rngmin = pred->id ();
   bigint rngmax = succs[0]->id ();
@@ -242,7 +216,7 @@ syncer::doRPC_unbundler (ptr<location> dst, RPC_delay_args *args)
 }
 
 void
-syncer::missing (ptr<location> from,
+syncer::missing (ptr<location> from, ptr<merkle_tree> tmptree,
 		 bigint key, bool missing_local,
 		 bool round_over)
 {
@@ -253,6 +227,13 @@ syncer::missing (ptr<location> from,
   switch (ctype) {
   case DHASH_CONTENTHASH:
     db->update (key, from, missing_local, true);
+    // if they have it, but we don't yet, add it to our tree
+    // otherwise remove it from our tree
+    if( missing_local ) {
+      tmptree->insert( key );
+    } else {
+      tmptree->remove( key );
+    }
     break;
   case DHASH_KEYHASH:
   case DHASH_NOAUTH:
@@ -260,6 +241,13 @@ syncer::missing (ptr<location> from,
       chordID aux = (key & 0xFFFFFFFF);
       chordID dbkey = (key >> 32) << 32;
       db->update (dbkey, from, aux.getui (), missing_local, true);
+      // if they have it, but we don't yet, add it to our tree
+      // otherwise remove it from our tree
+      if( missing_local ) {
+	tmptree->insert( dbkey, aux.getui() );
+      } else {
+	tmptree->remove( dbkey, aux.getui() );
+      }
     }
     break;
   default:

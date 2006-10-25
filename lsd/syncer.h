@@ -19,10 +19,11 @@ class syncer {
   u_int dfrags;
   u_int efrags;
 
-  merkle_tree *tmptree;
+  ptr<merkle_tree> tmptree;
   ptr<merkle_syncer> replica_syncer;
   ptr<location> host_loc;
   ptr<adb> db;
+  str db_prefix;
 
   u_int cur_succ;
 
@@ -32,6 +33,7 @@ public:
 
   syncer::syncer (ptr<locationtable> locations,
 		  ptr<location> h,
+		  str dbdir,
 		  str dbname,
 		  str dbext,
 		  dhash_ctype ctype,
@@ -56,11 +58,8 @@ protected:
   void sync_replicas_predupdated (ptr<location> pred);
   void sync_replicas_gotsucclist (ptr<location> pred,
 				  vec<ptr<location> > succs);
-  void populate_tree (u_int64_t start,
-    ptr<location> pred, vec<ptr<location> > succs,
-    adb_status astat, vec<chordID> blocks, vec<u_int32_t> aux);
 
   void doRPC_unbundler (ptr<location> dst, RPC_delay_args *args);
-  void missing (ptr<location> from,
+  void missing (ptr<location> from, ptr<merkle_tree> tmptree,
 		bigint key, bool missing_local, bool round_over);
 };

@@ -11,6 +11,7 @@
 #include <lsdctl_prot.h>
 
 static char *logfname;
+static str dbdir;
 
 static vec<syncer *> syncers;
 
@@ -50,11 +51,13 @@ start (ptr<lsdctl_lsdparameters> p, clnt_stat err)
 
     //dbname format: ID.".c"
     str dbname = strbuf () << ret.x << ".c";
-    syncer *s = New syncer (locations, n, p->adbdsock, dbname, DHASH_CONTENTHASH);
+    syncer *s = New syncer (locations, n, dbdir, p->adbdsock, dbname, 
+			    DHASH_CONTENTHASH);
     syncers.push_back (s);
     
     dbname = strbuf () << ret.x << ".n";
-    s = New syncer (locations, n, p->adbdsock, dbname, DHASH_NOAUTH, p->nreplica, p->nreplica);
+    s = New syncer (locations, n, dbdir, p->adbdsock, dbname, 
+		    DHASH_NOAUTH, p->nreplica, p->nreplica);
     syncers.push_back (s);
   }
 }
@@ -106,8 +109,10 @@ main (int argc, char **argv)
 
   setprogname (argv[0]);
   random_init ();
+
+  dbdir = "/tmp/";
   
-  while ((ch = getopt (argc, argv, "C:L:t"))!=-1)
+  while ((ch = getopt (argc, argv, "C:L:td:"))!=-1)
     switch (ch) {
     case 'C':
       lsdsock = optarg;
@@ -117,6 +122,9 @@ main (int argc, char **argv)
       break;
     case 't':
       modlogger::setmaxprio (modlogger::TRACE);
+      break;
+    case 'd':
+      dbdir = optarg;
       break;
     default:
       usage ();

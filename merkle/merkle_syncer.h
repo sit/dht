@@ -23,7 +23,7 @@ class merkle_syncer {
 
  public:
   dhash_ctype ctype;
-  merkle_tree *ltree; // local tree
+  ptr<merkle_tree> ltree; // local tree
   rpcfnc_t rpcfnc;
   missingfnc_t missingfnc;
 
@@ -39,7 +39,8 @@ class merkle_syncer {
   vec<pair<merkle_rpc_node, int> > st;
 
   merkle_syncer (dhash_ctype ctype,
-		 merkle_tree *ltree, rpcfnc_t rpcfnc, missingfnc_t missingfnc);
+		 ptr<merkle_tree> ltree, rpcfnc_t rpcfnc, 
+		 missingfnc_t missingfnc);
   ~merkle_syncer ();
 
   void dump ();

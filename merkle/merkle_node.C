@@ -84,15 +84,18 @@ merkle_node::dump (u_int depth)
 }
 
 
-merkle_node::merkle_node ()
+merkle_node::merkle_node () :
+  entry(NULL), count(0), hash(0)
 {
-  bzero (this, sizeof (*this));
+  //bzero (this, sizeof (*this));
 }
 
 void
 merkle_node::initialize (u_int64_t _count)
 {
-  bzero (this, sizeof (*this));
+  //bzero (this, sizeof (*this));
+  entry = NULL;
+  hash = 0;
   this->count = _count; 
 #if 0
   warnx << "[init NODE " 

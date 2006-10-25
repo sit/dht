@@ -111,7 +111,7 @@ usage ()
 int 
 main (int argc, char **argv) 
 {
-  mp_set_memory_functions( NULL, simple_realloc, NULL );
+  //mp_set_memory_functions( NULL, simple_realloc, NULL );
 
   str lsdsock = "/tmp/lsdctl-sock";
   char ch;

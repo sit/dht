@@ -273,7 +273,9 @@ dhblock_chash_srv::offer (user_args *sbp, dhash_offer_arg *arg)
 void
 dhblock_chash_srv::stats (vec<dstat> &s)
 {
-  s.push_back (dstat ("frags on disk", mtree->root.count));
+  merkle_node *n = mtree->get_root();
+  s.push_back (dstat ("frags on disk", n->count));
+  mtree->lookup_release(n);
   return;
 }
 

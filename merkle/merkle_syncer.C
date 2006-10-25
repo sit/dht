@@ -60,7 +60,7 @@ overlap (const bigint &l1, const bigint &r1, const bigint &l2, const bigint &r2)
 // merkle_syncer
 
 
-merkle_syncer::merkle_syncer (dhash_ctype ctype, merkle_tree *ltree, 
+merkle_syncer::merkle_syncer (dhash_ctype ctype, ptr<merkle_tree> ltree, 
 			      rpcfnc_t rpcfnc, missingfnc_t missingfnc)
   : ctype (ctype), ltree (ltree), rpcfnc (rpcfnc), missingfnc (missingfnc)
 {

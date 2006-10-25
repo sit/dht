@@ -34,6 +34,7 @@ merkle_tree::merkle_tree () :
   do_rehash (true)
 {
   root = New merkle_node();
+  warn << "root: " << root->isleaf() << "\n";
 }
 
 merkle_tree::~merkle_tree ()
