@@ -9,11 +9,15 @@
 #include <dhash_common.h>
 
 #include <lsdctl_prot.h>
+#include <merkle_tree_disk.h>
+#include <merkle_disk_server.h>
 
 static char *logfname;
 static str dbdir;
 
 static vec<syncer *> syncers;
+
+static ptr<merkle_disk_server> server;
 
 static ptr<aclnt>
 lsdctl_connect (str sockname)
@@ -27,6 +31,17 @@ lsdctl_connect (str sockname)
   ptr<aclnt> c = aclnt::alloc (axprt_unix::alloc (fd, 10*1024),
 			       lsdctl_prog_1);
   return c;
+}
+
+static ptr<merkle_server> make_mserver( str dbdir, str dbname ) {
+  str merkle_file = strbuf() << dbdir << "/" << dbname << "/";
+  ptr<merkle_tree> tree = New refcounted<merkle_tree_disk>
+    ( strbuf() << merkle_file << "index.mrk",
+      strbuf() << merkle_file << "internal.mrk",
+      strbuf() << merkle_file << "leaf.mrk", false /*read only*/ );
+
+  return New refcounted<merkle_server>( tree );
+
 }
 
 static void
@@ -44,6 +59,9 @@ start (ptr<lsdctl_lsdparameters> p, clnt_stat err)
     ret.coords.push_back (0);
   ret.r.hostname = p->addr.hostname;
   ret.r.port = p->addr.port;
+
+  server = New refcounted<merkle_disk_server>( p->addr.port+2, p->nvnodes );
+
   for (int i = 0; i < p->nvnodes; i++) {
     ret.vnode_num = i;
     ret.x = make_chordID (ret.r.hostname, ret.r.port, i);
@@ -54,11 +72,20 @@ start (ptr<lsdctl_lsdparameters> p, clnt_stat err)
     syncer *s = New syncer (locations, n, dbdir, p->adbdsock, dbname, 
 			    DHASH_CONTENTHASH);
     syncers.push_back (s);
-    
+
+    // create a merkle_tree and a merkle_server for this vnode/ctype
+    server->add_merkle_server( i, DHASH_CONTENTHASH,
+			       make_mserver( dbdir, dbname ) );
+
     dbname = strbuf () << ret.x << ".n";
     s = New syncer (locations, n, dbdir, p->adbdsock, dbname, 
 		    DHASH_NOAUTH, p->nreplica, p->nreplica);
     syncers.push_back (s);
+
+    // create a merkle_tree and a merkle_server for this vnode/ctype
+    server->add_merkle_server( i, DHASH_NOAUTH,
+			       make_mserver( dbdir, dbname ) );
+
   }
 }
 

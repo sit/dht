@@ -16,6 +16,7 @@
 
 class merkle_getkeyrange {
 private:
+  uint vnode;
   dhash_ctype ctype;
   bigint rngmin;
   bigint rngmax;
@@ -31,11 +32,11 @@ private:
 
 public:
   ~merkle_getkeyrange () {}
-  merkle_getkeyrange (dhash_ctype ctype, 
+  merkle_getkeyrange (uint vnode, dhash_ctype ctype, 
 		      bigint rngmin, bigint rngmax, 
 		      vec<chordID> plkeys,
 		      missingfnc_t missing, rpcfnc_t rpcfnc)
-    : ctype (ctype), rngmin (rngmin), 
+    : vnode (vnode), ctype (ctype), rngmin (rngmin), 
       rngmax (rngmax), current (rngmin), 
       missing (missing), rpcfnc (rpcfnc), lkeys (plkeys)
     { go (); }
@@ -60,9 +61,11 @@ overlap (const bigint &l1, const bigint &r1, const bigint &l2, const bigint &r2)
 // merkle_syncer
 
 
-merkle_syncer::merkle_syncer (dhash_ctype ctype, ptr<merkle_tree> ltree, 
+merkle_syncer::merkle_syncer (uint vnode, dhash_ctype ctype, 
+			      ptr<merkle_tree> ltree, 
 			      rpcfnc_t rpcfnc, missingfnc_t missingfnc)
-  : ctype (ctype), ltree (ltree), rpcfnc (rpcfnc), missingfnc (missingfnc)
+  : vnode (vnode), ctype (ctype), ltree (ltree), rpcfnc (rpcfnc), 
+    missingfnc (missingfnc)
 {
   deleted = New refcounted<bool> (false);
   fatal_err = NULL;
@@ -224,6 +227,7 @@ merkle_syncer::sendnode (u_int depth, const merkle_hash &prefix)
   assert (lnode_depth == depth);
 
   format_rpcnode (ltree, depth, prefix, lnode, &arg->node);
+  arg->vnode = vnode;
   arg->ctype = ctype;
   arg->rngmin = local_rngmin;
   arg->rngmax = local_rngmax;
@@ -256,7 +260,7 @@ merkle_syncer::sendnode_cb (ptr<bool> deleted,
   }
   
   compare_nodes (ltree, local_rngmin, local_rngmax, lnode, rnode, 
-		 ctype, missingfnc, rpcfnc);
+		 vnode, ctype, missingfnc, rpcfnc);
 
   if (!lnode->isleaf () && !rnode->isleaf) {
     trace << "I vs I\n";
@@ -284,6 +288,7 @@ merkle_getkeyrange::go ()
 
   ref<getkeys_arg> arg = New refcounted<getkeys_arg> ();
   arg->ctype = ctype;
+  arg->vnode = vnode;
   arg->rngmin = current;
   arg->rngmax = rngmax;
   ref<getkeys_res> res = New refcounted<getkeys_res> ();
@@ -382,7 +387,7 @@ compare_keylists (vec<chordID> lkeys,
 void
 compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax, 
 	       merkle_node *lnode, merkle_rpc_node *rnode,
-	       dhash_ctype ctype,
+	       uint vnode, dhash_ctype ctype,
 	       missingfnc_t missingfnc, rpcfnc_t rpcfnc)
 {
   trace << (lnode->isleaf ()  ? "L" : "I")
@@ -411,7 +416,7 @@ compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax,
     if (between (tmpmin, tmpmax, rngmax))
       tmpmax = rngmax;
 
-    vNew merkle_getkeyrange (ctype, tmpmin, tmpmax, lkeys, 
+    vNew merkle_getkeyrange (vnode, ctype, tmpmin, tmpmax, lkeys, 
 			     missingfnc, rpcfnc);
   }
 }

@@ -22,6 +22,7 @@ class merkle_syncer {
   void missing (const merkle_hash &key);
 
  public:
+  uint vnode;
   dhash_ctype ctype;
   ptr<merkle_tree> ltree; // local tree
   rpcfnc_t rpcfnc;
@@ -38,7 +39,7 @@ class merkle_syncer {
 
   vec<pair<merkle_rpc_node, int> > st;
 
-  merkle_syncer (dhash_ctype ctype,
+  merkle_syncer (uint vnode, dhash_ctype ctype,
 		 ptr<merkle_tree> ltree, rpcfnc_t rpcfnc, 
 		 missingfnc_t missingfnc);
   ~merkle_syncer ();
@@ -65,7 +66,8 @@ format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
 void
 compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax, 
 	       merkle_node *lnode, merkle_rpc_node *rnode,
-	       dhash_ctype ctype, missingfnc_t missingfnc, rpcfnc_t rpcfnc);
+	       uint vnode, dhash_ctype ctype, missingfnc_t missingfnc, 
+	       rpcfnc_t rpcfnc);
 
 void
 compare_keylists (vec<chordID> lkeys, vec<chordID> rkeys,

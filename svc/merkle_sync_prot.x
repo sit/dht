@@ -23,6 +23,7 @@ struct merkle_rpc_node {
 /* GETKEYS */
 
 struct getkeys_arg {
+  u_int32_t vnode;
   dhash_ctype ctype;
   bigint rngmin;
   bigint rngmax;
@@ -45,6 +46,7 @@ union getkeys_res switch (merkle_stat status) {
 /* SENDNODE */
 
 struct sendnode_arg {
+  u_int32_t vnode;
   dhash_ctype ctype;
   bigint rngmin;
   bigint rngmax;

@@ -1,0 +1,28 @@
+#ifndef _MERKLE_DISK_SERVER_H_
+#define _MERKLE_DISK_SERVER_H_
+
+#include <arpc.h>
+//#include <asrv.h>
+#include <dhash_types.h>
+#include "merkle_server.h"
+
+class merkle_disk_server {
+ public:
+  merkle_disk_server( uint port, int num_vnodes );
+  ~merkle_disk_server();
+  void add_merkle_server( int vnode, dhash_ctype ctype, ptr<merkle_server> s );
+  void dispatch( ptr<asrv> s, svccb *sbp );
+
+ private:
+
+  void client_listen( int fd );
+  void init_listen( int port );
+  void client_accept_socket( int lfd );
+
+  ptr<merkle_server> **_mservers;
+  int _num_vnodes;
+
+};
+
+
+#endif /* _MERKLE_DISK_SERVER_H_ */

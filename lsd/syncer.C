@@ -145,7 +145,7 @@ syncer::sync_replicas_predupdated (ptr<location> pred)
 
 void
 syncer::sync_replicas_gotsucclist (ptr<location> pred,
-			   vec<ptr<location> > succs) 
+				   vec<ptr<location> > succs) 
 {
   if (succs.size () < 2) {
     delaycb (replica_timer, wrap (this, &syncer::sync_replicas)); 
@@ -163,6 +163,28 @@ syncer::sync_replicas_gotsucclist (ptr<location> pred,
   else if (cur_succ >= succs.size ()) cur_succ = 1;
 
   assert(succs[cur_succ]);
+
+  // first thing to do is establish a TCP connection with the neighbor
+  ptr<location> neighbor = succs[cur_succ];
+  curr_dst = neighbor;
+  tcpconnect( neighbor->address().hostname,
+	      neighbor->address().port+2,
+	      wrap( this, &syncer::tcp_connected, pred, succs ) );
+
+}
+
+void
+syncer::tcp_connected (ptr<location> pred,
+		       vec<ptr<location> > succs, int fd) {
+
+  if( fd < 0 ) {
+    warn << "couldn't connect to neighbor, giving up\n";
+    delaycb (replica_timer, wrap(this, &syncer::sync_replicas));
+    return;
+  }
+
+  ptr<axprt_stream> xprt = axprt_stream::alloc( fd );
+  curr_client = aclnt::alloc( xprt, merklesync_program_1 );
 
   //sync with the next node
   u_int64_t start = getusec ();
@@ -191,8 +213,8 @@ syncer::sync_replicas_gotsucclist (ptr<location> pred,
       strbuf() << merkle_file << "leaf.mrk", true );
 
   replica_syncer = New refcounted<merkle_syncer> 
-    (ctype, tmptree, 
-     wrap (this, &syncer::doRPC_unbundler, succs[cur_succ]),
+    (curr_dst->vnode(), ctype, tmptree, 
+     wrap (this, &syncer::doRPC_unbundler),
      wrap (this, &syncer::missing, succs[cur_succ], tmptree));
   
   bigint rngmin = pred->id ();
@@ -208,11 +230,14 @@ syncer::sync_replicas_gotsucclist (ptr<location> pred,
 }
 
 void
-syncer::doRPC_unbundler (ptr<location> dst, RPC_delay_args *args)
+syncer::doRPC_unbundler (RPC_delay_args *args)
 {
-  chord_node n;
-  dst->fill_node (n);
-  ::doRPC (n, args->prog, args->procno, args->in, args->out, args->cb);
+
+  curr_client->call( args->procno, args->in, args->out, args->cb );
+
+  //chord_node n;
+  //dst->fill_node (n);
+  //::doRPC (n, args->prog, args->procno, args->in, args->out, args->cb);
 }
 
 void

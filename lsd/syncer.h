@@ -23,6 +23,8 @@ class syncer {
   ptr<merkle_syncer> replica_syncer;
   ptr<location> host_loc;
   ptr<adb> db;
+  ptr<aclnt> curr_client;
+  ptr<location> curr_dst;
   str db_prefix;
 
   u_int cur_succ;
@@ -58,8 +60,10 @@ protected:
   void sync_replicas_predupdated (ptr<location> pred);
   void sync_replicas_gotsucclist (ptr<location> pred,
 				  vec<ptr<location> > succs);
+  void tcp_connected (ptr<location> pred,
+		      vec<ptr<location> > succs, int fd);
 
-  void doRPC_unbundler (ptr<location> dst, RPC_delay_args *args);
+  void doRPC_unbundler (RPC_delay_args *args);
   void missing (ptr<location> from, ptr<merkle_tree> tmptree,
 		bigint key, bool missing_local, bool round_over);
 };
