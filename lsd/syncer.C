@@ -233,6 +233,7 @@ void
 syncer::doRPC_unbundler (RPC_delay_args *args)
 {
 
+  warn << "Calling proc " << args->procno << "\n";
   curr_client->call( args->procno, args->in, args->out, args->cb );
 
   //chord_node n;

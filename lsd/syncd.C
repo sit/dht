@@ -33,14 +33,14 @@ lsdctl_connect (str sockname)
   return c;
 }
 
-static ptr<merkle_server> make_mserver( str dbdir, str dbname ) {
+static merkle_server *make_mserver( str dbdir, str dbname ) {
   str merkle_file = strbuf() << dbdir << "/" << dbname << "/";
   ptr<merkle_tree> tree = New refcounted<merkle_tree_disk>
     ( strbuf() << merkle_file << "index.mrk",
       strbuf() << merkle_file << "internal.mrk",
       strbuf() << merkle_file << "leaf.mrk", false /*read only*/ );
 
-  return New refcounted<merkle_server>( tree );
+  return New merkle_server( tree );
 
 }
 

@@ -6,11 +6,11 @@ merkle_disk_server::merkle_disk_server( uint port, int num_vnodes ) :
 
   init_listen( port );
 
-  _mservers = (ptr<merkle_server> **) 
-    malloc( _num_vnodes*sizeof(ptr<merkle_server> *) );
+  _mservers = (merkle_server ***) 
+    malloc( _num_vnodes*sizeof(merkle_server **) );
   for( int i = 0; i < _num_vnodes; i++ ) {
-    _mservers[i] = (ptr<merkle_server> *) 
-      malloc( 3*sizeof(ptr<merkle_server> ) );
+    _mservers[i] = (merkle_server **) 
+      malloc( 3*sizeof(merkle_server *) );
     for( int j = 0; j < 3; j++ ) {
       _mservers[i][j] = NULL;
     }
@@ -21,14 +21,19 @@ merkle_disk_server::merkle_disk_server( uint port, int num_vnodes ) :
 merkle_disk_server::~merkle_disk_server() {
   
   for( int i = 0; i < _num_vnodes; i++ ) {
-    delete [] _mservers[i];
+    for( int j = 0; j < 3; j++ ) {
+      delete _mservers[i][j];
+      _mservers[i][j] = NULL;
+    }
+    delete _mservers[i];
+    _mservers[i] = NULL;
   }
-  delete [] _mservers;
+  delete _mservers;
 
 }
 
 void merkle_disk_server::add_merkle_server( int vnode, dhash_ctype ctype, 
-					    ptr<merkle_server> s ) {
+					    merkle_server *s ) {
 
   _mservers[vnode][ctype] = s;
 
@@ -80,6 +85,8 @@ void merkle_disk_server::dispatch( ptr<asrv> s, svccb *sbp ) {
     return;
   }
 
+  warn << "Received RPC\n";
+
   uint vnode;
   dhash_ctype ctype;
 
@@ -89,6 +96,10 @@ void merkle_disk_server::dispatch( ptr<asrv> s, svccb *sbp ) {
       sendnode_arg *arg1 = sbp->Xtmpl getarg<sendnode_arg> ();
       vnode = arg1->vnode;
       ctype = arg1->ctype;
+      assert( _mservers[vnode][ctype] != NULL );
+      sendnode_res res (MERKLE_OK);
+      _mservers[vnode][ctype]->handle_send_node( arg1, &res );
+      sbp->reply (&res);
       break;
     }
   case MERKLESYNC_GETKEYS:
@@ -96,15 +107,17 @@ void merkle_disk_server::dispatch( ptr<asrv> s, svccb *sbp ) {
       getkeys_arg *arg2 = sbp->Xtmpl getarg<getkeys_arg> ();
       vnode = arg2->vnode;
       ctype = arg2->ctype;
+      assert( _mservers[vnode][ctype] != NULL );
+      getkeys_res res (MERKLE_OK);
+      _mservers[vnode][ctype]->handle_get_keys( arg2, &res );
+      sbp->reply (&res);
       break;
     }
   default:
-    fatal << "unknown proc in merkle " << sbp->proc() << "\n";
+    fatal << "unknown proc in merkle_disk_server " << sbp->proc() << "\n";
     sbp->reject (PROC_UNAVAIL);
     break;
   }
 
-  assert( _mservers[vnode][ctype] != NULL );
-  _mservers[vnode][ctype]->dispatch((user_args*) sbp);
 
 }

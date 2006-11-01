@@ -253,7 +253,9 @@ merkle_tree_disk::merkle_tree_disk( str index, str internal, str leaf,
   // make sure the root is created correctly:
   merkle_node *n = get_root();
   delete n;
-  write_metadata();
+  if( _writer ) {
+    write_metadata();
+  }
 
 }
 

@@ -3,6 +3,10 @@
 
 class merkle_tree;
 class user_args;
+class getkeys_arg;
+class getkeys_res;
+class sendnode_arg;
+class sendnode_res;
 
 // One merkle_server runs for each node of the Chord ring.
 //  - i.e., one merkle_server per virtual node
@@ -14,6 +18,8 @@ class merkle_server {
 
   void dispatch (user_args *a);
   merkle_server (merkle_tree *ltree);
+  void handle_get_keys( getkeys_arg *arg, getkeys_res *res );
+  void handle_send_node( sendnode_arg *arg, sendnode_res *res );
 
 };
 
