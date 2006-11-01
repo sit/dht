@@ -8,6 +8,7 @@
 #include <keyauxdb.h>
 #include <id_utils.h>
 #include <dbfe.h>
+#include <merkle_tree_disk.h>
 
 // {{{ Globals
 static bool dbstarted (false);
@@ -145,6 +146,7 @@ class dbns {
   DB *bsdx;
 
   keyauxdb *kdb;
+  merkle_tree *mtree;
 
   // XXX should have a instance-level lock that governs datadb/auxdatadb.
 
@@ -224,13 +226,50 @@ dbns::dbns (const str &dbpath, const str &name, bool aux) :
   DBNS_ERRCHECK ("bsdb->associate (bsdx)");
   warn << "dbns::dbns (" << dbpath << ", " << name << ", " << aux << ")\n";
 
-  fullpath << "/kdb.db";
-  kdb = New keyauxdb (fullpath);
+  str fullpath_kdb = strbuf() << fullpath << "/kdb.db";
+  kdb = New keyauxdb (fullpath_kdb);
   u_int32_t dummy;
   if (NULL == kdb->getkeys (0, 1, &dummy) ) {
     // This could take a very long time if there's a lot of data.
     migrate_getkeys ();
   }
+
+  // now make the on disk merkle tree, migrating keys as necessary
+  str mtree_index = strbuf() << fullpath << "/index.mrk";
+  FILE *f = fopen( mtree_index, "r" );
+  bool mtree_exists = true;
+  if( f == NULL ) {
+    mtree_exists = false;
+  } else {
+    fclose(f);
+  }
+
+  mtree = New merkle_tree_disk
+    ( mtree_index,
+      strbuf() << fullpath << "/internal.mrk",
+      strbuf() << fullpath << "/leaf.mrk", true /*read-write*/ );
+  
+  if( !mtree_exists ) {
+    uint avail;
+    uint at_a_time = 100000;
+    const keyaux_t *keys;
+    uint recno = 0;
+    while( (keys = kdb->getkeys(recno, at_a_time, &avail)) && avail > 0 ) {
+      for( uint j = 0; j < avail; j++ ) {
+	chordID k;
+	uint aux;
+	keyaux_unmarshall( &(keys[j]), &k, &aux );
+	if( hasaux() ) {
+	  mtree->insert( k, aux );
+	} else {
+	  mtree->insert( k );
+	}
+      }
+      recno += avail;
+    }
+    warn << "Migrated " << recno << " records to the mtree\n";
+  }
+
 }
 // }}}
 // {{{ dbns::~dbns
@@ -285,7 +324,12 @@ dbns::kinsert (const chordID &key, u_int32_t auxdata)
   // databases yet, so just ignore them for now.  The auxdatadb
   // should iterate much faster than the full database anyway.
   // if (!auxdatadb)
-    return kdb->addkey (key, auxdata);
+  if( hasaux() ) {
+    mtree->insert( key, auxdata );
+  } else {
+    mtree->insert( key );
+  }
+  return kdb->addkey (key, auxdata);
   // return 0;
 }
 // }}}
