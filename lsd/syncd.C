@@ -35,6 +35,7 @@ lsdctl_connect (str sockname)
 
 static merkle_server *make_mserver( str dbdir, str dbname ) {
   str merkle_file = strbuf() << dbdir << "/" << dbname << "/";
+
   ptr<merkle_tree> tree = New refcounted<merkle_tree_disk>
     ( strbuf() << merkle_file << "index.mrk",
       strbuf() << merkle_file << "internal.mrk",
@@ -131,6 +132,9 @@ usage ()
 int 
 main (int argc, char **argv) 
 {
+
+  mp_set_memory_functions( NULL, simple_realloc, NULL );
+
   str lsdsock = "/tmp/lsdctl-sock";
   char ch;
 

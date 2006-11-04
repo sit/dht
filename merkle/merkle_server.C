@@ -12,7 +12,7 @@
 // ---------------------------------------------------------------------------
 // merkle_server
 
-merkle_server::merkle_server (merkle_tree *ltree) : ltree (ltree)
+merkle_server::merkle_server (ptr<merkle_tree> ltree) : ltree (ltree)
 {
 }
 

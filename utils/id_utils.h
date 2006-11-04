@@ -63,4 +63,6 @@ chordID make_chordID (const chord_node_wire &n);
 chordID make_randomID ();
 bool is_authenticID (const chordID &x, chord_hostname n, int p, int vnode);
 
+void *simple_realloc( void *memblock, size_t old_size, size_t new_size );
+
 #endif /* _ID_UTILS_H */

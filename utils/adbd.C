@@ -1073,6 +1073,7 @@ do_initspace (dbmanager *dbm, svccb *sbp)
 void
 do_store (dbmanager *dbm, svccb *sbp)
 {
+
   adb_storearg *arg = sbp->Xtmpl getarg<adb_storearg> ();
   dbns *db = dbm->get (arg->name);
   if (!db) {

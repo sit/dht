@@ -634,7 +634,7 @@ merkle_tree_disk::lookup( u_int *depth, u_int max_depth,
   *depth = 0;
   merkle_node *curr_root = get_root();
   merkle_node *ret = merkle_tree::lookup( depth, max_depth, key, 
-					       curr_root );
+					  curr_root );
   ret = make_node(((merkle_node_disk *) ret)->get_block_no(),
 		  ret->isleaf()?MERKLE_DISK_LEAF:MERKLE_DISK_INTERNAL);
   delete curr_root;

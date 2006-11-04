@@ -85,8 +85,6 @@ void merkle_disk_server::dispatch( ptr<asrv> s, svccb *sbp ) {
     return;
   }
 
-  warn << "Received RPC\n";
-
   uint vnode;
   dhash_ctype ctype;
 

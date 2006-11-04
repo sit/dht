@@ -14,10 +14,10 @@ class sendnode_res;
 
 class merkle_server {
  public:
-  merkle_tree *ltree; // local tree
+  ptr<merkle_tree> ltree; // local tree
 
   void dispatch (user_args *a);
-  merkle_server (merkle_tree *ltree);
+  merkle_server (ptr<merkle_tree> ltree);
   void handle_get_keys( getkeys_arg *arg, getkeys_res *res );
   void handle_send_node( sendnode_arg *arg, sendnode_res *res );
 
