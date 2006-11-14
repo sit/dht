@@ -165,11 +165,11 @@ public:
   bool hasaux () { return auxdatadb != NULL; };
 
   // Primary data management
-  int kinsert (const chordID &key, u_int32_t auxdata);
+  bool kinsert (const chordID &key, u_int32_t auxdata);
   int insert (const chordID &key, DBT &data, DBT &auxdata);
   int lookup (const chordID &key, str &data);
   int lookup_nextkey (const chordID &key, chordID &nextkey);
-  int del (const chordID &key);
+  int del (const chordID &key, u_int32_t auxdata);
   int kgetkeys (u_int32_t start, size_t count, bool getaux,
       rpc_vec<adb_keyaux_t, RPC_INFINITY> &out); 
   int getkeys (const chordID &start, size_t count, bool getaux,
@@ -317,7 +317,7 @@ dbns::sync ()
 }
 // }}}
 // {{{ dbns::kinsert (chordID, u_int32_t)
-int
+bool
 dbns::kinsert (const chordID &key, u_int32_t auxdata)
 {
   // We don't really deal well with updating these auxiliary
@@ -327,9 +327,13 @@ dbns::kinsert (const chordID &key, u_int32_t auxdata)
   if( hasaux() ) {
     mtree->insert( key, auxdata );
   } else {
+    if( mtree->key_exists( key ) ) {
+      return false;
+    }
     mtree->insert( key );
   }
-  return kdb->addkey (key, auxdata);
+  kdb->addkey (key, auxdata);
+  return true;
   // return 0;
 }
 // }}}
@@ -436,7 +440,7 @@ dbns::lookup_nextkey (const chordID &key, chordID &nextkey)
 // }}}
 // {{{ dbns::del
 int
-dbns::del (const chordID &key)
+dbns::del (const chordID &key, u_int32_t auxdata)
 {
   int r = 0;
   str key_str = id_to_str (key);
@@ -445,6 +449,12 @@ dbns::del (const chordID &key)
   // Implicit transaction
   r = datadb->del (datadb, NULL, &skey, DB_AUTO_COMMIT);
   // XXX Should delkey from kdb.
+
+  if( hasaux() ) {
+    mtree->remove( key, auxdata );
+  } else {
+    mtree->remove( key );
+  }
 
   if (r && r != DB_NOTFOUND)
     warner ("dbns::del", "del error", r);
@@ -1081,7 +1091,12 @@ do_store (dbmanager *dbm, svccb *sbp)
     return;
   }
 
-  db->kinsert (arg->key, arg->auxdata);
+  // implicit policy: don't insert the same key twice for non-aux dbs.
+  bool inserted_new_key = db->kinsert (arg->key, arg->auxdata);
+  if( !inserted_new_key ) {
+    sbp->replyref( ADB_OK );
+    return;
+  }
 
   DBT data;
   bzero (&data, sizeof (data));
@@ -1177,7 +1192,7 @@ do_delete (dbmanager *dbm, svccb *sbp)
     sbp->replyref (ADB_ERR);
     return;
   }
-  int r = db->del (arg->key);
+  int r = db->del (arg->key, arg->auxdata);
   sbp->replyref ((r == 0) ? ADB_OK : ADB_NOTFOUND);
 }
 

@@ -306,6 +306,8 @@ void merkle_tree_disk::write_metadata() {
   _future_free_leafs.clear();
   _future_free_internals.clear();
 
+  fflush( _index );
+
 }
 
 merkle_node *merkle_tree_disk::get_root() {

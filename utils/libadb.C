@@ -183,9 +183,28 @@ adb::getkeys_cb (bool getaux, adb_getkeysres *res, cb_getkeys cb, clnt_stat err)
 void
 adb::remove (chordID key, cb_adbstat cb)
 {
-  adb_storearg arg;
+  assert(!hasaux);
+
+  adb_deletearg arg;
   arg.name = name_space;
   arg.key = key;
+  adb_status *stat = New adb_status ();
+
+  c->call (ADBPROC_DELETE, &arg, stat,
+	   wrap (this, &adb::generic_cb, stat, cb));
+}
+
+void
+adb::remove (chordID key, u_int32_t auxdata, cb_adbstat cb)
+{
+
+  assert(hasaux);
+
+  adb_deletearg arg;
+  arg.name = name_space;
+  arg.key = key;
+  arg.auxdata = auxdata;
+
   adb_status *stat = New adb_status ();
 
   c->call (ADBPROC_DELETE, &arg, stat,

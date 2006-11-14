@@ -43,8 +43,9 @@ dhblock_keyhash_srv::real_store (chordID key, str od, str nd, cb_dhstat cb)
 	cb (DHASH_RETRY);
     } else {
       info << "db delete: " << key << "\n";
-      mtree->remove (key, v0);
-      db->remove (key, wrap (this, &dhblock_keyhash_srv::delete_cb, key, nd, v1, cb));
+      db->remove (key, v0, 
+		  wrap (this, &dhblock_keyhash_srv::delete_cb, key, 
+			nd, v1, cb));
       db->update (key, node->my_location (), v0, false);
     }
   } else {
@@ -61,7 +62,6 @@ dhblock_keyhash_srv::delete_cb (chordID k, str d, u_int32_t v, cb_dhstat cb, adb
   info << "db write: " << node->my_ID ()
        << " U " << k << " " << d.len () << "\n";
   
-  mtree->insert (k, v);
   db_store (k, d, v, cb);
   db->update (k, node->my_location (), v, true);
 }

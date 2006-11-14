@@ -53,55 +53,18 @@ dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
 				      cbv donecb) :
   dhblock_srv (node, cli, desc, dbname, dbext, false, donecb),
   cache_db (NULL),
-  msrv (NULL),
-  mtree (NULL),
   pmaint_obj (NULL)
 {
   pmaint_obj = New pmaint (cli, node, mkref (this)); 
   cache_db = New refcounted<adb> (dbname, "ccache");
 
-  mtree = New merkle_tree ();
-  mtree->set_rehash_on_modification (false);
-  db->getkeys (0, wrap (this, &dhblock_chash_srv::populate_mtree));
-  // Don't create msrv until populate_mtree is done.
-  // Any merkle RPCs will get a MERKLE_ERR from dhash_impl::merkle_dispatch
-}
+  (*donecb)();
 
-void
-dhblock_chash_srv::populate_mtree (adb_status stat,
-    u_int32_t id, vec<adb_keyaux_t> keys)
-{
-  // aux can be ignored; not needed for chash
-  if (stat != ADB_COMPLETE && stat != ADB_OK) {
-    warn << "dhblock_chash_srv::populate_mtree: unexpected adb status " 
-         << stat << "\n";
-    return;
-  }
-  for (size_t i = 0; i < keys.size (); i++) {
-    mtree->insert (keys[i].key);
-  }
-  if (stat != ADB_COMPLETE) {
-    db->getkeys (id, wrap (this, &dhblock_chash_srv::populate_mtree));
-  } else {
-    mtree->hash_tree ();
-    mtree->set_rehash_on_modification (true);
-    // Ready to start synchronizing!
-    msrv = New merkle_server (mtree);
-    (*donecb)();
-  }
 }
 
 dhblock_chash_srv::~dhblock_chash_srv ()
 {
   stop ();
-  if (msrv) {
-    delete msrv;
-    msrv = NULL;
-  }
-  if (mtree) {
-    delete mtree;
-    mtree = NULL;
-  }
   if (pmaint_obj) {
     delete pmaint_obj;
     pmaint_obj = NULL;
@@ -131,10 +94,9 @@ dhblock_chash_srv::store (chordID key, str d, cb_dhstat cb)
 {
   char *action;
 
-  if (!mtree->key_exists (key)) {
+  if (1) {  // without maintaining our own merkle tree, we can't know
     action = "N"; // New
     db_store (key, d, cb);
-    mtree->insert (key);
   } else {
     action = "R";
     cb (DHASH_OK);
@@ -273,9 +235,7 @@ dhblock_chash_srv::offer (user_args *sbp, dhash_offer_arg *arg)
 void
 dhblock_chash_srv::stats (vec<dstat> &s)
 {
-  merkle_node *n = mtree->get_root();
-  s.push_back (dstat ("frags on disk", n->count));
-  mtree->lookup_release(n);
+  warn << "chash stats no longer supported\n";
   return;
 }
 

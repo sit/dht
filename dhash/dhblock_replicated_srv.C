@@ -50,41 +50,11 @@ dhblock_replicated_srv::dhblock_replicated_srv (ptr<vnode> node,
 						dhash_ctype ctype,
 						cbv donecb) :
   dhblock_srv (node, cli, desc, dbname, dbext, true, donecb),
-  ctype (ctype),
-  mtree (NULL),
-  msrv (NULL)
+  ctype (ctype)
 {
-  mtree = New merkle_tree ();
-  mtree->set_rehash_on_modification (false);
-  db->getkeys (0, wrap (this, &dhblock_replicated_srv::populate_mtree),
-	       false, 16384, true);
-}
 
-void
-dhblock_replicated_srv::populate_mtree (adb_status stat,
-    u_int32_t id, vec<adb_keyaux_t> keys)
-{
-  if (stat != ADB_COMPLETE && stat != ADB_OK) {
-    warn << "dhblock_replicated_srv::populate_mtree: unexpected adb status " 
-         << stat << "\n";
-    return;
-  }
-  // aux contains pre-computed hashes of the low-order
-  // bytes of the key.
-  for (unsigned int i = 0; i < keys.size (); i++) {
-    mtree->insert (keys[i].key, keys[i].auxdata);
-  }
+  (*donecb)();
 
-  if (stat != ADB_COMPLETE) { // more keys
-    db->getkeys (id,
-		 wrap (this, &dhblock_replicated_srv::populate_mtree),
-		 false, 16384, true);
-  } else {
-    mtree->hash_tree ();
-    mtree->set_rehash_on_modification (true);
-    msrv = New merkle_server (mtree);
-    (*donecb)();
-  }
 }
 
 void

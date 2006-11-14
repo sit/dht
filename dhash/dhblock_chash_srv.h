@@ -15,12 +15,8 @@ class dhblock_chash_srv : public dhblock_srv {
   friend class rjchash;
   ptr<adb> cache_db;
 
-  merkle_server *msrv;
-  merkle_tree *mtree;
-
   pmaint *pmaint_obj;
 
-  void populate_mtree (adb_status err, u_int32_t done, vec<adb_keyaux_t> keys);
   void localqueue (u_int32_t frags, clnt_stat err, adb_status stat, vec<block_info> keys);
 
 public:
@@ -36,8 +32,6 @@ public:
   void offer (user_args *sbp, dhash_offer_arg *arg);
 
   void stats (vec<dstat> &s);
-
-  merkle_server *mserv () { return msrv; };
 
   void generate_repair_jobs ();
 };

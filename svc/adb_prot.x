@@ -73,6 +73,7 @@ union adb_fetchres switch (adb_status status) {
 struct adb_deletearg {
   str name;
   chordID key;
+  u_int32_t auxdata;
 };
 /* }}} */
 /* {{{ ADBPROC_GETKEYS (and ADBPROC_GETKEYSON) */

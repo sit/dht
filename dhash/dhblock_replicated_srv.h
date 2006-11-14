@@ -40,12 +40,9 @@ class dhblock_replicated_srv : public dhblock_srv
 
 protected:
   const dhash_ctype ctype;
-  merkle_tree *mtree;
-  merkle_server *msrv;
 
   qhash<chordID, vec<cbv> *, hashID> _paused_stores;
 
-  virtual void populate_mtree (adb_status stat, u_int32_t id, vec<adb_keyaux_t> keys);
 
   // Mutable blocks require Merkle key tweaking
   virtual chordID idaux_to_mkey (chordID key, u_int32_t aux);
@@ -59,7 +56,6 @@ public:
 			  str dbname, str dbext, str desc,
                           dhash_ctype ctype, cbv donecb);
 
-  merkle_server *mserv () { return msrv; };
   virtual void store (chordID key, str d, cb_dhstat cb);
   virtual void fetch (chordID key, cb_fetch cb);
   virtual void generate_repair_jobs ();
