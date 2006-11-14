@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-## $Id: Makefile.am,v 1.21.2.1 2006/11/01 22:40:46 strib Exp $
+## $Id: Makefile.am,v 1.21.2.2 2006/11/14 21:53:41 strib Exp $
 
 chordlib_LIBRARIES = libutil.a libadb.a
 chordinclude_HEADERS = id_utils.h configurator.h skiplist.h modlogger.h
@@ -33,11 +33,7 @@ libutil_a_SOURCES = \
 
 libadb_a_SOURCES = libadb.C
 
-bin_PROGRAMS = adbd
 noinst_PROGRAMS = adb_benchmark
-
-adbd_SOURCES = adbd.C 
-adbd_LDADD =  libutil.a ../svc/libsvc.la ../merkle/libmerkle.a $(LIBARPC)  $(LIBSFSCRYPT) $(LIBGMP) $(DBLIB) $(LIBASYNC) 
 
 adb_benchmark_SOURCES = adb_benchmark.C
 adb_benchmark_LDADD =  libutil.a ../svc/libsvc.la $(LIBARPC)  $(LIBSFSCRYPT) $(LIBGMP) $(DBLIB) $(LIBASYNC) 

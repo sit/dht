@@ -69,7 +69,7 @@ if (length($bindir)) {
     if (-x "$bindir/lsd/lsd") {
 	# e.g. bindir is top of builddir
 	$LSD    = "$bindir/lsd/lsd";
-	$ADBD   = "$bindir/utils/adbd";
+	$ADBD   = "$bindir/lsd/adbd";
 	$SYNCD  = "$bindir/lsd/syncd";
     } elsif (-x "$bindir/lsd" and ! -d _) {
 	# e.g. bindir=/usr/bin
