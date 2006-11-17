@@ -579,7 +579,7 @@ merkle_tree_disk::insert (u_int depth, merkle_hash& key, merkle_node *n)
   if (n->isleaf ()) {
     old_type = MERKLE_DISK_LEAF;
     if (n->leaf_is_full ()) {
-      leaf2internal (depth, (merkle_node_disk *) n);
+      leaf2internal (depth, nd);
       assert (!n->isleaf());
     }
   } else {
