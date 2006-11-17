@@ -380,22 +380,21 @@ is_authenticID (const chordID &x, chord_hostname n, int p, int vnode)
   return (ID == x);
 }
 
-void *simple_realloc( void *memblock, size_t old_size, size_t new_size ) {
-  
-  void *newp = malloc( new_size );
-
-  if( newp != NULL ) {
-    if( new_size > old_size ) {
-      memcpy( newp, memblock, old_size );
+void *
+simple_realloc (void *memblock, size_t old_size, size_t new_size)
+{
+  void *newp = malloc (new_size);
+  if (newp != NULL) {
+    if (new_size > old_size) {
+      memcpy (newp, memblock, old_size);
     } else {
-      memcpy( newp, memblock, new_size );
+      memcpy (newp, memblock, new_size);
     }
   } else {
       fprintf (stderr, "simple_realloc: Cannot reallocate memory (old_size=%u new_size=%u)\n", old_size, new_size);
       abort ();
   }
 
-  free(memblock);
+  free (memblock);
   return newp;
-
 }

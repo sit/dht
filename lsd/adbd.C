@@ -236,33 +236,33 @@ dbns::dbns (const str &dbpath, const str &name, bool aux) :
 
   // now make the on disk merkle tree, migrating keys as necessary
   str mtree_index = strbuf() << fullpath << "/index.mrk";
-  FILE *f = fopen( mtree_index, "r" );
+  FILE *f = fopen (mtree_index, "r");
   bool mtree_exists = true;
-  if( f == NULL ) {
+  if (f == NULL) {
     mtree_exists = false;
   } else {
-    fclose(f);
+    fclose (f);
   }
 
   mtree = New merkle_tree_disk
-    ( mtree_index,
+     (mtree_index,
       strbuf() << fullpath << "/internal.mrk",
-      strbuf() << fullpath << "/leaf.mrk", true /*read-write*/ );
+      strbuf() << fullpath << "/leaf.mrk", true /*read-write*/);
   
-  if( !mtree_exists ) {
+  if (!mtree_exists) {
     uint avail;
     uint at_a_time = 100000;
     const keyaux_t *keys;
     uint recno = 0;
-    while( (keys = kdb->getkeys(recno, at_a_time, &avail)) && avail > 0 ) {
-      for( uint j = 0; j < avail; j++ ) {
+    while ((keys = kdb->getkeys (recno, at_a_time, &avail)) && avail > 0) {
+      for (uint j = 0; j < avail; j++) {
 	chordID k;
 	uint aux;
-	keyaux_unmarshall( &(keys[j]), &k, &aux );
-	if( hasaux() ) {
-	  mtree->insert( k, aux );
+	keyaux_unmarshall (&(keys[j]), &k, &aux);
+	if (hasaux ()) {
+	  mtree->insert (k, aux);
 	} else {
-	  mtree->insert( k );
+	  mtree->insert (k);
 	}
       }
       recno += avail;
@@ -324,17 +324,16 @@ dbns::kinsert (const chordID &key, u_int32_t auxdata)
   // databases yet, so just ignore them for now.  The auxdatadb
   // should iterate much faster than the full database anyway.
   // if (!auxdatadb)
-  if( hasaux() ) {
-    mtree->insert( key, auxdata );
+  if (hasaux ()) {
+    mtree->insert (key, auxdata);
   } else {
-    if( mtree->key_exists( key ) ) {
+    if (mtree->key_exists (key)) {
       return false;
     }
-    mtree->insert( key );
+    mtree->insert (key);
   }
   kdb->addkey (key, auxdata);
   return true;
-  // return 0;
 }
 // }}}
 // {{{ dbns::insert (chordID, DBT, DBT)
@@ -450,10 +449,10 @@ dbns::del (const chordID &key, u_int32_t auxdata)
   r = datadb->del (datadb, NULL, &skey, DB_AUTO_COMMIT);
   // XXX Should delkey from kdb.
 
-  if( hasaux() ) {
-    mtree->remove( key, auxdata );
+  if (hasaux ()) {
+    mtree->remove (key, auxdata);
   } else {
-    mtree->remove( key );
+    mtree->remove (key);
   }
 
   if (r && r != DB_NOTFOUND)
@@ -495,7 +494,7 @@ dbns::getkeys (const chordID &start, size_t count, bool getaux, rpc_vec<adb_keya
     limit = (u_int32_t) (asrvbufsize/(1.5*sizeof (adb_keyaux_t)));
 
   // since we set a limit, we know the maximum amount we have to allocate
-  out.setsize( limit );
+  out.setsize (limit);
   u_int32_t elements = 0;
 
   r = cursor->c_get (cursor, &key, &data, DB_SET_RANGE);
@@ -510,8 +509,8 @@ dbns::getkeys (const chordID &start, size_t count, bool getaux, rpc_vec<adb_keya
     r = cursor->c_get (cursor, &key, &data, DB_NEXT);
   }
 
-  if( elements < limit ) {
-    out.setsize( elements );
+  if (elements < limit) {
+    out.setsize (elements);
   }
 
   if (r && r != DB_NOTFOUND)
@@ -625,7 +624,7 @@ dbns::getblockrange_all (const chordID &start, const chordID &stop,
   }
 
   // since we set a limit, we know the maximum amount we have to allocate
-  out.setsize( limit );
+  out.setsize (limit);
   u_int32_t elements = 0;
 
   while (!r && elements < limit)
@@ -639,9 +638,9 @@ dbns::getblockrange_all (const chordID &start, const chordID &stop,
     cur = k;
     if (buf2xdr (vbs, data.data, data.size)) {
       out[elements].block = k;
-      out[elements].hosts.setsize( vbs.d.size() );
+      out[elements].hosts.setsize (vbs.d.size());
       // explicit deep copy
-      for( u_int32_t i = 0; i < vbs.d.size(); i++ ) {
+      for (u_int32_t i = 0; i < vbs.d.size(); i++) {
 	out[elements].hosts[i].n = vbs.d[i].n;
 	out[elements].hosts[i].auxdata = vbs.d[i].auxdata;
       }
@@ -658,8 +657,8 @@ dbns::getblockrange_all (const chordID &start, const chordID &stop,
   if (r && r != DB_NOTFOUND)
     warner ("dbns::getblockrange_all", "cursor get", r);
 
-  if( elements < limit ) {
-    out.setsize( elements );
+  if (elements < limit) {
+    out.setsize (elements);
   }
 
   (void) cursor->c_close (cursor);
@@ -710,7 +709,7 @@ dbns::getblockrange_extant (const chordID &start, const chordID &stop,
   }
 
   // since we set a limit, we know the maximum amount we have to allocate
-  out.setsize( limit );
+  out.setsize (limit);
   u_int32_t elements = 0;
 
   while (!r && elements < limit)
@@ -727,9 +726,9 @@ dbns::getblockrange_extant (const chordID &start, const chordID &stop,
     cur = k;
     if (buf2xdr (vbs, data.data, data.size)) {
       out[elements].block = k;
-      out[elements].hosts.setsize( vbs.d.size() );
+      out[elements].hosts.setsize (vbs.d.size ());
       // explicit deep copy
-      for( u_int32_t i = 0; i < vbs.d.size(); i++ ) {
+      for (u_int32_t i = 0; i < vbs.d.size(); i++) {
 	out[elements].hosts[i].n = vbs.d[i].n;
 	out[elements].hosts[i].auxdata = vbs.d[i].auxdata;
       }
@@ -746,8 +745,8 @@ dbns::getblockrange_extant (const chordID &start, const chordID &stop,
   if (r && r != DB_NOTFOUND)
     warner ("dbns::getblockrange_extant", "cursor get", r);
 
-  if( elements < limit ) {
-    out.setsize( elements );
+  if (elements < limit) {
+    out.setsize (elements);
   }
 
   (void) cursor->c_close (cursor);
@@ -792,7 +791,7 @@ dbns::getkeyson (const adb_vnodeid &n, const chordID &start,
   }
 
   // since we set a limit, we know the maximum amount we have to allocate
-  out.setsize( limit );
+  out.setsize (limit);
   u_int32_t elements = 0;
 
   // Each adb_keyaux_t is 24ish bytes; leave some slack
@@ -828,7 +827,7 @@ dbns::getkeyson (const adb_vnodeid &n, const chordID &start,
   if (r && r != DB_NOTFOUND)
     warner ("dbns::getkeyson", "cursor get", r);
 
-  if( elements < limit ) {
+  if (elements < limit) {
     out.setsize(elements);
   }
 
@@ -1093,8 +1092,8 @@ do_store (dbmanager *dbm, svccb *sbp)
 
   // implicit policy: don't insert the same key twice for non-aux dbs.
   bool inserted_new_key = db->kinsert (arg->key, arg->auxdata);
-  if( !inserted_new_key ) {
-    sbp->replyref( ADB_OK );
+  if (!inserted_new_key) {
+    sbp->replyref (ADB_OK);
     return;
   }
 
@@ -1131,7 +1130,7 @@ do_fetch (dbmanager *dbm, svccb *sbp)
 
   int r;
   chordID key;
-  if( arg->nextkey ) {
+  if (arg->nextkey) {
     r = db->lookup_nextkey (arg->key, key);
     data = "";
   } else {

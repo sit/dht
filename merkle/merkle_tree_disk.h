@@ -38,7 +38,6 @@ struct merkle_hash_id {
 };
 
 class merkle_node_disk : public merkle_node {
-
  private:
   array<merkle_hash_id, 64> *hashes;
   array<uint32, 64> *children;
@@ -50,33 +49,29 @@ class merkle_node_disk : public merkle_node {
   vec<merkle_node_disk *> to_delete;
 
  public:
-
   itree<chordID, merkle_key, &merkle_key::id, &merkle_key::ik> keylist;
 
-  merkle_hash child_hash( u_int i );
-  uint32 child_ptr( u_int i );
-  merkle_node *child( u_int i );
+  merkle_hash child_hash (u_int i);
+  uint32 child_ptr (u_int i);
+  merkle_node *child (u_int i);
   void leaf2internal ();
   void internal2leaf ();
   bool isleaf () const;
-  void add_key( chordID key );
-  void add_key( merkle_hash key );
-  void set_child( merkle_node_disk *n, u_int i);
-  void write_out();
-  void set_block_no( uint32 block_no ) { _block_no = block_no; }
-  uint32 get_block_no() { return _block_no; }
-  void rehash();
+  void add_key (chordID key);
+  void add_key (merkle_hash key);
+  void set_child (merkle_node_disk *n, u_int i);
+  void write_out ();
+  void set_block_no (uint32 block_no) { _block_no = block_no; }
+  uint32 get_block_no () { return _block_no; }
+  void rehash ();
 
-  merkle_node_disk (FILE *internal, FILE *leaf, 
+  merkle_node_disk (FILE *internal, FILE *leaf,
 		    MERKLE_DISK_TYPE type, uint32 block_no);
   ~merkle_node_disk ();
-
-
 };
 
 class merkle_tree_disk : public merkle_tree {
 private:
-
   str _index_name;
   str _internal_name;
   str _leaf_name;
@@ -105,8 +100,7 @@ private:
   void switch_root( merkle_node_disk *n );
 
 public:
-
-  vec<merkle_hash> database_get_keys (u_int depth, 
+  vec<merkle_hash> database_get_keys (u_int depth,
 					      const merkle_hash &prefix);
   vec<chordID> database_get_IDs (u_int depth, const merkle_hash &prefix);
   bool key_exists (chordID key);
@@ -121,10 +115,6 @@ public:
   merkle_node *lookup (u_int *depth, u_int max_depth, const merkle_hash &key);
   void lookup_release( merkle_node *n );
   void remove( merkle_hash &key );
-
 };
-
-
-
 
 #endif /* _MERKLE_TREE_DISK_H_ */

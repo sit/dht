@@ -23,7 +23,7 @@ syncer::syncer (ptr<locationtable> locations,
   : locations (locations), ctype (ctype), dfrags (dfrags), efrags (efrags),
     tmptree (NULL), host_loc (h),
     db (New refcounted<adb> (dbpath, dbname)),
-    db_prefix (strbuf() << dbdir << "/" << dbname),
+    db_prefix (strbuf () << dbdir << "/" << dbname),
     cur_succ (0),
     replica_timer (300)
 { 
@@ -42,7 +42,7 @@ syncer::syncer (ptr<locationtable> locations,
   
   // Initially randomize a little.
   int delay = random_getword () % replica_timer;
-  delaycb (delay, wrap(this, &syncer::sync_replicas)); 
+  delaycb (delay, wrap (this, &syncer::sync_replicas)); 
 }
 
 syncer::~syncer ()
@@ -124,7 +124,7 @@ syncer::sync_replicas ()
 {
   if (replica_syncer && !replica_syncer->done ()) {
     // still working on the last sync
-    delaycb (replica_timer, wrap(this, &syncer::sync_replicas)); 
+    delaycb (replica_timer, wrap (this, &syncer::sync_replicas)); 
   } else {
     warn << "sync_replicas: starting (ctype = " << ctype << ")\n";
     update_pred (wrap (this, &syncer::sync_replicas_predupdated)); 
@@ -162,35 +162,34 @@ syncer::sync_replicas_gotsucclist (ptr<location> pred,
   if (efrags > 0 && cur_succ >= efrags) cur_succ = 1;
   else if (cur_succ >= succs.size ()) cur_succ = 1;
 
-  assert(succs[cur_succ]);
+  assert (succs[cur_succ]);
 
   // first thing to do is establish a TCP connection with the neighbor
   ptr<location> neighbor = succs[cur_succ];
   curr_dst = neighbor;
-  tcpconnect( neighbor->address().hostname,
-	      neighbor->address().port+2,
-	      wrap( this, &syncer::tcp_connected, pred, succs ) );
-
+  tcpconnect (neighbor->address ().hostname,
+	      neighbor->address ().port+2,
+	      wrap (this, &syncer::tcp_connected, pred, succs));
 }
 
 void
 syncer::tcp_connected (ptr<location> pred,
-		       vec<ptr<location> > succs, int fd) {
-
-  if( fd < 0 ) {
+		       vec<ptr<location> > succs, int fd)
+{
+  if (fd < 0) {
     warn << "couldn't connect to neighbor, giving up\n";
-    delaycb (replica_timer, wrap(this, &syncer::sync_replicas));
+    delaycb (replica_timer, wrap (this, &syncer::sync_replicas));
     return;
   }
 
-  ptr<axprt_stream> xprt = axprt_stream::alloc( fd );
-  curr_client = aclnt::alloc( xprt, merklesync_program_1 );
+  ptr<axprt_stream> xprt = axprt_stream::alloc (fd);
+  curr_client = aclnt::alloc (xprt, merklesync_program_1);
 
   //sync with the next node
   u_int64_t start = getusec ();
 
   str ext;
-  switch(ctype) {
+  switch (ctype) {
   case DHASH_CONTENTHASH:
     ext = "c";
     break;
@@ -204,16 +203,16 @@ syncer::tcp_connected (ptr<location> pred,
     fatal << "bad ctype\n";
   }
 
-  str merkle_file = strbuf() << db_prefix << "/" << succs[cur_succ]->id()
+  str merkle_file = strbuf () << db_prefix << "/" << succs[cur_succ]->id ()
 			     << "." << ext << "/";
 
   tmptree = New refcounted<merkle_tree_disk>
-    ( strbuf() << merkle_file << "index.mrk",
-      strbuf() << merkle_file << "internal.mrk",
-      strbuf() << merkle_file << "leaf.mrk", true );
+     (strbuf () << merkle_file << "index.mrk",
+      strbuf () << merkle_file << "internal.mrk",
+      strbuf () << merkle_file << "leaf.mrk", true);
 
   replica_syncer = New refcounted<merkle_syncer> 
-    (curr_dst->vnode(), ctype, tmptree, 
+    (curr_dst->vnode (), ctype, tmptree, 
      wrap (this, &syncer::doRPC_unbundler),
      wrap (this, &syncer::missing, succs[cur_succ], tmptree));
   
@@ -232,8 +231,7 @@ syncer::tcp_connected (ptr<location> pred,
 void
 syncer::doRPC_unbundler (RPC_delay_args *args)
 {
-
-  curr_client->call( args->procno, args->in, args->out, args->cb );
+  curr_client->call (args->procno, args->in, args->out, args->cb);
 
   //chord_node n;
   //dst->fill_node (n);
@@ -254,10 +252,10 @@ syncer::missing (ptr<location> from, ptr<merkle_tree> tmptree,
     db->update (key, from, missing_local, true);
     // if they have it, but we don't yet, add it to our tree
     // otherwise remove it from our tree
-    if( missing_local ) {
-      tmptree->insert( key );
+    if (missing_local) {
+      tmptree->insert (key);
     } else {
-      tmptree->remove( key );
+      tmptree->remove (key);
     }
     break;
   case DHASH_KEYHASH:
@@ -268,10 +266,10 @@ syncer::missing (ptr<location> from, ptr<merkle_tree> tmptree,
       db->update (dbkey, from, aux.getui (), missing_local, true);
       // if they have it, but we don't yet, add it to our tree
       // otherwise remove it from our tree
-      if( missing_local ) {
-	tmptree->insert( dbkey, aux.getui() );
+      if (missing_local) {
+	tmptree->insert (dbkey, aux.getui ());
       } else {
-	tmptree->remove( dbkey, aux.getui() );
+	tmptree->remove (dbkey, aux.getui ());
       }
     }
     break;

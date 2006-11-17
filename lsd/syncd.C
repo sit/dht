@@ -33,16 +33,17 @@ lsdctl_connect (str sockname)
   return c;
 }
 
-static merkle_server *make_mserver( str dbdir, str dbname ) {
+static merkle_server *
+make_mserver (str dbdir, str dbname)
+{
   str merkle_file = strbuf() << dbdir << "/" << dbname << "/";
 
   ptr<merkle_tree> tree = New refcounted<merkle_tree_disk>
-    ( strbuf() << merkle_file << "index.mrk",
+     (strbuf() << merkle_file << "index.mrk",
       strbuf() << merkle_file << "internal.mrk",
-      strbuf() << merkle_file << "leaf.mrk", false /*read only*/ );
+      strbuf() << merkle_file << "leaf.mrk", false /*read only*/);
 
-  return New merkle_server( tree );
-
+  return New merkle_server (tree);
 }
 
 static void
@@ -61,7 +62,7 @@ start (ptr<lsdctl_lsdparameters> p, clnt_stat err)
   ret.r.hostname = p->addr.hostname;
   ret.r.port = p->addr.port;
 
-  server = New refcounted<merkle_disk_server>( p->addr.port+2, p->nvnodes );
+  server = New refcounted<merkle_disk_server> (p->addr.port+2, p->nvnodes);
 
   for (int i = 0; i < p->nvnodes; i++) {
     ret.vnode_num = i;
@@ -75,8 +76,8 @@ start (ptr<lsdctl_lsdparameters> p, clnt_stat err)
     syncers.push_back (s);
 
     // create a merkle_tree and a merkle_server for this vnode/ctype
-    server->add_merkle_server( i, DHASH_CONTENTHASH,
-			       make_mserver( dbdir, dbname ) );
+    server->add_merkle_server (i, DHASH_CONTENTHASH,
+			       make_mserver (dbdir, dbname));
 
     dbname = strbuf () << ret.x << ".n";
     s = New syncer (locations, n, dbdir, p->adbdsock, dbname, 
@@ -84,9 +85,8 @@ start (ptr<lsdctl_lsdparameters> p, clnt_stat err)
     syncers.push_back (s);
 
     // create a merkle_tree and a merkle_server for this vnode/ctype
-    server->add_merkle_server( i, DHASH_NOAUTH,
-			       make_mserver( dbdir, dbname ) );
-
+    server->add_merkle_server (i, DHASH_NOAUTH,
+			       make_mserver (dbdir, dbname));
   }
 }
 
@@ -132,8 +132,7 @@ usage ()
 int 
 main (int argc, char **argv) 
 {
-
-  mp_set_memory_functions( NULL, simple_realloc, NULL );
+  mp_set_memory_functions (NULL, simple_realloc, NULL);
 
   str lsdsock = "/tmp/lsdctl-sock";
   char ch;

@@ -4,59 +4,58 @@
 int main (int argc, char **argv) {
 
   uint num_keys = 150;
-  if( argc > 1 ) {
-    num_keys = atoi(argv[1]);
+  if (argc > 1) {
+    num_keys = atoi (argv[1]);
   }
 
-  srandom(time(NULL));
+  srandom (time (NULL));
 
-  merkle_tree *tree = New merkle_tree_disk( "/tmp/index.mrk", 
+  merkle_tree *tree = New merkle_tree_disk ("/tmp/index.mrk", 
 					    "/tmp/internal.mrk",
-					    "/tmp/leaf.mrk", true );
+					    "/tmp/leaf.mrk", true);
 
-  //tree->dump();
+  //tree->dump ();
 
   // inserts
 
   chordID c;
-  for( uint i = 0; i < num_keys; i++ ) {
-    c = make_randomID();
+  for (uint i = 0; i < num_keys; i++) {
+    c = make_randomID ();
     warn << "\ninserting " << c << " (" << i << ")\n";
-    tree->insert( c );
+    tree->insert (c);
   }
 
   // lookups
 
-  merkle_node_disk *n = (merkle_node_disk *) tree->lookup(to_merkle_hash(c));
+  merkle_node_disk *n = (merkle_node_disk *) tree->lookup (to_merkle_hash (c));
 
   warn << "found node " << n->count << ": \n";
 
-  if( n->isleaf() ) {
-    merkle_key *k = n->keylist.first();
-    while( k != NULL ) {
+  if (n->isleaf ()) {
+    merkle_key *k = n->keylist.first ();
+    while (k != NULL) {
       warn << "\t" << k->id << "\n";
-      k = n->keylist.next(k);
+      k = n->keylist.next (k);
     }
   }
 
-  tree->lookup_release(n);
+  tree->lookup_release (n);
 
-  assert( tree->key_exists(c) );
+  assert (tree->key_exists (c));
 
   // remove
 
-  tree->remove(c);
+  tree->remove (c);
 
-  assert( !tree->key_exists(c) );
+  assert (!tree->key_exists (c));
 
-  //tree->dump();
+  //tree->dump ();
 
   chordID min = c;
   chordID max = ((chordID) 1) << 156;
-  vec<chordID> keys = tree->get_keyrange( min, max, 65 );
-  for( uint i = 0; i < keys.size(); i++ ) {
+  vec<chordID> keys = tree->get_keyrange (min, max, 65);
+  for (uint i = 0; i < keys.size (); i++) {
     warn << "Found key " << keys[i] << " in range [" 
 	 << min << "," << max << "]\n";
   }
-
 }

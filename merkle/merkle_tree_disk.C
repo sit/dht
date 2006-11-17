@@ -6,92 +6,88 @@
 
 //////////////// merkle_node_disk /////////////////
 
-FILE *open_file( str name ) {
-
+static FILE *
+open_file (str name) {
   // make all the parent directories if applicable
-
   vec<str> dirs;
   static const rxx dirsplit("\\/");
-  uint num_dirs = split( &dirs, dirsplit, name );
+  uint num_dirs = split (&dirs, dirsplit, name);
   strbuf filestrbuf;
-  for( uint i = 0; i < dirs.size()-1; i++ ) {
+  for (uint i = 0; i < dirs.size()-1; i++) {
     filestrbuf << "/" << dirs[i];
     
-    str dirpath( filestrbuf );
+    str dirpath (filestrbuf);
     // check for existence, make if necessary
     struct stat st;
-    if( stat( dirpath, &st ) < 0 ) {
-      if( mkdir( dirpath, S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH ) != 0 ) {
-	fatal << "Couldn't make dir " << dirpath << "; bailing.\n";
+    if (stat (dirpath, &st) < 0) {
+      if (mkdir(dirpath, S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) != 0) {
+	fatal << "open_file: Couldn't make dir " << dirpath << "; bailing.\n";
       }
     }
-    
   }
 
-  FILE *f = fopen( name, "r+" );
-  if( f == NULL ) {
-    f = fopen( name, "w+" );
+  FILE *f = fopen (name, "r+");
+  if (f == NULL) {
+    f = fopen (name, "w+");
   }
-  if( f == NULL ) {
-    fatal << "Couldn't open or create " << name << " for read/write\n";
+  if (f == NULL) {
+    fatal << "open_file: Couldn't open or create " << name << " for read/write\n";
   }
   return f;
 }
 
 merkle_node_disk::merkle_node_disk (FILE *internal, FILE *leaf, 
 				    MERKLE_DISK_TYPE type, uint32 block_no) :
-  merkle_node (), _internal(internal), _leaf(leaf), 
-  _type(type), _block_no(block_no) {
-
-  if( isleaf() ) {
-
-    children = NULL;
-    hashes = NULL;
-
+  merkle_node (),
+  hashes (NULL),
+  children (NULL),
+  _internal (internal),
+  _leaf (leaf), 
+  _type (type),
+  _block_no (block_no)
+{
+  if (isleaf()) {
     merkle_leaf_node leaf;
-    int seekval = fseek( _leaf, _block_no*sizeof(merkle_leaf_node), SEEK_SET );
-    assert( seekval == 0 );
-    fread( &leaf, sizeof(merkle_leaf_node), 1, _leaf );
+    int seekval = fseek (_leaf, _block_no*sizeof (merkle_leaf_node), SEEK_SET);
+    assert (seekval == 0);
+    fread (&leaf, sizeof (merkle_leaf_node), 1, _leaf);
 
     count = ntohl(leaf.key_count);
-    for( uint i = 0; i < count; i++ ) {
+    for (uint i = 0; i < count; i++) {
       chordID c;
-      mpz_set_rawmag_be( &c, leaf.keys[i].key, sizeof(leaf.keys[i].key) );
-      keylist.insert(New merkle_key(c));
+      mpz_set_rawmag_be (&c, leaf.keys[i].key, sizeof (leaf.keys[i].key));
+      keylist.insert (New merkle_key (c));
     }
-
   } else {
-
-    children = New array<uint32, 64>();
-    hashes = New array<merkle_hash_id, 64>();
+    children = New array<uint32, 64> ();
+    hashes = New array<merkle_hash_id, 64> ();
 
     merkle_internal_node internal;
-    int seekval = fseek( _internal, _block_no*sizeof(merkle_internal_node), 
-			 SEEK_SET );
-    assert( seekval == 0 );
-    fread( &internal, sizeof(merkle_internal_node), 1, _internal );
+    int seekval = fseek (_internal, _block_no*sizeof (merkle_internal_node), 
+			 SEEK_SET);
+    assert (seekval == 0);
+    fread (&internal, sizeof (merkle_internal_node), 1, _internal);
 
     count = ntohl(internal.key_count);
-    for( uint i = 0; i < 64; i++ ) {
-      mpz_set_rawmag_be( &((*hashes)[i].id), internal.hashes[i].key, 
-			 sizeof(internal.hashes[i].key) );
-      (*hashes)[i].hash = to_merkle_hash((*hashes)[i].id);
-      (*children)[i] = ntohl( internal.child_pointers[i] );
+    for (uint i = 0; i < 64; i++) {
+      mpz_set_rawmag_be (&((*hashes)[i].id), internal.hashes[i].key, 
+			 sizeof(internal.hashes[i].key));
+      (*hashes)[i].hash = to_merkle_hash ((*hashes)[i].id);
+      (*children)[i] = ntohl (internal.child_pointers[i]);
     }
-
   }
 
-  rehash();
-
+  rehash ();
 }
 
-merkle_node_disk::~merkle_node_disk () {
+merkle_node_disk::~merkle_node_disk () 
+{
   keylist.deleteall_correct();
   delete children;
   delete hashes;
 
   // also delete all children
-  for( uint i = 0; i < to_delete.size(); i++ ) {
+  for (uint i = 0; i < to_delete.size(); i++) {
     delete to_delete[i];
   }
 
@@ -99,126 +95,132 @@ merkle_node_disk::~merkle_node_disk () {
   bzero (this, sizeof (*this)); 
 }
 
-void merkle_node_disk::rehash() {
-
+void merkle_node_disk::rehash ()
+{
   hash = 0;
   if (count == 0) {
     return;
   }
   
   sha1ctx sc;
-  if( isleaf() ) {
-    assert( count > 0 && count <= 64 );
+  if (isleaf ()) {
+    assert (count > 0 && count <= 64);
     merkle_key *k = keylist.first();
-    while( k != NULL ) {
+    while (k != NULL) {
       merkle_hash h = to_merkle_hash(k->id);
       sc.update (h.bytes, h.size);
       k = keylist.next(k);
     }
   } else {
-    for( uint i = 0; i < 64; i++ ) {
+    for (uint i = 0; i < 64; i++) {
       merkle_hash h = (*hashes)[i].hash;
       sc.update (h.bytes, h.size);
     }
   }
   sc.final (hash.bytes);
-
 }
 
-void merkle_node_disk::write_out() {
-
-  if( isleaf() ) {
-
+void
+merkle_node_disk::write_out ()
+{
+  if (isleaf ()) {
     merkle_leaf_node leaf;
-    //bzero( &leaf, sizeof(merkle_leaf_node) );
-    leaf.key_count = htonl(count);
+    leaf.key_count = htonl (count);
     merkle_key *m = keylist.first();
     int i = 0;
-    while( m != NULL ) {
-      mpz_get_rawmag_be( leaf.keys[i].key, sizeof(leaf.keys[i].key), &(m->id));
-      m = keylist.next(m);
+    while (m != NULL) {
+      mpz_get_rawmag_be (leaf.keys[i].key, sizeof(leaf.keys[i].key), &(m->id));
+      m = keylist.next (m);
       i++;
     }
 
-    int seekval = fseek( _leaf, _block_no*sizeof(merkle_leaf_node), SEEK_SET );
-    assert( seekval == 0 );
-    fwrite( &leaf, sizeof(merkle_leaf_node), 1, _leaf );
-
+    int seekval = fseek (_leaf, _block_no*sizeof(merkle_leaf_node), SEEK_SET);
+    assert (seekval == 0);
+    fwrite (&leaf, sizeof(merkle_leaf_node), 1, _leaf);
   } else {
-
     merkle_internal_node internal;
     internal.key_count = htonl(count);
-    for( uint i = 0; i < 64; i++ ) {
-      mpz_get_rawmag_be( internal.hashes[i].key, 
-			 sizeof(internal.hashes[i].key), &((*hashes)[i].id));
-      internal.child_pointers[i] = htonl((*children)[i]);
+    for (uint i = 0; i < 64; i++) {
+      mpz_get_rawmag_be (internal.hashes[i].key, 
+			 sizeof (internal.hashes[i].key), &((*hashes)[i].id));
+      internal.child_pointers[i] = htonl ((*children)[i]);
     }
 
-    int seekval = fseek( _internal, _block_no*sizeof(merkle_internal_node), 
-			 SEEK_SET );
-    assert( seekval == 0 );
-    fwrite( &internal, sizeof(merkle_internal_node), 1, _internal );
-
+    int seekval = fseek (_internal, _block_no*sizeof(merkle_internal_node), 
+			 SEEK_SET);
+    assert (seekval == 0);
+    fwrite (&internal, sizeof(merkle_internal_node), 1, _internal);
   }
-
 }
 
-merkle_node *merkle_node_disk::child (u_int i) {
+merkle_node *
+merkle_node_disk::child (u_int i)
+{
   assert (!isleaf ());
   assert (i >= 0 && i < 64);
 
   uint32 pointer = (*children)[i];
   MERKLE_DISK_TYPE type;
-  if( pointer % 2 == 0 ) {
+  if (pointer % 2 == 0) {
     type = MERKLE_DISK_INTERNAL;
   } else {
     type = MERKLE_DISK_LEAF;
   }
-  merkle_node_disk *n = New merkle_node_disk( _internal, _leaf, type, 
-					      pointer >> 1 );
-  to_delete.push_back(n);
+  merkle_node_disk *n = New merkle_node_disk (_internal, _leaf, type, 
+					      pointer >> 1);
+  to_delete.push_back (n);
   return n;
-
 }
 
-merkle_hash merkle_node_disk::child_hash( u_int i ) {
+merkle_hash
+merkle_node_disk::child_hash (u_int i)
+{
   assert (!isleaf ());
   assert (i >= 0 && i < 64);
   return (*hashes)[i].hash;
 }
 
-uint32 merkle_node_disk::child_ptr( u_int i ) {
+uint32
+merkle_node_disk::child_ptr (u_int i)
+{
   assert (!isleaf ());
   assert (i >= 0 && i < 64);
   return (*children)[i];
 }
 
-void merkle_node_disk::set_child( merkle_node_disk *n, u_int i) {
+void
+merkle_node_disk::set_child (merkle_node_disk *n, u_int i)
+{
   assert (!isleaf ());
   assert (i >= 0 && i < 64);
 
   (*children)[i] = ((n->get_block_no() << 1) | (n->isleaf()?0x00000001:0));
   (*hashes)[i].hash = n->hash;
   (*hashes)[i].id = tobigint(n->hash);
-
 }
 
-void merkle_node_disk::add_key( chordID key ) {
-  assert( isleaf() && count < 64 );
+void
+merkle_node_disk::add_key (chordID key)
+{
+  assert (isleaf () && count < 64);
+  count++;
+  merkle_key *m = New merkle_key (key);
+  keylist.insert (m);
+}
+
+void
+merkle_node_disk::add_key (merkle_hash key)
+{
+  assert (isleaf () && count < 64);
   count++;
   merkle_key *m = New merkle_key(key);
   keylist.insert(m);
 }
 
-void merkle_node_disk::add_key( merkle_hash key ) {
-  assert( isleaf() && count < 64 );
-  count++;
-  merkle_key *m = New merkle_key(key);
-  keylist.insert(m);
-}
-
-void merkle_node_disk::internal2leaf () {
-  assert( !isleaf() );
+void
+merkle_node_disk::internal2leaf ()
+{
+  assert (!isleaf ());
   _type = MERKLE_DISK_LEAF;
   delete children;
   children = NULL;
@@ -226,59 +228,63 @@ void merkle_node_disk::internal2leaf () {
   hashes = NULL;
 }
 
-bool merkle_node_disk::isleaf () const {
+bool
+merkle_node_disk::isleaf () const {
   return (_type == MERKLE_DISK_LEAF);
 }
 
 void merkle_node_disk::leaf2internal () {
-  assert( isleaf() );
+  assert (isleaf ());
   _type = MERKLE_DISK_INTERNAL;
   children = New array<uint32, 64>();
   hashes = New array<merkle_hash_id, 64>();
   keylist.deleteall_correct();
-  assert( !isleaf() );
+  assert (!isleaf ());
 }
 
 //////////////// merkle_tree_disk /////////////////
 
-merkle_tree_disk::merkle_tree_disk( str index, str internal, str leaf,
-				    bool writer ) :
-  merkle_tree (), _index_name(index), 
-  _internal_name(internal), _leaf_name(leaf), _writer(writer) {
-
-  _internal = open_file( _internal_name );
-  _leaf = open_file( _leaf_name );
-  _index = open_file( _index_name );
+merkle_tree_disk::merkle_tree_disk (str index, str internal, str leaf,
+				    bool writer) :
+  merkle_tree (),
+  _index_name (index), 
+  _internal_name (internal),
+  _leaf_name (leaf), 
+  _writer (writer)
+{
+  _internal = open_file (_internal_name);
+  _leaf = open_file (_leaf_name);
+  _index = open_file (_index_name);
 
   // make sure the root is created correctly:
-  merkle_node *n = get_root();
+  merkle_node *n = get_root ();
   delete n;
-  if( _writer ) {
-    write_metadata();
+  if (_writer) {
+    write_metadata ();
   }
-
 }
 
 merkle_tree_disk::~merkle_tree_disk ()
 {
-  fclose( _internal );
-  fclose( _leaf );
-  fclose( _index );
+  fclose (_internal);
+  fclose (_leaf);
+  fclose (_index);
 }
 
-void merkle_tree_disk::write_metadata() {
+void
+merkle_tree_disk::write_metadata ()
+{
+  assert (_writer);
 
-  assert( _writer );
-
-  fseek( _index, 0, SEEK_SET );
+  fseek (_index, 0, SEEK_SET);
   
-  assert( _free_leafs.size() == _md.num_leaf_free );
-  assert( _free_internals.size() == _md.num_internal_free );
+  assert (_free_leafs.size () == _md.num_leaf_free);
+  assert (_free_internals.size () == _md.num_internal_free);
 
-  _md.num_leaf_free += _future_free_leafs.size();
-  _md.num_internal_free += _future_free_internals.size();
+  _md.num_leaf_free += _future_free_leafs.size ();
+  _md.num_internal_free += _future_free_internals.size ();
 
-  fwrite( &_md, sizeof(merkle_index_metadata), 1, _index );
+  fwrite (&_md, sizeof(merkle_index_metadata), 1, _index);
 
   int nfree = _md.num_leaf_free + _md.num_internal_free;
   uint32 freelist[nfree];
@@ -286,39 +292,38 @@ void merkle_tree_disk::write_metadata() {
   // write out both the unused free slots and the newly created free slots
   uint i;
   uint sofar = 0;
-  for( i = 0; i < _free_leafs.size(); i++ ) {
+  for (i = 0; i < _free_leafs.size(); i++) {
     freelist[i] = ((_free_leafs[i-sofar] << 1) | 0x00000001);
   }
   sofar = i;
-  for( ; (i-sofar) < _free_internals.size(); i++ ) {
+  for (; (i-sofar) < _free_internals.size(); i++) {
     freelist[i] = (_free_internals[i-sofar] << 1);
   }
   sofar = i;
-  for( ; (i-sofar) < _future_free_leafs.size(); i++ ) {
+  for (; (i-sofar) < _future_free_leafs.size(); i++) {
     freelist[i] = ((_future_free_leafs[i-sofar] << 1) | 0x00000001);
   }
   sofar = i;
-  for( ; (i-sofar) < _future_free_internals.size(); i++ ) {
+  for (; (i-sofar) < _future_free_internals.size(); i++) {
     freelist[i] = (_future_free_internals[i-sofar] << 1);
   }
 
-  fwrite( &freelist, sizeof(uint32), nfree, _index );
-  _future_free_leafs.clear();
-  _future_free_internals.clear();
+  fwrite (&freelist, sizeof (uint32), nfree, _index);
+  _future_free_leafs.clear ();
+  _future_free_internals.clear ();
 
-  fflush( _index );
-
+  fflush (_index);
 }
 
-merkle_node *merkle_tree_disk::get_root() {
-
-  fseek( _index, 0, SEEK_SET );
+merkle_node *merkle_tree_disk::get_root ()
+{
+  fseek (_index, 0, SEEK_SET);
 
   // figure out where the root node is, given the index file
   // the first 32 bytes of the file tells us where it is
-  int num_read = fread( &_md, sizeof(merkle_index_metadata), 1, _index );
+  int num_read = fread (&_md, sizeof (merkle_index_metadata), 1, _index);
 
-  if( num_read <= 0 ) {
+  if (num_read <= 0) {
     // no root pointer yet, so we have a new tree
     _md.root = 1;
     _md.num_leaf_free = 0;
@@ -328,93 +333,94 @@ merkle_node *merkle_tree_disk::get_root() {
 
     // also, make a block there
     merkle_leaf_node new_root;
-    bzero( &new_root, sizeof(merkle_leaf_node) );
-    fseek( _leaf, 0, SEEK_SET );
-    fwrite( &new_root, sizeof(merkle_leaf_node), 1, _leaf );
-
-  } else if( _writer ) {
-
-    _free_leafs.clear();
-    _free_internals.clear();
+    bzero (&new_root, sizeof (merkle_leaf_node));
+    fseek (_leaf, 0, SEEK_SET);
+    fwrite (&new_root, sizeof (merkle_leaf_node), 1, _leaf);
+  } else if (_writer) {
+    _free_leafs.clear ();
+    _free_internals.clear ();
 
     // read in the free list
     int nfree = _md.num_leaf_free+_md.num_internal_free;
     uint32 freelist[nfree];
-    int nread = fread( &freelist, sizeof(uint32), nfree, _index );
-    assert( nread == nfree );
+    int nread = fread (&freelist, sizeof (uint32), nfree, _index);
+    assert (nread == nfree);
 
-    for( int i = 0; i < nread; i++ ) {
+    for (int i = 0; i < nread; i++) {
       uint32 pointer = freelist[i];
-      if( pointer % 2 == 0 ) {
-	_free_internals.push_back(pointer >> 1);
+      if (pointer % 2 == 0) {
+	_free_internals.push_back (pointer >> 1);
       } else {
-	_free_leafs.push_back(pointer >> 1);
+	_free_leafs.push_back (pointer >> 1);
       }
     }
-
   }
 
-  return make_node(_md.root);
-
+  return make_node (_md.root);
 }
 
-merkle_node *merkle_tree_disk::make_node( uint32 block_no, 
-					  MERKLE_DISK_TYPE type ) {
-  return New merkle_node_disk( _internal, _leaf, type, block_no );
+merkle_node *
+merkle_tree_disk::make_node (uint32 block_no, MERKLE_DISK_TYPE type)
+{
+  return New merkle_node_disk (_internal, _leaf, type, block_no);
 }
 
-merkle_node *merkle_tree_disk::make_node( uint32 pointer ) {
-  // even == internal, odd == lead
-  if( pointer % 2 == 0 ) {
-    return make_node( pointer >> 1, MERKLE_DISK_INTERNAL );
+merkle_node *
+merkle_tree_disk::make_node (uint32 pointer)
+{
+  // even == internal, odd == leaf
+  if (pointer % 2 == 0) {
+    return make_node (pointer >> 1, MERKLE_DISK_INTERNAL);
   } else {
-    return make_node( pointer >> 1, MERKLE_DISK_LEAF );
+    return make_node (pointer >> 1, MERKLE_DISK_LEAF);
   }
 }
 
-void merkle_tree_disk::free_block( uint32 pointer ) {
-  // even == internal, odd == lead
-  if( pointer % 2 == 0 ) {
-    return free_block( pointer >> 1, MERKLE_DISK_INTERNAL );
+void
+merkle_tree_disk::free_block (uint32 pointer)
+{
+  // even == internal, odd == leaf
+  if (pointer % 2 == 0) {
+    return free_block (pointer >> 1, MERKLE_DISK_INTERNAL);
   } else {
-    return free_block( pointer >> 1, MERKLE_DISK_LEAF );
+    return free_block (pointer >> 1, MERKLE_DISK_LEAF);
   }
 }
 
 
 // returns a block_no without the type bit on the end
-void merkle_tree_disk::free_block( uint32 block_no, MERKLE_DISK_TYPE type ) {
-
-  assert( _writer );
+void
+merkle_tree_disk::free_block (uint32 block_no, MERKLE_DISK_TYPE type)
+{
+  assert (_writer);
 
   // don't want these blocks being used until the root gets switched over
   // in write_metadata, so keep them on a separate list
-  if( type == MERKLE_DISK_LEAF ) {
-    _future_free_leafs.push_back( block_no );
+  if (type == MERKLE_DISK_LEAF) {
+    _future_free_leafs.push_back (block_no);
   } else {
-    _future_free_internals.push_back( block_no );
+    _future_free_internals.push_back (block_no);
   }
-
 }
 
 // returns a block_no without the type bit on the end
-uint32 merkle_tree_disk::alloc_free_block( MERKLE_DISK_TYPE type ) {
-
-  assert( _writer );
+uint32
+merkle_tree_disk::alloc_free_block (MERKLE_DISK_TYPE type)
+{
+  assert (_writer);
 
   uint32 ret;
-
   // if there are any free
-  if( type == MERKLE_DISK_LEAF ) {
-    if( _md.num_leaf_free > 0 ) {
-      ret = _free_leafs.pop_back();
+  if (type == MERKLE_DISK_LEAF) {
+    if (_md.num_leaf_free > 0) {
+      ret = _free_leafs.pop_back ();
       _md.num_leaf_free--;
     } else {
       ret = _md.next_leaf;
       _md.next_leaf++; 
     }
   } else {
-    if( _md.num_internal_free > 0 ) {
+    if (_md.num_internal_free > 0) {
       ret = _free_internals.pop_back();
       _md.num_internal_free--;
     } else {
@@ -424,30 +430,31 @@ uint32 merkle_tree_disk::alloc_free_block( MERKLE_DISK_TYPE type ) {
   }
 
   return ret;
-
 }
 
-void merkle_tree_disk::switch_root( merkle_node_disk *n ) {
-  assert(_writer);
-  uint32 newroot = n->get_block_no();
+void
+merkle_tree_disk::switch_root (merkle_node_disk *n)
+{
+  assert (_writer);
+  uint32 newroot = n->get_block_no ();
   newroot <<= 1;
-  if( n->isleaf() ) {
+  if (n->isleaf()) {
     newroot |= 0x00000001;
   }
   _md.root = newroot;
   // NOTE: there should only be one thread on the machine that is
   // inserting or removing blocks and writing metadata.  Any others
   // need to be readonly
-  write_metadata();
+  write_metadata ();
 }
 
-void merkle_tree_disk::remove( u_int depth, merkle_hash& key, 
-			       merkle_node *n ) {
-
-  assert( _writer );
+void
+merkle_tree_disk::remove (u_int depth, merkle_hash& key, 
+			  merkle_node *n)
+{
+  assert (_writer);
 
   merkle_node_disk *nd = (merkle_node_disk *) n;
-
   MERKLE_DISK_TYPE old_type;
 
   if (n->isleaf ()) {
@@ -459,127 +466,121 @@ void merkle_tree_disk::remove( u_int depth, merkle_hash& key,
     old_type = MERKLE_DISK_LEAF;
   } else {
     u_int32_t branch = key.read_slot(depth);
-    merkle_node *child = n->child( branch );
-    remove( depth+1, key, child );
-    nd->set_child( (merkle_node_disk *) child, branch );
+    merkle_node *child = n->child (branch);
+    remove (depth+1, key, child);
+    nd->set_child ((merkle_node_disk *) child, branch);
     old_type = MERKLE_DISK_INTERNAL;
   }
 
   MERKLE_DISK_TYPE new_type = old_type;
 
   n->count--;
-  if( !n->isleaf () && n->count <= 64 ) {
-
+  if (!n->isleaf () && n->count <= 64) {
     // free all the children blocks and copy their keys
     uint added = 0;
-    for( uint i = 0; i < 64; i++ ) {
+    for (uint i = 0; i < 64; i++) {
       merkle_node_disk *child = (merkle_node_disk *) nd->child(i);
-      free_block( child->get_block_no() );
-      assert( child->isleaf() );
-      merkle_key *k = child->keylist.first();
+      free_block (child->get_block_no());
+      assert (child->isleaf ());
+      merkle_key *k = child->keylist.first ();
       uint j = 0;
-      while( k != NULL ) {
-	merkle_key *knew = New merkle_key(k->id);
-	nd->keylist.insert(knew);
+      while (k != NULL) {
+	merkle_key *knew = New merkle_key (k->id);
+	nd->keylist.insert (knew);
 	added++;
 	j++;
-	k = child->keylist.next(k);
+	k = child->keylist.next (k);
       }
-      assert( j == child->count );
-      child->keylist.clear();
+      assert (j == child->count);
+      child->keylist.clear ();
     }
-    assert( added == n->count );
+    assert (added == n->count);
 
     // this will copy the keys around
     n->internal2leaf();
-    assert( n->isleaf() );
+    assert (n->isleaf ());
     new_type = MERKLE_DISK_LEAF;
   }
 
-  nd->rehash();
+  nd->rehash ();
 
   // write this block out to a new place on disk, then switch the root
   // atomically
-  uint32 block_no = alloc_free_block(new_type);
-  free_block( nd->get_block_no(), old_type );
-  nd->set_block_no( block_no );
-  nd->write_out();
-
+  uint32 block_no = alloc_free_block (new_type);
+  free_block (nd->get_block_no(), old_type);
+  nd->set_block_no (block_no);
+  nd->write_out ();
 }
 
-void merkle_tree_disk::remove( merkle_hash &key ) {
+void
+merkle_tree_disk::remove (merkle_hash &key)
+{
   merkle_node_disk *curr_root = (merkle_node_disk *) get_root();
-  remove( 0, key, curr_root );
-  switch_root(curr_root);
+  remove (0, key, curr_root);
+  switch_root (curr_root);
   delete curr_root;
 }
 
-void merkle_tree_disk::leaf2internal( uint depth, merkle_node_disk *n ) {
-
-  assert( n->isleaf() && n->count == 64 );
+void
+merkle_tree_disk::leaf2internal (uint depth, merkle_node_disk *n)
+{
+  assert (n->isleaf () && n->count == 64);
   merkle_key *k = n->keylist.first();
   array< vec<chordID>, 64> keys;
   uint added = 9;
-  while( k != NULL ) {
+  while (k != NULL) {
     merkle_hash h = to_merkle_hash(k->id);
-    u_int32_t branch = h.read_slot( depth );
+    u_int32_t branch = h.read_slot (depth);
     //warn << "picked branch " << branch << " for key " << k->id << ", hash " 
     // << h << "\n";
     keys[branch].push_back(k->id);
     k = n->keylist.next(k);
     added++;
   }
-  assert( added = n->count );
+  assert (added = n->count);
 
-  n->leaf2internal();
-  assert( !n->isleaf() );
+  n->leaf2internal ();
+  assert (!n->isleaf ());
 
   // NOTE: bottom depth may only have 16??
   added = 0;
-  for( uint i = 0; i < 64; i++ ) {
-
+  for (uint i = 0; i < 64; i++) {
     // zero the new guy out
-    uint block_no = alloc_free_block( MERKLE_DISK_LEAF );
+    uint block_no = alloc_free_block (MERKLE_DISK_LEAF);
     merkle_leaf_node new_leaf;
-    bzero( &new_leaf, sizeof(merkle_leaf_node) );
-    fseek( _leaf, block_no*sizeof(merkle_leaf_node), SEEK_SET );
-    fwrite( &new_leaf, sizeof(merkle_leaf_node), 1, _leaf );
+    bzero (&new_leaf, sizeof (merkle_leaf_node));
+    fseek (_leaf, block_no*sizeof (merkle_leaf_node), SEEK_SET);
+    fwrite (&new_leaf, sizeof (merkle_leaf_node), 1, _leaf);
 
     merkle_node_disk *child = 
-      (merkle_node_disk *) make_node( block_no, MERKLE_DISK_LEAF );
+      (merkle_node_disk *) make_node (block_no, MERKLE_DISK_LEAF);
 
     vec<chordID> v = keys[i];
-    for( uint j = 0; j < v.size(); j++ ) {
-      child->add_key( v[j] );
+    for (uint j = 0; j < v.size(); j++) {
+      child->add_key (v[j]);
     }
     added += child->count;
-    n->rehash();
-    n->set_child( child, i );
-    child->write_out();
+    n->rehash ();
+    n->set_child (child, i);
+    child->write_out ();
     delete child;
-
   }
 
-  assert( added = n->count );
-
-  assert( !n->isleaf() );
-
+  assert (added = n->count);
 }
 
 int
 merkle_tree_disk::insert (u_int depth, merkle_hash& key, merkle_node *n)
 {
-
   int ret = 0;
-
   merkle_node_disk *nd = (merkle_node_disk *) n;
 
   MERKLE_DISK_TYPE old_type;
-  if ( n->isleaf () ) {
+  if (n->isleaf ()) {
     old_type = MERKLE_DISK_LEAF;
-    if( n->leaf_is_full () ) {
-      leaf2internal( depth, (merkle_node_disk *) n);
-      assert( !n->isleaf() );
+    if (n->leaf_is_full ()) {
+      leaf2internal (depth, (merkle_node_disk *) n);
+      assert (!n->isleaf());
     }
   } else {
     old_type = MERKLE_DISK_INTERNAL;
@@ -588,119 +589,117 @@ merkle_tree_disk::insert (u_int depth, merkle_hash& key, merkle_node *n)
   MERKLE_DISK_TYPE type;
   if (n->isleaf ()) {
     type = MERKLE_DISK_LEAF;
-    nd->add_key(key);
+    nd->add_key (key);
   } else {
     type = MERKLE_DISK_INTERNAL;
-    u_int32_t branch = key.read_slot(depth);
-    merkle_node *child = n->child(branch);
+    u_int32_t branch = key.read_slot (depth);
+    merkle_node *child = n->child (branch);
     warn << "inserting " << key << " into child " 
-    	 << ((merkle_node_disk *) child)->get_block_no() << " on branch " 
+    	 << ((merkle_node_disk *) child)->get_block_no () << " on branch " 
     	 << branch << " at depth " << depth << " and leaf " 
 	 << child->isleaf() << " with count " << child->count << "\n";
-    ret = insert( depth+1, key, child );
-    nd->set_child( (merkle_node_disk *) child, branch );
+    ret = insert (depth+1, key, child);
+    nd->set_child ((merkle_node_disk *) child, branch);
     n->count++;
   }
 
-  nd->rehash();
+  nd->rehash ();
   
   // write this block out to a new place on disk, then switch the root
   // atomically
   uint32 block_no = alloc_free_block(type);
-  free_block( nd->get_block_no(), old_type );
-  nd->set_block_no( block_no );
-  nd->write_out();
+  free_block (nd->get_block_no(), old_type);
+  nd->set_block_no (block_no);
+  nd->write_out ();
 
   return ret;
 }
 
-int merkle_tree_disk::insert( merkle_hash &key ) {
-
-  assert( _writer );
+int
+merkle_tree_disk::insert (merkle_hash &key)
+{
+  assert (_writer);
   merkle_node_disk *curr_root = (merkle_node_disk *) get_root();
-  int ret = insert( 0, key, curr_root );
-  switch_root(curr_root);
+  int ret = insert (0, key, curr_root);
+  switch_root (curr_root);
   delete curr_root;
   return ret;
-
 }
 
-void merkle_tree_disk::lookup_release( merkle_node *n ) {
+void
+merkle_tree_disk::lookup_release (merkle_node *n)
+{
   delete n;
 }
 
 merkle_node *
-merkle_tree_disk::lookup( u_int *depth, u_int max_depth,
-			  const merkle_hash &key ) {
-
+merkle_tree_disk::lookup (u_int *depth, u_int max_depth,
+			  const merkle_hash &key)
+{
   *depth = 0;
-  merkle_node *curr_root = get_root();
-  merkle_node *ret = merkle_tree::lookup( depth, max_depth, key, 
-					  curr_root );
-  ret = make_node(((merkle_node_disk *) ret)->get_block_no(),
-		  ret->isleaf()?MERKLE_DISK_LEAF:MERKLE_DISK_INTERNAL);
+  merkle_node *curr_root = get_root ();
+  merkle_node *ret = merkle_tree::lookup (depth, max_depth, key, 
+					  curr_root);
+  ret = make_node(((merkle_node_disk *) ret)->get_block_no (),
+		  ret->isleaf () ? MERKLE_DISK_LEAF : MERKLE_DISK_INTERNAL);
   delete curr_root;
   return ret;
-
 }
 
 merkle_node *
-merkle_tree_disk::lookup( u_int depth, const merkle_hash &key ) {
-
+merkle_tree_disk::lookup (u_int depth, const merkle_hash &key)
+{
   u_int depth_ignore = 0;
-  merkle_node *curr_root = get_root();
-  merkle_node *ret = merkle_tree::lookup( &depth_ignore, depth, key, 
-					       curr_root );
-  ret = make_node(((merkle_node_disk *) ret)->get_block_no(),
-		  ret->isleaf()?MERKLE_DISK_LEAF:MERKLE_DISK_INTERNAL);
+  merkle_node *curr_root = get_root ();
+  merkle_node *ret = merkle_tree::lookup (&depth_ignore, depth, key, 
+					  curr_root);
+  ret = make_node (((merkle_node_disk *) ret)->get_block_no(),
+		   ret->isleaf() ? MERKLE_DISK_LEAF : MERKLE_DISK_INTERNAL);
   delete curr_root;
   return ret;
-
 }
 
 merkle_node *
-merkle_tree_disk::lookup_exact( u_int depth, const merkle_hash &key ) {
-
+merkle_tree_disk::lookup_exact (u_int depth, const merkle_hash &key)
+{
   u_int realdepth = 0;
-  merkle_node *curr_root = get_root();
-  merkle_node *ret = merkle_tree::lookup( &realdepth, depth, key, curr_root );
-  assert( realdepth <= depth );
-  if( realdepth != depth ) {
+  merkle_node *curr_root = get_root ();
+  merkle_node *ret = merkle_tree::lookup (&realdepth, depth, key, curr_root);
+  assert (realdepth <= depth);
+  if (realdepth != depth) {
     ret = NULL;
   } else {
-    ret = make_node(((merkle_node_disk *) ret)->get_block_no(), 
-		    ret->isleaf()?MERKLE_DISK_LEAF:MERKLE_DISK_INTERNAL);
+    ret = make_node (((merkle_node_disk *) ret)->get_block_no (), 
+		     ret->isleaf () ? MERKLE_DISK_LEAF: MERKLE_DISK_INTERNAL);
   }
   delete curr_root;
   return ret;
-
 }
 
 vec<merkle_hash>
-get_all_keys( u_int depth, const merkle_hash &prefix, merkle_node_disk *n ) {
-
+get_all_keys (u_int depth, const merkle_hash &prefix, merkle_node_disk *n)
+{
   vec<merkle_hash> keys;
-  if( n->isleaf() ) {
-    merkle_key *k = n->keylist.first();
-    while( k != NULL ) {
-      merkle_hash key = to_merkle_hash(k->id);
-      if( prefix_match(depth, key, prefix)) {
-	keys.push_back(key);
+  if (n->isleaf ()) {
+    merkle_key *k = n->keylist.first ();
+    while (k != NULL) {
+      merkle_hash key = to_merkle_hash (k->id);
+      if (prefix_match(depth, key, prefix)) {
+	keys.push_back (key);
       }
-      k = n->keylist.next(k);
+      k = n->keylist.next (k);
     }
   } else {
-    for( uint i = 0; i < 64; i++ ) {
+    for (uint i = 0; i < 64; i++) {
       vec<merkle_hash> child_keys = 
-	get_all_keys( depth, prefix, (merkle_node_disk *) n->child(i) );
-      for( uint j = 0; j < child_keys.size(); j++ ) {
-	keys.push_back( child_keys[j] );
+	get_all_keys (depth, prefix, (merkle_node_disk *) n->child (i));
+      for (uint j = 0; j < child_keys.size(); j++) {
+	keys.push_back (child_keys[j]);
       }
     }
   }
 
   return keys;
-
 }
 
 vec<merkle_hash>
@@ -709,24 +708,24 @@ merkle_tree_disk::database_get_keys (u_int depth, const merkle_hash &prefix)
   vec<merkle_hash> keys;
 
   // find all the keys matching this prefix
-  merkle_node *r = get_root();
+  merkle_node *r = get_root ();
   merkle_node *n = r;
-  for( u_int i = 0; i < depth && !n->isleaf(); i++ ) {
-    u_int32_t branch = prefix.read_slot(i);
-    n = n->child(branch);
+  for (u_int i = 0; i < depth && !n->isleaf (); i++) {
+    u_int32_t branch = prefix.read_slot (i);
+    n = n->child (branch);
   }
 
   // now we have the node and the right depth that matches the prefix.
   // Read all the keys under this node that match the prefix
-  keys = get_all_keys( depth, prefix, (merkle_node_disk *) n );
+  keys = get_all_keys (depth, prefix, (merkle_node_disk *) n);
   delete r;
   return keys;
 }
 
-bool get_keyrange_recurs( merkle_hash min, chordID max, u_int n, 
-			  uint depth, vec<chordID> *keys, 
-			  merkle_node_disk *node ) {
-
+bool
+get_keyrange_recurs (merkle_hash min, chordID max, u_int n, 
+		     uint depth, vec<chordID> *keys, merkle_node_disk *node)
+{
   // go down until you find the leaf responsible for min
   // add all of its keys up to n, less than max.  If you haven't
   // found more than n keys, set min to the last key and keep
@@ -734,49 +733,43 @@ bool get_keyrange_recurs( merkle_hash min, chordID max, u_int n,
 
   bool over_max = false;
 
-  if( node->isleaf() ) {
-
-    chordID min_id = tobigint(min);
-    merkle_key *k = node->keylist.first();
+  if (node->isleaf ()) {
+    chordID min_id = tobigint (min);
+    merkle_key *k = node->keylist.first ();
     merkle_key *last_key = NULL;
 
-    while( k != NULL && keys->size() < n ) {
-      if( betweenbothincl( min_id, max, k->id) ) {
-	keys->push_back(k->id);
-      }
+    while (k != NULL && keys->size () < n) {
+      if (betweenbothincl (min_id, max, k->id))
+	keys->push_back (k->id);
       last_key = k;
-      k = node->keylist.next(k);
+      k = node->keylist.next (k);
     }
     
-    if( last_key != NULL && betweenbothincl( min_id, last_key->id, max) ) {
+    if (last_key != NULL && betweenbothincl (min_id, last_key->id, max)) {
       over_max = true;
     } else {
       over_max = false;
     }
-
     // don't need a special case here, since we look at all the keys
-
   } else {
-
     bool over_max = false;
-    u_int32_t branch = min.read_slot(depth);
+    u_int32_t branch = min.read_slot (depth);
 
-    while( keys->size() < n && branch < 64 && !over_max ) {
-      merkle_node_disk *child = (merkle_node_disk *) node->child(branch);
-      over_max = get_keyrange_recurs( min, max, n, depth+1, keys, child );
+    while (keys->size () < n && branch < 64 && !over_max) {
+      merkle_node_disk *child = (merkle_node_disk *) node->child (branch);
+      over_max = get_keyrange_recurs (min, max, n, depth+1, keys, child);
       branch++;
     }
 
     // special case for when we hit the right edge of the ring
-    if( depth == 0 && !over_max && keys->size() < n && 
-	betweenrightincl( tobigint(min), max, 0 )  ) {
-      over_max = get_keyrange_recurs( 0, max, n, depth, keys, node );
+    if (depth == 0 && !over_max && keys->size () < n && 
+	betweenrightincl (tobigint (min), max, 0))
+    {
+      over_max = get_keyrange_recurs (0, max, n, depth, keys, node);
     }
-
   }
 
   return over_max;
-
 }
 
 vec<chordID> 
@@ -784,27 +777,23 @@ merkle_tree_disk::get_keyrange (chordID min, chordID max, u_int n)
 {
   vec<chordID> keys;
 
-  merkle_node *root = get_root();
-  if( root->count > 0 ) {
-    get_keyrange_recurs( to_merkle_hash(min), max, n, 0, &keys, 
-			 (merkle_node_disk *) root );
+  merkle_node *root = get_root ();
+  if(root->count > 0) {
+    get_keyrange_recurs (to_merkle_hash(min), max, n, 0, &keys, 
+			 (merkle_node_disk *) root);
   }
   delete root;
 
   return keys;
 }
 
-bool merkle_tree_disk::key_exists (chordID key) {
-
+bool
+merkle_tree_disk::key_exists (chordID key)
+{
   merkle_node_disk *n = 
-    (merkle_node_disk *) merkle_tree::lookup( to_merkle_hash(key) );
+    (merkle_node_disk *) merkle_tree::lookup (to_merkle_hash (key));
   merkle_key *mkey = n->keylist[key];
-  lookup_release(n);
+  lookup_release (n);
 
-  if( mkey == NULL ) {
-    return false;
-  } else {
-    return true;
-  }
-
+  return (mkey != NULL);
 }
