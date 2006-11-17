@@ -91,28 +91,36 @@ merkle_disk_server::dispatch (ptr<asrv> s, svccb *sbp)
   switch (sbp->proc()) {
   case MERKLESYNC_SENDNODE:
     {
-      sendnode_arg *arg1 = sbp->Xtmpl getarg<sendnode_arg> ();
-      vnode = arg1->vnode;
-      ctype = arg1->ctype;
-      assert (_mservers[vnode][ctype] != NULL);
-      sendnode_res res (MERKLE_OK);
-      _mservers[vnode][ctype]->handle_send_node (arg1, &res);
-      sbp->reply (&res);
+      sendnode_arg *arg = sbp->Xtmpl getarg<sendnode_arg> ();
+      vnode = arg->vnode;
+      ctype = arg->ctype;
+      if ((vnode < _num_vnodes) && (ctype < 3)) {
+	assert (_mservers[vnode][ctype] != NULL);
+	sendnode_res res (MERKLE_OK);
+	_mservers[vnode][ctype]->handle_send_node (arg, &res);
+	sbp->reply (&res);
+      } else {
+	sbp->reject (GARBAGE_ARGS);
+      }
       break;
     }
   case MERKLESYNC_GETKEYS:
     {
-      getkeys_arg *arg2 = sbp->Xtmpl getarg<getkeys_arg> ();
-      vnode = arg2->vnode;
-      ctype = arg2->ctype;
-      assert (_mservers[vnode][ctype] != NULL);
-      getkeys_res res (MERKLE_OK);
-      _mservers[vnode][ctype]->handle_get_keys (arg2, &res);
-      sbp->reply (&res);
+      getkeys_arg *arg = sbp->Xtmpl getarg<getkeys_arg> ();
+      vnode = arg->vnode;
+      ctype = arg->ctype;
+      if ((vnode < _num_vnodes) && (ctype < 3)) {
+	assert (_mservers[vnode][ctype] != NULL);
+	getkeys_res res (MERKLE_OK);
+	_mservers[vnode][ctype]->handle_get_keys (arg, &res);
+	sbp->reply (&res);
+      } else {
+	sbp->reject (GARBAGE_ARGS);
+      }
       break;
     }
   default:
-    fatal << "unknown proc in merkle_disk_server " << sbp->proc () << "\n";
+    warn << "unknown proc in merkle_disk_server " << sbp->proc () << "\n";
     sbp->reject (PROC_UNAVAIL);
     break;
   }
