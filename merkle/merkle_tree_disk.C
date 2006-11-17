@@ -525,9 +525,10 @@ void
 merkle_tree_disk::leaf2internal (uint depth, merkle_node_disk *n)
 {
   assert (n->isleaf () && n->count == 64);
-  merkle_key *k = n->keylist.first();
+  // NOTE: bottom depth may only have 16??
+  merkle_key *k = n->keylist.first ();
   array< vec<chordID>, 64> keys;
-  uint added = 9;
+  uint added = 0;
   while (k != NULL) {
     merkle_hash h = to_merkle_hash(k->id);
     u_int32_t branch = h.read_slot (depth);
@@ -537,12 +538,11 @@ merkle_tree_disk::leaf2internal (uint depth, merkle_node_disk *n)
     k = n->keylist.next(k);
     added++;
   }
-  assert (added = n->count);
+  assert (added == n->count);
 
   n->leaf2internal ();
   assert (!n->isleaf ());
 
-  // NOTE: bottom depth may only have 16??
   added = 0;
   for (uint i = 0; i < 64; i++) {
     // zero the new guy out
@@ -566,7 +566,7 @@ merkle_tree_disk::leaf2internal (uint depth, merkle_node_disk *n)
     delete child;
   }
 
-  assert (added = n->count);
+  assert (added == n->count);
 }
 
 int
