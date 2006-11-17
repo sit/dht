@@ -1,8 +1,6 @@
 #include <dhblock_srv.h>
 
 class pmaint;
-class merkle_tree;
-class merkle_server;
 struct block_info;
 
 struct adb_keyaux_t;
@@ -28,11 +26,8 @@ public:
   void stop  ();
 
   void store (chordID k, str d, cb_dhstat cb);
-
   void offer (user_args *sbp, dhash_offer_arg *arg);
-
   void stats (vec<dstat> &s);
-
   void generate_repair_jobs ();
 };
 

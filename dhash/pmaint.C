@@ -2,7 +2,6 @@
 #include <dhash.h>
 #include <dhblock_chash.h>
 #include <location.h>
-#include <merkle_misc.h>
 #include <libadb.h>
 #include <locationtable.h>
 #include <misc_utils.h>

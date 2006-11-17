@@ -39,7 +39,6 @@
 #include <configurator.h>
 #include <location.h>
 #include <locationtable.h>
-#include <merkle_misc.h>
 
 #include "dhash_common.h"
 #include "dhash.h"

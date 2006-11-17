@@ -10,10 +10,6 @@
 #include "dhblock_replicated.h"
 #include "dhblock_replicated_srv.h"
 
-#include <merkle_tree.h>
-#include <merkle_server.h>
-#include <merkle_misc.h>
-
 #include <modlogger.h>
 #define warning modlogger ("dhblock_replicated", modlogger::WARNING)
 #define info    modlogger ("dhblock_replicated", modlogger::INFO)

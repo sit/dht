@@ -9,8 +9,6 @@
 #include "locationtable.h"
 #include "location.h"
 
-#include "merkle_tree.h"
-
 // "fake" key to merkle on.. low 32 bits are hash of the block contents
 inline static u_int32_t
 mhashdata (str data)

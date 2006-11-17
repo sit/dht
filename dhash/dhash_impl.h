@@ -119,8 +119,6 @@ class dhash_impl : public dhash, public virtual refcount {
   void dofetchrec_assembler_cb (user_args *sbp, dhash_fetchrec_arg *arg,
 				dhash_stat s, ptr<dhash_block> b, route r);
 
-  void merkle_dispatch (user_args *sbp);
-
   void fetchcomplete_done (int nonce, chord_node sender,
 			   dhash_stat status, bool present);
 

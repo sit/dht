@@ -4,8 +4,6 @@
 #include <dhblock_srv.h>
 
 class location;
-class merkle_tree;
-class merkle_server;
 class dhblock_replicated_srv;
 
 struct adb_keyaux_t;

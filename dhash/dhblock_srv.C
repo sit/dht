@@ -7,8 +7,6 @@
 
 #include <dhblock_srv.h>
 
-#include <merkle_misc.h>
-
 #include <modlogger.h>
 #define trace   modlogger ("dhblock_srv", modlogger::TRACE)
 

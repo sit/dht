@@ -7,8 +7,6 @@
 #include <dhblock_keyhash.h>
 #include <dhblock_keyhash_srv.h>
 
-#include <merkle_tree.h>
-
 #include <modlogger.h>
 #define warning modlogger ("dhblock_keyhash", modlogger::WARNING)
 #define info    modlogger ("dhblock_keyhash", modlogger::INFO)

@@ -12,8 +12,6 @@ class dhashcli;
 
 struct user_args;
 struct dhash_offer_arg;
-class merkle_tree;
-class merkle_server;
 
 typedef callback<void, dhash_stat>::ptr cb_dhstat;
 
@@ -85,8 +83,6 @@ class dhblock_srv : virtual public refcount {
   virtual void fetch (chordID k, cb_fetch cb);
   virtual ptr<adb> get_db () { return db; };
   virtual void offer (user_args *sbp, dhash_offer_arg *arg);
-
-  virtual merkle_server *mserv () { return NULL; };
 };
 
 #endif /* _DHBLOCK_SRV_H_ */

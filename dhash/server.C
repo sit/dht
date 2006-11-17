@@ -39,8 +39,6 @@
 #include <location.h>
 #include <locationtable.h>
 #include <misc_utils.h>
-#include <merkle_server.h>
-#include <merkle_sync_prot.h>
 
 #include "dhblock_srv.h"
 #include "dhblock_chash_srv.h"
@@ -152,35 +150,25 @@ dhash_impl::dhash_impl (ptr<vnode> node, str dbname, cbv dcb) :
 void
 dhash_impl::srv_ready (ptr<uint> num_to_go) 
 {
-
   (*num_to_go)--;
 
-  if( *num_to_go == 0 ) {
-
+  if (*num_to_go == 0) {
     // RPC demux
     trace << host_node->my_ID () << " registered dhash_program_1\n";
     host_node->addHandler (dhash_program_1, wrap(this, &dhash_impl::dispatch));
-    
-    trace << host_node->my_ID () << " registered merklesync_program_1\n";
-    host_node->addHandler (merklesync_program_1, 
-			   wrap(this, &dhash_impl::merkle_dispatch));
 
     start_maint ();
-
     (*donecb)();
   }
-
 }
 
 void
 dhash_impl::start_maint () 
 {
-
   int v;
   bool ok = Configurator::only ().get_int ("dhash.start_maintenance", v);
   if (!ok || v)
     start (true);
-
 }
 
 void
@@ -200,30 +188,11 @@ dhash_impl::fetchcomplete_done (int nonce, chord_node sender,
     doRPC (sender, dhash_program_1, DHASHPROC_FETCHCOMPLETE, 
 	   arg, NULL, aclnt_cb_null);
   }
-  
 }
-
-void
-dhash_impl::merkle_dispatch (user_args *sbp)
-{
-  merkle_stat err (MERKLE_ERR);
-  dhash_ctype *ctype = sbp->Xtmpl getarg<dhash_ctype> ();
-  ptr<dhblock_srv> srv = blocksrv[*ctype];
-  if (srv) {
-    merkle_server *msrv = srv->mserv ();
-    if (msrv)
-      msrv->dispatch (sbp);
-    else
-      sbp->replyref (err);
-  } else 
-    sbp->replyref (err);
-}
-
 
 long
 dhash_impl::register_fetch_callback (cbfetch cb) 
 {
-
   fcb_state *fcb = New fcb_state (cb);
   fetch_cbs.insert (fcb);  
   return fcb->nonce;

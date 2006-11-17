@@ -10,9 +10,6 @@
 
 #include "pmaint.h"
 
-#include <merkle.h>
-#include <merkle_server.h>
-
 #include <configurator.h>
 #include <locationtable.h>
 #include <ida.h>
@@ -87,7 +84,6 @@ dhblock_chash_srv::stop ()
   if (pmaint_obj)
     pmaint_obj->stop ();
 }
-
 
 void
 dhblock_chash_srv::store (chordID key, str d, cb_dhstat cb)
