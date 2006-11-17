@@ -11,17 +11,17 @@ open_file (str name) {
   // make all the parent directories if applicable
   vec<str> dirs;
   static const rxx dirsplit("\\/");
-  uint num_dirs = split (&dirs, dirsplit, name);
+  (void) split (&dirs, dirsplit, name);
   strbuf filestrbuf;
   for (uint i = 0; i < dirs.size()-1; i++) {
-    filestrbuf << "/" << dirs[i];
+    filestrbuf << dirs[i] << "/";
     
     str dirpath (filestrbuf);
     // check for existence, make if necessary
     struct stat st;
     if (stat (dirpath, &st) < 0) {
       if (mkdir(dirpath, S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) != 0) {
-	fatal << "open_file: Couldn't make dir " << dirpath << "; bailing.\n";
+	fatal << "open_file: Couldn't make dir " << dirpath << ": " << strerror (errno) << ".\n";
       }
     }
   }
