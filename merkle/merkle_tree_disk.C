@@ -594,10 +594,10 @@ merkle_tree_disk::insert (u_int depth, merkle_hash& key, merkle_node *n)
     type = MERKLE_DISK_INTERNAL;
     u_int32_t branch = key.read_slot (depth);
     merkle_node *child = n->child (branch);
-    warn << "inserting " << key << " into child " 
-    	 << ((merkle_node_disk *) child)->get_block_no () << " on branch " 
-    	 << branch << " at depth " << depth << " and leaf " 
-	 << child->isleaf() << " with count " << child->count << "\n";
+    //warn << "inserting " << key << " into child " 
+    //	 << ((merkle_node_disk *) child)->get_block_no () << " on branch " 
+    // 	 << branch << " at depth " << depth << " and leaf " 
+    //	 << child->isleaf() << " with count " << child->count << "\n";
     ret = insert (depth+1, key, child);
     nd->set_child ((merkle_node_disk *) child, branch);
     n->count++;
