@@ -21,7 +21,7 @@ int main (int argc, char **argv) {
   chordID c;
   for (uint i = 0; i < num_keys; i++) {
     c = make_randomID ();
-    warn << "\ninserting " << c << " (" << i << ")\n";
+    warn << "inserting " << c << " (" << i << ")\n";
     tree->insert (c);
   }
 
@@ -58,4 +58,10 @@ int main (int argc, char **argv) {
     warn << "Found key " << keys[i] << " in range [" 
 	 << min << "," << max << "]\n";
   }
+  delete tree;
+  tree = NULL;
+
+  unlink("/tmp/index.mrk");
+  unlink("/tmp/internal.mrk");
+  unlink("/tmp/leaf.mrk");
 }
