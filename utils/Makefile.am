@@ -59,6 +59,5 @@ test_skiplist_SOURCES = test_skiplist.C
 test_adb_SOURCES = test_adb.C
 test_adb_LDADD = libadb.a libutil.a ../svc/libsvc.la $(LIBARPC) $(LIBSFSCRYPT) $(LIBGMP) $(DBLIB) $(LIBASYNC) 
 
-EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo
 MAINTAINERCLEANFILES = Makefile.in

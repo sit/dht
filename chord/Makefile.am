@@ -41,6 +41,5 @@ libchord_a_SOURCES = chord.C \
 		      accordion_table.C \
 		      route_accordion.C
 
-EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo
 MAINTAINERCLEANFILES = Makefile.in

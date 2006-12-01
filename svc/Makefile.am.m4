@@ -60,7 +60,7 @@ rpcmk(sample_prot)
 
 $(DEP_FILES): rpcmk_headers
 
-EXTRA_DIST = Makefile.am.m4 .cvsignore bigint.py
+EXTRA_DIST = Makefile.am.m4 bigint.py
 
 libsvc_la_SOURCES = rpcmk_sources
 

@@ -37,7 +37,7 @@ lsdctl_SOURCES = lsdctl.C
 lsdctl_LDADD = ../svc/libsvc.la $(LDADD)
 
 
-EXTRA_DIST = .cvsignore $(bin_SCRIPTS)
+EXTRA_DIST = sample_server.T sampler.T $(bin_SCRIPTS)
 CLEANFILES = core *.core *~ *.rpo
 MAINTAINERCLEANFILES = Makefile.in
 

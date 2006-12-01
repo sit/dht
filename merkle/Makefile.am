@@ -12,6 +12,5 @@ check_PROGRAMS = $(TESTS)
 test_merkle_disk_SOURCES = test_merkle_disk.C
 test_merkle_disk_LDADD = libmerkle.a ../utils/libutil.a ../svc/libsvc.la $(LIBARPC) $(LIBSFSCRYPT) $(LIBGMP) $(DBLIB) $(LIBASYNC)
 
-EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo
 MAINTAINERCLEANFILES = Makefile.in

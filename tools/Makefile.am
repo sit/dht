@@ -11,7 +11,7 @@ bin_PROGRAMS = dbm walk findroute filestore nodeq dbdump lsdping dbm_noauth kdb_
 bin_SCRIPTS = dbm.py nodeq-filter
 chorddata_DATA =  RPC.py RPCProto.py vischat.py
 
-EXTRA_DIST = .cvsignore $(bin_SCRIPTS) $(chorddata_DATA)
+EXTRA_DIST = $(bin_SCRIPTS) $(chorddata_DATA)
 CLEANFILES = core *.core *~ *.rpo
 MAINTAINERCLEANFILES = Makefile.in
 

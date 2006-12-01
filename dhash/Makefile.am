@@ -88,7 +88,6 @@ dist-hook:
 rpcclean:
 	rm -f $(RPCBUILT)
 
-EXTRA_DIST = .cvsignore
 CLEANFILES = core *.core *~ *.rpo $(RPCBUILT)
 MAINTAINERCLEANFILES = Makefile.in
 
