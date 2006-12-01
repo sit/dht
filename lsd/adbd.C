@@ -567,8 +567,6 @@ dbns::migrate_getkeys (void)
     data_template.flags = DB_DBT_PARTIAL;
   DBT data = data_template;
 
-  u_int32_t elements = 0;
-
   r = cursor->c_get (cursor, &key, &data, DB_FIRST);
   while (!r) {
     chordID k = dbt_to_id (key);

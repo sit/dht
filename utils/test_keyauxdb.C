@@ -95,7 +95,6 @@ main (int argc, char *argv[])
     add_random_key (kdb);
   }
 
-
   /* Bulk insert/reads */
   for (size_t i = 0; i < 20000; i++) {
     add_random_key (kdb);
@@ -105,6 +104,8 @@ main (int argc, char *argv[])
 	  random_getword () % keys.size ());
   }
   test_read_range (kdb, 0, 10000);
+
+  unlink (dbfile);
 
   return 0;
 }

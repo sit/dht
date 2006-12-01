@@ -129,7 +129,7 @@ int main (int argc, char **argv) {
        << num_keys_uniq << "\n";
 
   // need the last one
-  key_rec *last;
+  key_rec *last = NULL;
   key_rec *next = sorted_nodes.first();
   while( next != NULL ) {
     warn << next->key << " ";

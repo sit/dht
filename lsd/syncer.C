@@ -185,9 +185,6 @@ syncer::tcp_connected (ptr<location> pred,
   ptr<axprt_stream> xprt = axprt_stream::alloc (fd);
   curr_client = aclnt::alloc (xprt, merklesync_program_1);
 
-  //sync with the next node
-  u_int64_t start = getusec ();
-
   str ext;
   switch (ctype) {
   case DHASH_CONTENTHASH:
