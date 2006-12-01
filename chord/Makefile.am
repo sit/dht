@@ -8,7 +8,6 @@ noinst_HEADERS = aclnt_chord.h \
 	         chord.h \
 		 chord_impl.h \
 		 comm.h \
-		 debruijn.h \
 		 finger_table.h \
 		 fingerroute.h \
 		 pred_list.h \
@@ -26,13 +25,11 @@ noinst_HEADERS = aclnt_chord.h \
 libchord_a_SOURCES = chord.C \
 		      chord_client.C \
 		      comm.C \
-		      debruijn.C \
 		      finger_table.C \
 		      fingerroute.C \
 		      pred_list.C \
 		      route.C \
 		      route_chord.C \
-		      route_debruijn.C \
 		      route_recchord.C \
 		      server.C \
 		      stabilize.C \

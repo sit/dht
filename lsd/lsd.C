@@ -37,7 +37,6 @@
 #include <location.h>
 #include <locationtable.h>
 
-#include <debruijn.h>
 #include <fingerroute.h>
 #include <fingerroutepns.h>
 #include <recroute.h>
@@ -81,7 +80,6 @@ int myport;
 enum routing_mode_t {
   MODE_SUCC,
   MODE_CHORD,
-  MODE_DEBRUIJN,
   MODE_PNS,
   MODE_PNSREC,
   MODE_CHORDREC,
@@ -103,8 +101,6 @@ routing_mode_desc modes[] = {
     wrap (vnode::produce_vnode) },
   { MODE_CHORD, "chord", "use fingers and successors",
     wrap (fingerroute::produce_vnode) },
-  { MODE_DEBRUIJN, "debruijn", "use debruijn routing",
-    wrap (debruijn::produce_vnode) },
   { MODE_PNS, "pns", "use proximity neighbor selection",
     wrap (fingerroutepns::produce_vnode) },
   { MODE_PNSREC, "pnsrec", "g^2 pns recursive",
@@ -476,8 +472,7 @@ usage ()
     "\t[-S <sock>]\n"
     "\t[-C <ctlsock>]\n"
     "\t[-l <locally bound IP>]\n"
-    "\t[-m [chord|debruijn]]\n"
-    "\t[-b <debruijn logbase>]\n"
+    "\t[-m successors|chord|pns|pnsrec|...]\n"
     "\t[-s <server select mode>]\n"
     "\t[-L <warn/fatal/panic output file name>]\n"
     "\t[-T <trace file name (aka new log)>]\n"
@@ -490,7 +485,6 @@ void finish_start();
 
 int ch;
 int ss_mode = -1;
-int lbase = 1;
 
 // ensure enough room for fingers and successors.
 int max_loccache = 0;
@@ -534,9 +528,6 @@ main (int argc, char **argv)
 
   while ((ch = getopt (argc, argv, "b:C:d:fFH:j:l:L:M:m:n:O:Pp:rS:s:T:tv:D"))!=-1)
     switch (ch) {
-    case 'b':
-      lbase = atoi (optarg);
-      break;
     case 'C':
       ctlsocket = optarg;
       break;
@@ -684,12 +675,6 @@ main (int argc, char **argv)
 				   ((ss_mode & 2) ? 1 : 0));
     Configurator::only ().set_int ("chord.find_succlist_shaving",
 				   ((ss_mode & 4) ? 1 : 0));
-  }
-
-  if (lbase != 1) {
-    if (mode != MODE_DEBRUIJN)
-      warnx << "logbase " << lbase << " only supported in debruijn\n";
-    Configurator::only ().set_int ("debruijn.logbase", lbase);
   }
 
   if (!replicate)

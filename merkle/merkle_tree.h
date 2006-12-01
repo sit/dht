@@ -11,15 +11,15 @@ class merkle_tree;
 class block_status_manager;
 
 struct merkle_tree_stats {
-  uint32 nodes_per_level[merkle_hash::NUM_SLOTS];
-  uint32 empty_leaves_per_level[merkle_hash::NUM_SLOTS];
-  uint32 leaves_per_level[merkle_hash::NUM_SLOTS];
-  uint32 internals_per_level[merkle_hash::NUM_SLOTS];
+  u_int32_t nodes_per_level[merkle_hash::NUM_SLOTS];
+  u_int32_t empty_leaves_per_level[merkle_hash::NUM_SLOTS];
+  u_int32_t leaves_per_level[merkle_hash::NUM_SLOTS];
+  u_int32_t internals_per_level[merkle_hash::NUM_SLOTS];
 
-  uint32 num_nodes;
-  uint32 num_leaves;
-  uint32 num_empty_leaves;
-  uint32 num_internals;
+  u_int32_t num_nodes;
+  u_int32_t num_leaves;
+  u_int32_t num_empty_leaves;
+  u_int32_t num_internals;
 };
 
 

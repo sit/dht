@@ -54,7 +54,7 @@ keyauxdb::getkeys (u_int32_t recno, u_int32_t count, u_int32_t *avail)
     baselen = a * kasz;
     base = (keyaux_t *) malloc (baselen);
   }
-  off_t pos = lseek (fd, recno * kasz, SEEK_SET);
+  (void) lseek (fd, recno * kasz, SEEK_SET);
 
   u_int32_t toread = a * kasz;
   int remain (toread);

@@ -7,8 +7,8 @@ if GTK_AVAILABLE
 VIS = vis
 endif
 
-bin_PROGRAMS = dbm walk findroute filestore nodeq dbdump  lsdping dbm_noauth adbmigrate kdb_stats $(VIS) 
-bin_SCRIPTS = dbm.py usenetlsdmon.py nodeq-filter
+bin_PROGRAMS = dbm walk findroute filestore nodeq dbdump lsdping dbm_noauth kdb_stats $(VIS) 
+bin_SCRIPTS = dbm.py nodeq-filter
 chorddata_DATA =  RPC.py RPCProto.py vischat.py
 
 EXTRA_DIST = .cvsignore $(bin_SCRIPTS) $(chorddata_DATA)
@@ -18,10 +18,7 @@ MAINTAINERCLEANFILES = Makefile.in
 noinst_PROGRAMS = coords 
 noinst_HEADERS = rpclib.h
 
-adbmigrate_SOURCES = adbmigrate.C
-adbmigrate_LDADD = ../merkle/libmerkle.a ../utils/libutil.a ../svc/libsvc.la $(DBLIB) $(LDADD)
-
-dbm_noauth_SOURCES = dhash_benchmark_noauth.C
+dbm_noauth_SOURCES = dbm_noauth.C
 dbm_noauth_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)
 
 lsdping_SOURCES = lsdping.C rpclib.C
@@ -37,7 +34,7 @@ filestore_SOURCES = filestore.C
 filestore_LDADD = ../dhash/libdhashclient.a  ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
 
 
-dbm_SOURCES = dhash_benchmark.C
+dbm_SOURCES = dbm.C
 dbm_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)
 
 dbdump_SOURCES = dbdump.C

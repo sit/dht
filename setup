@@ -1,45 +1,10 @@
-#! /bin/sh -e
-# $Id: setup,v 1.2 2003/02/26 01:09:14 fdabek Exp $
+#!/bin/sh -e
 #
-# This script builds the files necessary to configure this package for
-# development.  Once you run this script, you will need GNU make,
-# autoconf, and automake to build the software.  You must run "make
-# dist" if you the wish to create a source tree that can be built
-# without these tools.
+# This script builds the files necessary to configure this package
+# for development.  You will need GNU make, autoconf, and automake
+# to build the software.  You must run "make dist" if you the wish
+# to create a source tree that can be built without these tools.
 #
-# You should generally only need to run this script if you just
-# checked sfs out of a CVS repository, or else somehow badly mangled
-# the Makefile.
-
-opt_c=
-opt_f=
-opt_n=
-
-for arg in "$@"; do
-case "$arg" in
-    -cf|-fc)
-	    opt_c='--copy'
-	    opt_f='--force'
-	    ;;
-    -c)
-	    opt_c='--copy'
-	    ;;
-    -f)
-	    opt_f='--force'
-	    ;;
-    -n)
-	    WANT_AUTOCONF_2_5=1
-	    export WANT_AUTOCONF_2_5
-	    WANT_AUTOMAKE_1_6=1
-	    export WANT_AUTOMAKE_1_6
-	    opt_n=yes
-	    ;;
-    *)
-	    echo setup: unknown option "$arg"
-	    ;;
-esac
-done
-
 if test ! -f configure.in; then
 	echo Must run this from source directory >&2
 	exit 1
@@ -51,13 +16,6 @@ $M4 --version < /dev/null 2>&1 | grep GNU >/dev/null 2>&1 || M4=m4
 $M4 --version < /dev/null 2>&1 | grep GNU >/dev/null 2>&1 \
     || (echo Cannot locate GNU m4 >&2; exit 1)
 
-for file in acconfig.h acinclude.m4; do
-    if test ! -f $file -a -f ../$file; then
-	echo "+ ln -s -f ../$file $file"
-	ln -s -f ../$file $file 
-    fi
-done
-
 for file in Makefile.am.m4 */Makefile.am.m4; do
     if test -f $file; then
 	out=`echo $file | sed -e 's/\.m4$//'`
@@ -68,28 +26,7 @@ for file in Makefile.am.m4 */Makefile.am.m4; do
     fi
 done
 
-for dir in *; do
-    if test -x ${dir}/setup; then
-	echo "+ ${dir}/setup";
-	(cd ${dir} && ./setup)
-    fi
-done
-
-if test -z "${AM_ARGS:+set}"; then
-    AM_ARGS="--add-missing $opt_c $opt_f"
-fi
-if test -z "${LTI_ARGS:+set}"; then
-    LTI_ARGS="$opt_c $opt_f"
-fi
-
-set -x
-chmod +x setup
-libtoolize $LTI_ARGS
-aclocal
-autoheader
-automake $AM_ARGS
-autoconf
-set +x
+autoreconf -f -i -s "$@"
 
 if test -f config.status; then
     set -x

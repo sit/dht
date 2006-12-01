@@ -18,7 +18,7 @@ bool accordion = false;
 static const unsigned int DRAW_IMMED_SUCC = 1 << 0;
 static const unsigned int DRAW_SUCC_LIST  = 1 << 1;
 static const unsigned int DRAW_IMMED_PRED = 1 << 2;
-static const unsigned int DRAW_DEBRUIJN   = 1 << 3;
+// static const unsigned int DRAW_DEBRUIJN   = 1 << 3;
 static const unsigned int DRAW_FINGERS    = 1 << 4;
 // static const unsigned int DRAW_TOES       = 1 << 5;
 static const unsigned int DRAW_TOP_FINGERS       = 1 << 6;
@@ -36,7 +36,6 @@ static handler_info handlers[] = {
   { DRAW_IMMED_SUCC, "immed. succ", NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
   { DRAW_SUCC_LIST,  "succ. list",  NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
   { DRAW_PRED_LIST,  "pred. list",  NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
-  { DRAW_DEBRUIJN,  "debruijn node",  NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
   { DRAW_IMMED_PRED, "immed. pred", NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
   { DRAW_FINGERS,    "fingers",     NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) },
   { DRAW_TOP_FINGERS,    "top fingers",     NULL, GTK_SIGNAL_FUNC (draw_toggle_cb) }
@@ -1008,14 +1007,6 @@ draw_ring ()
 	int a,b;
 	set_foreground_lat (n->predecessor->resok->nlist[1].a_lat); 
 	ID_to_xy (make_chordID (n->predecessor->resok->nlist[1].n), &a, &b);
-	draw_arrow (x,y,a,b, draw_gc);
-      }
-      
-      if (n->debruijn &&
-	  ((n->draw & DRAW_DEBRUIJN) == DRAW_DEBRUIJN)) {
-	int a,b;
-	set_foreground_lat (1); 
-	ID_to_xy (make_chordID (n->debruijn->noderes->node), &a, &b);
 	draw_arrow (x,y,a,b, draw_gc);
       }
       

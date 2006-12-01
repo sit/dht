@@ -21,7 +21,7 @@ adbd_LDADD =  ../utils/libutil.a ../svc/libsvc.la ../merkle/libmerkle.a $(LIBARP
 
 syncd_SOURCES = syncd.C syncer.C syncer.h
 syncd_LDADD =  ../dhash/libdhash.a  ../merkle/libmerkle.a \
-	     ../chord/libchord.a ../utils/libutil.a ../devel/rpclib.o \
+	     ../chord/libchord.a ../utils/libutil.a ../tools/rpclib.o \
 		../svc/libsvc.la  \
 	    $(DBLIB) ${LDADD} 
 
@@ -29,7 +29,7 @@ sampled_SOURCES = sampled.C sampler.C sampler.h sample_server.C sample_server.h
 sample_server.C: sample_server.T
 sampler.C: sampler.T
 sampled_LDADD =  ../dhash/libdhash.a \
-		 ../chord/libchord.a ../utils/libutil.a ../devel/rpclib.o \
+		 ../chord/libchord.a ../utils/libutil.a ../tools/rpclib.o \
 		 ../svc/libsvc.la  \
 	         $(DBLIB) ${LDADD} 
 

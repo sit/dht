@@ -1,15 +1,5 @@
 dnl $Id: acinclude.m4,v 1.19 2006/10/04 23:05:09 strib Exp $
 
-
-
-dnl
-dnl switch for building everyting
-dnl
-AC_DEFUN([CHORD_BUILDALL],
-[AC_ARG_WITH(apps, [--with-apps Build everything])
-AM_CONDITIONAL(COND_ALL, test "${with_apps}" = yes)
-])
-
 dnl
 dnl Find full path to program
 dnl

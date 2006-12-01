@@ -16,7 +16,7 @@ extern bool accordion;
 f_node::f_node (const chord_node &n) :
   ID (n.x), host (n.r.hostname), hostname(""), port (n.r.port),
   vnode_num (n.vnode_num),
-  fingers (NULL), predecessor (NULL), debruijn (NULL), successors (NULL),
+  fingers (NULL), predecessor (NULL), successors (NULL),
   selected (true), highlight (false)
 {
   draw = check_get_state ();
@@ -27,7 +27,7 @@ f_node::f_node (const chord_node &n) :
 
 f_node::f_node (chordID i, str h, unsigned short p) :
     ID (i), host (h), port (p), vnode_num (0),
-    fingers (NULL), predecessor (NULL), debruijn (NULL), successors (NULL),
+    fingers (NULL), predecessor (NULL), successors (NULL),
     selected (true), highlight (false)
 { 
   draw = check_get_state ();
@@ -55,7 +55,6 @@ f_node::~f_node () {
   if (fingers) delete fingers;
   if (predecessor) delete predecessor;
   if (successors) delete successors;
-  if (debruijn) delete debruijn;
 }
 
 f_node *
@@ -121,7 +120,6 @@ update (f_node *n)
 {
   update_fingers (n);
   update_pred (n);
-  update_debruijn (n);
   update_succlist (n);
 }
 
@@ -208,43 +206,6 @@ update_pred_got_pred (chordID ID, str host, unsigned short port,
   if (nodes[n.x] == NULL) 
     add_node (n);
 }
-
-//----- update debruijn finger -------------------------------------------------
-
-void
-update_debruijn (f_node *nu)
-{
-  return;
-  chordID n = nu->ID;
-  ptr<debruijn_arg> arg = New refcounted<debruijn_arg> ();
-  arg->n = n;
-  arg->x = n + 1;
-  arg->i = n + 1;
-  arg->upcall_prog = 0;
-  
-  debruijn_res *nres = New debruijn_res (CHORD_OK);
-  doRPC (nu, debruijn_program_1, DEBRUIJNPROC_ROUTE, arg, nres, 
-	 wrap (&update_debruijn_got_debruijn, n, nres));
-}
-
-void
-update_debruijn_got_debruijn (chordID ID, debruijn_res *res, clnt_stat err)
-{
-  if (err  || res->status == CHORD_INRANGE) {
-    delete res;
-    return;
-  }
-  assert (res->status == CHORD_NOTINRANGE);
-  f_node *nu = nodes[ID];
-
-  if (nu->debruijn) delete nu->debruijn;
-  nu->debruijn = res;
-
-  chord_node n = make_chord_node (res->noderes->node);
-  if (nodes[n.x] == NULL) 
-    add_node (n);
-}
-
 
 //----- update fingers -----------------------------------------------------
 void

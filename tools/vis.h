@@ -1,5 +1,4 @@
 #include "chord_prot.h"
-#include "debruijn_prot.h"
 #include "fingers_prot.h"
 #include "accordion_prot.h"
 #include "transport_prot.h"
@@ -20,7 +19,6 @@ struct f_node {
   unsigned short vnode_num;
   chord_nodelistextres *fingers;
   chord_nodelistextres *predecessor;
-  debruijn_res *debruijn;
   chord_nodelistextres *successors;
   ihash_entry <f_node> link;
   unsigned int draw;
@@ -68,11 +66,6 @@ void update_succ_got_succ (chordID ID, str host, unsigned short port,
 void update_pred (f_node *n);
 void update_pred_got_pred (chordID ID, str host, unsigned short port,
 			   chord_nodelistextres *res, clnt_stat err);
-
-void update_debruijn (f_node *nu);
-void update_debruijn_got_debruijn (chordID n, debruijn_res *res,
-			     clnt_stat err);
-
 
 f_node *add_node (const chord_node &n);
 f_node *add_node (str host, unsigned short port);

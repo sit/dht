@@ -1,14 +1,14 @@
 #include <merkle_sync_prot.h>
 #include "merkle_disk_server.h"
 
-merkle_disk_server::merkle_disk_server (uint port, int num_vnodes) :
+merkle_disk_server::merkle_disk_server (uint port, uint num_vnodes) :
   _num_vnodes (num_vnodes)
 {
   init_listen (port);
 
   _mservers = (merkle_server ***) 
     malloc (_num_vnodes*sizeof (merkle_server **));
-  for (int i = 0; i < _num_vnodes; i++) {
+  for (uint i = 0; i < _num_vnodes; i++) {
     _mservers[i] = (merkle_server **) 
       malloc (3*sizeof (merkle_server *));
     for (int j = 0; j < 3; j++) {
@@ -19,7 +19,7 @@ merkle_disk_server::merkle_disk_server (uint port, int num_vnodes) :
 
 merkle_disk_server::~merkle_disk_server ()
 {
-  for (int i = 0; i < _num_vnodes; i++) {
+  for (uint i = 0; i < _num_vnodes; i++) {
     for (int j = 0; j < 3; j++) {
       delete _mservers[i][j];
       _mservers[i][j] = NULL;
@@ -85,7 +85,7 @@ merkle_disk_server::dispatch (ptr<asrv> s, svccb *sbp)
     return;
   }
 
-  uint vnode;
+  u_int32_t vnode;
   dhash_ctype ctype;
 
   switch (sbp->proc()) {

@@ -21,27 +21,9 @@ lsd/
 DHash layers and accepts requests from clients over a UNIX domain
 socket.
 
-chordcd/
-
-   - chordcd is the SFS client daemon for CFS. It is run as a slave
-process of sfscd and acts as an NFS server to provide a loopback file
-system interface to clients. chordcd and sfsrodb are based on similiar
-tools in the SFSRO distribution.
-
-sfsrodb/
-
-   - sfsrodb publishes a filesystem into the CFS network. Because
-sfsrodb is so closely related to a similiar tool in the SFS
-distribution, it is distributed under the GPL rather than the MIT
-license (as the remainder of this project is).
-
-devel/
+tools/
 
    - testing and performance tools
-
-sim/
-
-   - a Chord simulator
 
 svc/
 
@@ -49,4 +31,4 @@ svc/
 
 
 This software is experimental and under active development. Please
-send bug reports/fixes to chorddev@pdos.lcs.mit.edu.
+send bug reports/fixes to chord-dev@pdos.lcs.mit.edu.

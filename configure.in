@@ -1,11 +1,10 @@
-dnl $Id: configure.in,v 1.52 2005/08/19 20:04:28 fdabek Exp $
 dnl
 dnl Process this file with autoconf to produce a configure script.
 dnl
 
 AC_INIT(acinclude.m4)
 AM_INIT_AUTOMAKE(chord, 0.1)
-AM_CONFIG_HEADER(config.h)
+AM_CONFIG_HEADER(dhtconfig.h)
 
 AC_CANONICAL_HOST
 
@@ -16,8 +15,6 @@ AC_PROG_CXX
 AC_PATH_PROGS(M4, gm4 gnum4 m4, '$(top_srcdir)/missing')
 
 dnl Check for GTK and allow conditional Makefile.am statements
-dnl AM_PATH_GTK(1.2.0,,AC_MSG_WARN(gtk not available; vis will not be built))
-
 PKG_CHECK_MODULES(GSTUFF, gtk+-2.0 >= 2.0, AC_MSG_WARN([Found GTK...]), AC_MSG_WARN([You don't have GTK. Vis won't be built]))
 AM_CONDITIONAL(GTK_AVAILABLE, test "$GSTUFF_CFLAGS")
 AC_SUBST(GSTUFF_CFLAGS)
@@ -34,10 +31,9 @@ AM_PROG_LIBTOOL
 
 SFS_SFS
 SFS_CFLAGS
-CHORD_BUILDALL
 
 dnl setup db3
-SFS_SLEEPYCAT(4.3 4.2 4.0 4 3, no)
+SFS_SLEEPYCAT(4.5 4.4 4.3 4.2 4.0 4 3, no)
 AC_SUBST(DBLIB)
 AC_SUBST(DBDEPS)
 if test "${with_db3}" != no; then
@@ -65,7 +61,7 @@ AC_EGREP_HEADER(sfspriv,
 )
 
 dnl let directories share header files
-for lib in utils merkle chord dhc dhash sfsrodb svc lsd; do
+for lib in utils merkle chord dhash svc lsd; do
     CPPFLAGS="-I"'$(top_srcdir)'"/$lib $CPPFLAGS"
 done
     CPPFLAGS="-I"'$(top_builddir)'"/svc $CPPFLAGS"
@@ -90,9 +86,6 @@ ETAGS_ARGS='-C /dev/null'
 AC_SUBST(ETAGS_ARGS)
 
 AC_OUTPUT(Makefile svc/Makefile utils/Makefile 
-	sfsrodb/Makefile dhash/Makefile lsd/Makefile
-	merkle/Makefile chord/Makefile chordcd/Makefile 
-	proxy/Makefile devel/Makefile
-	test/Makefile tst/Makefile
-	melody/Makefile  usenet/Makefile
-	arpeggio/Makefile amud/Makefile)
+	dhash/Makefile lsd/Makefile
+	merkle/Makefile chord/Makefile 
+	tools/Makefile) 

@@ -37,7 +37,7 @@ open_file (str name) {
 }
 
 merkle_node_disk::merkle_node_disk (FILE *internal, FILE *leaf, 
-				    MERKLE_DISK_TYPE type, uint32 block_no) :
+				    MERKLE_DISK_TYPE type, u_int32_t block_no) :
   merkle_node (),
   hashes (NULL),
   children (NULL),
@@ -59,7 +59,7 @@ merkle_node_disk::merkle_node_disk (FILE *internal, FILE *leaf,
       keylist.insert (New merkle_key (c));
     }
   } else {
-    children = New array<uint32, 64> ();
+    children = New array<u_int32_t, 64> ();
     hashes = New array<merkle_hash_id, 64> ();
 
     merkle_internal_node internal;
@@ -159,7 +159,7 @@ merkle_node_disk::child (u_int i)
   assert (!isleaf ());
   assert (i >= 0 && i < 64);
 
-  uint32 pointer = (*children)[i];
+  u_int32_t pointer = (*children)[i];
   MERKLE_DISK_TYPE type;
   if (pointer % 2 == 0) {
     type = MERKLE_DISK_INTERNAL;
@@ -180,7 +180,7 @@ merkle_node_disk::child_hash (u_int i)
   return (*hashes)[i].hash;
 }
 
-uint32
+u_int32_t
 merkle_node_disk::child_ptr (u_int i)
 {
   assert (!isleaf ());
@@ -236,7 +236,7 @@ merkle_node_disk::isleaf () const {
 void merkle_node_disk::leaf2internal () {
   assert (isleaf ());
   _type = MERKLE_DISK_INTERNAL;
-  children = New array<uint32, 64>();
+  children = New array<u_int32_t, 64>();
   hashes = New array<merkle_hash_id, 64>();
   keylist.deleteall_correct();
   assert (!isleaf ());
@@ -287,7 +287,7 @@ merkle_tree_disk::write_metadata ()
   fwrite (&_md, sizeof(merkle_index_metadata), 1, _index);
 
   int nfree = _md.num_leaf_free + _md.num_internal_free;
-  uint32 freelist[nfree];
+  u_int32_t freelist[nfree];
 
   // write out both the unused free slots and the newly created free slots
   uint i;
@@ -308,7 +308,7 @@ merkle_tree_disk::write_metadata ()
     freelist[i] = (_future_free_internals[i-sofar] << 1);
   }
 
-  fwrite (&freelist, sizeof (uint32), nfree, _index);
+  fwrite (&freelist, sizeof (u_int32_t), nfree, _index);
   _future_free_leafs.clear ();
   _future_free_internals.clear ();
 
@@ -342,12 +342,12 @@ merkle_node *merkle_tree_disk::get_root ()
 
     // read in the free list
     int nfree = _md.num_leaf_free+_md.num_internal_free;
-    uint32 freelist[nfree];
-    int nread = fread (&freelist, sizeof (uint32), nfree, _index);
+    u_int32_t freelist[nfree];
+    int nread = fread (&freelist, sizeof (u_int32_t), nfree, _index);
     assert (nread == nfree);
 
     for (int i = 0; i < nread; i++) {
-      uint32 pointer = freelist[i];
+      u_int32_t pointer = freelist[i];
       if (pointer % 2 == 0) {
 	_free_internals.push_back (pointer >> 1);
       } else {
@@ -360,13 +360,13 @@ merkle_node *merkle_tree_disk::get_root ()
 }
 
 merkle_node *
-merkle_tree_disk::make_node (uint32 block_no, MERKLE_DISK_TYPE type)
+merkle_tree_disk::make_node (u_int32_t block_no, MERKLE_DISK_TYPE type)
 {
   return New merkle_node_disk (_internal, _leaf, type, block_no);
 }
 
 merkle_node *
-merkle_tree_disk::make_node (uint32 pointer)
+merkle_tree_disk::make_node (u_int32_t pointer)
 {
   // even == internal, odd == leaf
   if (pointer % 2 == 0) {
@@ -377,7 +377,7 @@ merkle_tree_disk::make_node (uint32 pointer)
 }
 
 void
-merkle_tree_disk::free_block (uint32 pointer)
+merkle_tree_disk::free_block (u_int32_t pointer)
 {
   // even == internal, odd == leaf
   if (pointer % 2 == 0) {
@@ -390,7 +390,7 @@ merkle_tree_disk::free_block (uint32 pointer)
 
 // returns a block_no without the type bit on the end
 void
-merkle_tree_disk::free_block (uint32 block_no, MERKLE_DISK_TYPE type)
+merkle_tree_disk::free_block (u_int32_t block_no, MERKLE_DISK_TYPE type)
 {
   assert (_writer);
 
@@ -404,12 +404,12 @@ merkle_tree_disk::free_block (uint32 block_no, MERKLE_DISK_TYPE type)
 }
 
 // returns a block_no without the type bit on the end
-uint32
+u_int32_t
 merkle_tree_disk::alloc_free_block (MERKLE_DISK_TYPE type)
 {
   assert (_writer);
 
-  uint32 ret;
+  u_int32_t ret;
   // if there are any free
   if (type == MERKLE_DISK_LEAF) {
     if (_md.num_leaf_free > 0) {
@@ -436,7 +436,7 @@ void
 merkle_tree_disk::switch_root (merkle_node_disk *n)
 {
   assert (_writer);
-  uint32 newroot = n->get_block_no ();
+  u_int32_t newroot = n->get_block_no ();
   newroot <<= 1;
   if (n->isleaf()) {
     newroot |= 0x00000001;
@@ -506,7 +506,7 @@ merkle_tree_disk::remove (u_int depth, merkle_hash& key,
 
   // write this block out to a new place on disk, then switch the root
   // atomically
-  uint32 block_no = alloc_free_block (new_type);
+  u_int32_t block_no = alloc_free_block (new_type);
   free_block (nd->get_block_no(), old_type);
   nd->set_block_no (block_no);
   nd->write_out ();
@@ -607,7 +607,7 @@ merkle_tree_disk::insert (u_int depth, merkle_hash& key, merkle_node *n)
   
   // write this block out to a new place on disk, then switch the root
   // atomically
-  uint32 block_no = alloc_free_block(type);
+  u_int32_t block_no = alloc_free_block(type);
   free_block (nd->get_block_no(), old_type);
   nd->set_block_no (block_no);
   nd->write_out ();

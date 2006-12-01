@@ -2,22 +2,14 @@
 # $Id: Makefile.am,v 1.41 2006/08/16 17:03:54 sit Exp $
 
 
-BASEDIRS = svc utils merkle chord dhash sfsrodb devel lsd
-SUBDIRS_ALL = $(BASEDIRS) chordcd test tst melody proxy usenet arpeggio amud
-SUBDIRS_SOME = $(BASEDIRS)
-if COND_ALL
-SUBDIRS = $(SUBDIRS_ALL)
-else
-SUBDIRS = $(SUBDIRS_SOME)
-endif
-
-chordinclude_HEADERS = config.h
+SUBDIRS = svc utils merkle chord dhash tools lsd
+chordinclude_HEADERS = dhtconfig.h
 
 CLEANFILES = core *.core *~
 
 EXTRA_DIST = .cvsignore
 MAINTAINERCLEANFILES = aclocal.m4 install-sh mkinstalldirs \
-	missing depcomp configure config.guess config.sub config.h.in \
+	missing depcomp configure config.guess config.sub dhtconfig.h.in \
 	ltconfig ltmain.sh INSTALL COPYING Makefile.in stamp-h.in
 
 dist-hook:

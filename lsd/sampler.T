@@ -1,7 +1,7 @@
 // -*-c++-*-
 
 #include <arpc.h>
-#include <../devel/rpclib.h>
+#include <../tools/rpclib.h>
 #include <comm.h>
 
 #include <dhash_prot.h>

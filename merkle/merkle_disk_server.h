@@ -7,7 +7,7 @@
 
 class merkle_disk_server {
  public:
-  merkle_disk_server (uint port, int num_vnodes);
+  merkle_disk_server (uint port, uint num_vnodes);
   ~merkle_disk_server ();
   void add_merkle_server (int vnode, dhash_ctype ctype, merkle_server *s);
   void dispatch (ptr<asrv> s, svccb *sbp);
@@ -18,7 +18,7 @@ class merkle_disk_server {
   void client_accept_socket (int lfd);
 
   merkle_server ***_mservers;
-  int _num_vnodes;
+  uint _num_vnodes;
 };
 
 

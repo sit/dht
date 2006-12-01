@@ -446,8 +446,8 @@ merkle_tree::compute_stats ()
 	    stats.num_leaves, stats.num_empty_leaves, stats.num_internals, stats.num_nodes);
   assert (stats.num_leaves > 0);
 
-  uint64 mn = max_depth;
-  uint64 mx = 0;
+  u_int64_t mn = max_depth;
+  u_int64_t mx = 0;
   double ave = 0;
   for (uint i = 0; i < max_depth; i++) {
     if (stats.leaves_per_level[i] == 0)

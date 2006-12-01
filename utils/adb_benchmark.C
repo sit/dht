@@ -35,7 +35,7 @@ bench_update (void)
   // Throw out a lot of update operations, see how many we can complete.
   for (size_t i = 0; i < count; i++) {
     chordID k     = random_getword ();
-    u_int32_t aux = random_getword ();
+    // u_int32_t aux = random_getword ();
     db->update (k, population[i % population.size ()], random_getword (),
 	        random_getword () % 2,
 	        batch);
