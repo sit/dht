@@ -1,9 +1,8 @@
 ## Process this file with automake to produce Makefile.in
-# $Id: Makefile.am,v 1.30.2.1 2006/11/14 21:53:41 strib Exp $
 
 $(PROGRAMS): $(LDEPS) $(DBDEPS)
 
-SUFFIXES = .T .x .C .h
+SUFFIXES = .T .C .h
 .T.C:
 	-$(TAME) -o $@ $< || rm -f $@
 
@@ -25,9 +24,7 @@ syncd_LDADD =  ../dhash/libdhash.a  ../merkle/libmerkle.a \
 		../svc/libsvc.la  \
 	    $(DBLIB) ${LDADD} 
 
-sampled_SOURCES = sampled.C sampler.C sampler.h sample_server.C sample_server.h
-sample_server.C: sample_server.T
-sampler.C: sampler.T
+sampled_SOURCES = sampled.C sampler.T sampler.h sample_server.T sample_server.h
 sampled_LDADD =  ../dhash/libdhash.a \
 		 ../chord/libchord.a ../utils/libutil.a ../tools/rpclib.o \
 		 ../svc/libsvc.la  \
@@ -36,8 +33,9 @@ sampled_LDADD =  ../dhash/libdhash.a \
 lsdctl_SOURCES = lsdctl.C
 lsdctl_LDADD = ../svc/libsvc.la $(LDADD)
 
+TAMEOUT = sample_server.C sampler.C
 
-EXTRA_DIST = sample_server.T sampler.T $(bin_SCRIPTS)
-CLEANFILES = core *.core *~ *.rpo
+EXTRA_DIST = $(bin_SCRIPTS)
+CLEANFILES = core *.core *~ *.rpo $(TAMEOUT)
 MAINTAINERCLEANFILES = Makefile.in
 
