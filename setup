@@ -26,7 +26,7 @@ for file in Makefile.am.m4 */Makefile.am.m4; do
     fi
 done
 
-autoreconf -f -i -s "$@"
+autoreconf -i -s "$@"
 
 if test -f config.status; then
     set -x
