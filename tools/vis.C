@@ -1151,7 +1151,6 @@ main (int argc, char** argv)
 {
 
   setprogname (argv[0]);
-  sfsconst_init ();
   random_init ();
 
   setup ();

@@ -27,7 +27,6 @@
  *
  */
 
-#include <sfsmisc.h>
 #include <arpc.h>
 #include <crypt.h>
 #include <vec.h>
