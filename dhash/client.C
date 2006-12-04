@@ -64,8 +64,6 @@ bool dhash_tcp_transfers = false;
 #endif
 #include <ida.h>
 
-#include "succopt.h"
-
 static void
 order_succs (ptr<locationtable> locations,
 	     const Coord &me, const vec<chord_node> &succs,

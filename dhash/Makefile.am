@@ -48,8 +48,6 @@ noinst_HEADERS = \
 		 dhash_store.h \
 		 download.h \
 		 pmaint.h \
-		 succopt.h \
-		 vsc.h \
 		 dhblock.h \
 		 dhblock_chash.h \
 		 dhblock_keyhash.h \
