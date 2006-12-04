@@ -1023,9 +1023,9 @@ case $host_os in
 	sfs_gnu_CXXWFLAGS="$sfs_gnu_WFLAGS"
 	;;
 esac
-expr "$DEBUG" : '.*-O' > /dev/null \
+expr "x$DEBUG" : '.*-O' > /dev/null \
     || sfs_gnu_WFLAGS="$sfs_gnu_WFLAGS -Wno-unused"
-expr "$CXXDEBUG" : '.*-O' > /dev/null \
+expr "x$CXXDEBUG" : '.*-O' > /dev/null \
     || sfs_gnu_CXXWFLAGS="$sfs_gnu_CXXWFLAGS -Wno-unused"
 NW='-w'
 test "$GCC" = yes -a -z "${WFLAGS+set}" && WFLAGS="$sfs_gnu_WFLAGS"
@@ -1033,11 +1033,11 @@ test "$GXX" = yes -a -z "${CXXWFLAGS+set}" && CXXWFLAGS="$sfs_gnu_CXXWFLAGS"
 CXXNOERR=
 test "$GXX" = yes && CXXNOERR='-Wno-error'
 # Temporarily set CFLAGS to ansi so tests for things like __inline go correctly
-if expr "$DEBUG $WFLAGS $ECFLAGS" : '.*-ansi' > /dev/null; then
+if expr "x$DEBUG $WFLAGS $ECFLAGS" : '.*-ansi' > /dev/null; then
 	CFLAGS="$CFLAGS -ansi"
 	ac_cpp="$ac_cpp -ansi"
 fi
-expr "$CXXDEBUG $CXXWFLAGS $ECXXFLAGS" : '.*-ansi' > /dev/null \
+expr "x$CXXDEBUG $CXXWFLAGS $ECXXFLAGS" : '.*-ansi' > /dev/null \
     && CXXFLAGS="$CXXFLAGS -ansi"
 ])
 dnl
