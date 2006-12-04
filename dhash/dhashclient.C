@@ -33,7 +33,6 @@
 #include "dhblock_keyhash.h"
 #include "dhashclient.h"
 #include <chord_types.h>
-#include "sfsmisc.h"
 #include "arpc.h"
 #include <sfscrypt.h>
 #ifdef DMALLOC

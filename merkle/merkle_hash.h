@@ -3,10 +3,7 @@
 
 #include "async.h"
 #include "sha1.h"
-#include "itree.h"
-#include "sfsmisc.h"
 #include "crypt.h"
-#include "sha1.h"
 
 #undef setbit
 

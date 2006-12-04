@@ -26,7 +26,6 @@
  */
 
 #include <async.h>
-#include <sfsmisc.h>
 #include <dhash_common.h>
 #include <dhash_prot.h>
 #include <dhashclient.h>

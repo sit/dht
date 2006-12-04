@@ -1,10 +1,4 @@
-#include "itree.h"
-#include "sfsmisc.h"
-#include "crypt.h"
-#include "sha1.h"
-#include <sys/time.h>
 #include "merkle_hash.h"
-
 
 bool
 func_xdr_merkle_hash (register XDR *xdr, merkle_hash *obj)

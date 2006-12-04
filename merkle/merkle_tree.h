@@ -1,8 +1,9 @@
 #ifndef _MERKLE_TREE_H_
 #define _MERKLE_TREE_H_
 
-#include "async.h"
-#include "sha1.h"
+#include <async.h>
+#include <itree.h>
+#include <sha1.h>
 #include "merkle_hash.h"
 #include "merkle_node.h"
 
