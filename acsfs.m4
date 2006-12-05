@@ -1752,7 +1752,7 @@ AC_SUBST(NOPAGING)
 SFS_GMP
 SFS_DMALLOC
 
-if test "$with_sfsmisc"  = "yes"; 
+if test "$LIBSVC" -a -f "$LIBSVC";
 then
 	LDEPS='$(LIBTAME) $(LIBSFSMISC) $(LIBSVC) $(LIBSFSCRYPT) $(LIBARPC) $(LIBASYNC)'
 else
