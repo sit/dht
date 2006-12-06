@@ -137,7 +137,7 @@ getsucc_cb (u_int64_t start, chord_node curr, chord_nodelistextres *res, clnt_st
   int index = curr.vnode_num;
   assert (index >= 0);
   char s[128];
-  sprintf (s, "e=%f", curr.e / PRED_ERR_MULT);
+  sprintf (s, "e=%f", curr.e / Coord::PRED_ERR_MULT);
   aout  << format (strbuf (), curr) << " "
         << curr.coords[0] << " " << curr.coords[1] << " " << curr.coords[2] << " "
 	<< s << " "

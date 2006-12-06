@@ -5,14 +5,13 @@ class str;
 #include <vec.h>
 #include <chord_types.h>
 
-#define NCOORD 2
-#define USING_HT 1
-#define PRED_ERR_MULT 1000.0
-
 // Perhaps this should be made a coordinate in the sort of standard
 // object-oriented sense of the word, instead of just a namespace
 // for some common functions.
 struct Coord {
+  static const unsigned int NCOORD = 2;
+  static const unsigned int USING_HT = 1;
+  static const float PRED_ERR_MULT = 1000.0;
 
   vec<float> coords;
   float ht;
@@ -46,8 +45,6 @@ struct Coord {
 
 private:
   int pred_err;
-
 };
 
-
-#endif
+#endif /* __CHORD_H__ */

@@ -732,7 +732,7 @@ vnode_impl::update_coords (Coord uc, float ud)
     
     float len = v.plane_norm ();
     while (len < 0.0001) {
-      for (int i = 0; i < NCOORD; i++)
+      for (unsigned int i = 0; i < Coord::NCOORD; i++)
 	v.coords[i] = (double)(random () % 400 - 200) / 1.0;
       //if (USING_HT) v.ht += fabs((double)(random () % 10 - 5) / 10.0);
       len = v.plane_norm ();

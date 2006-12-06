@@ -234,9 +234,9 @@ chord::join (str wellknownhost, int wellknownport, bool failok)
   wkn.age = 60;
   wkn.knownup = 600;
 
-  wkn.coords.setsize (NCOORD + USING_HT);
+  wkn.coords.setsize (Coord::NCOORD + Coord::USING_HT);
   // Make up some random initial information for this other node.
-  for (int i = 0; i < NCOORD + USING_HT; i++)
+  for (unsigned int i = 0; i < Coord::NCOORD + Coord::USING_HT; i++)
     wkn.coords[i] = (int) 0.0;
   wkn.e = -1;
 

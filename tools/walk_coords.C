@@ -128,7 +128,7 @@ getsucc_cb (chordID dest, str desthost,
     warnx << dest << " " << desthost << "\n";
   else {
     char s[1024];
-    sprintf (s, "%f %f %f e=%f", coords[0], coords[1], coords[2], e/PRED_ERR_MULT);
+    sprintf (s, "%f %f %f e=%f", coords[0], coords[1], coords[2], e/Coord::PRED_ERR_MULT);
     warnx << dest << " " << desthost << " "
 	  << s << " "
 	  << (getusec () - start) << " "
