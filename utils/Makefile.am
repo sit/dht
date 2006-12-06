@@ -36,17 +36,16 @@ libadb_a_SOURCES = libadb.C
 noinst_PROGRAMS = adb_benchmark
 
 adb_benchmark_SOURCES = adb_benchmark.C
-adb_benchmark_LDADD =  libutil.a ../svc/libsvc.la $(LIBARPC)  $(LIBSFSCRYPT) $(LIBGMP) $(DBLIB) $(LIBASYNC) 
+adb_benchmark_LDADD =  libutil.a ../svc/libsvc.la $(LIBSFSCRYPT) $(LIBARPC) $(LIBASYNC) $(LIBGMP) $(DBLIB)
 
 # should really figure out how to encode explict rule so that make
 # will run ida-genfield.py to update ida-field.C if ida-genfield.py changes.
-
 
 TESTS = test_ida test_skiplist test_locationtable test_adb test_keyauxdb
 check_PROGRAMS = $(TESTS)
 
 test_keyauxdb_SOURCES = test_keyauxdb.C
-test_keyauxdb_LDADD = keyauxdb.o $(LIBSFSCRYPT) $(LIBASYNC) $(LIBGMP)
+test_keyauxdb_LDADD = keyauxdb.o $(LIBSFSCRYPT) $(LIBARPC) $(LIBASYNC) $(LIBGMP)
 
 test_ida_SOURCES = test_ida.C
 test_ida_LDADD = ./libutil.a $(LIBSFSCRYPT) $(LIBARPC) $(LIBASYNC) $(LIBGMP)
@@ -57,7 +56,7 @@ test_locationtable_LDADD = ./libutil.a $(LIBSFSCRYPT) $(LIBARPC) $(LIBASYNC) $(L
 test_skiplist_SOURCES = test_skiplist.C
 
 test_adb_SOURCES = test_adb.C
-test_adb_LDADD = libadb.a libutil.a ../svc/libsvc.la $(LIBARPC) $(LIBSFSCRYPT) $(LIBGMP) $(DBLIB) $(LIBASYNC) 
+test_adb_LDADD = libadb.a libutil.a ../svc/libsvc.la $(LIBSFSCRYPT) $(LIBARPC) $(LIBASYNC) $(LIBGMP) $(DBLIB)
 
 CLEANFILES = core *.core *~ *.rpo
 MAINTAINERCLEANFILES = Makefile.in
