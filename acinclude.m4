@@ -42,10 +42,9 @@ if test -f ${with_chord}/Makefile -a -f ${with_chord}/config.h; then
     LIBCHORD=${with_chord}/chord/libchord.a
     LIBMERKLE=${with_chord}/merkle/libmerkle.a
     LIBDHASH=${with_chord}/dhash/libdhash.a
-    LIBDHASHCLIENT=${with_chord}/libdhashclient.a
+    LIBDHASHCLIENT=${with_chord}/dhash/libdhashclient.a
 elif test -f ${with_chord}/include/chord/config.h \
 	-a -f ${with_chord}/lib/chord/libasync.la; then
-dnl this is currently  DEAD CODE branch
     chordincludedir="${with_chord}/include/chord"
     chordlibdir=${with_chord}/lib/chord
     if egrep '#define DMALLOC' ${chordincludedir}/config.h > /dev/null; then
