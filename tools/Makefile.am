@@ -7,7 +7,7 @@ if GTK_AVAILABLE
 VIS = vis
 endif
 
-bin_PROGRAMS = dbm walk findroute filestore nodeq dbdump lsdping dbm_noauth kdb_stats $(VIS) 
+bin_PROGRAMS = dbm walk findroute filestore nodeq dbdump lsdping dbm_noauth $(VIS) 
 bin_SCRIPTS = dbm.py nodeq-filter
 chorddata_DATA =  RPC.py RPCProto.py vischat.py
 
@@ -15,7 +15,7 @@ EXTRA_DIST = $(bin_SCRIPTS) $(chorddata_DATA)
 CLEANFILES = core *.core *~ *.rpo
 MAINTAINERCLEANFILES = Makefile.in
 
-noinst_PROGRAMS = coords 
+noinst_PROGRAMS = coords kdb_stats 
 noinst_HEADERS = rpclib.h
 
 dbm_noauth_SOURCES = dbm_noauth.C

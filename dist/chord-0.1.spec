@@ -3,19 +3,19 @@
 Summary: Chord/DHash -- a distributed hash table
 Name: chord
 Version: 0.1
-Release: 3
+Release: 4
 Copyright: BSD 
 Group: Applications/Internet
 Source: http://pdos.csail.mit.edu/~fdabek/chord-0.1.tar.gz
 URL: http://pdos.csail.mit.edu/chord/
 Packager: Chord developers (chord@pdos.csail.mit.edu)
 BuildRoot: %{_tmppath}/%{name}-%{version}-buildroot
-Requires: sfs >= 0.8, db4 >= 4.0
-BuildRequires: sfs >= 0.8, db4 >= 4.0
+Requires: sfslite >= 0.8, db4 >= 4.0
+BuildRequires: sfslite >= 0.8, db4 >= 4.0
 
 %description
-Chord and DHash are building blocks for developing distributed applications.  Chord and DHash together provide a distributed hash table implementation.
-This package also includes the UsenetDHT server.
+Chord and DHash are building blocks for developing distributed applications.
+Chord and DHash together provide a distributed hash table implementation.
 
 %package vis
 Summary: Chord visualization utilities
@@ -39,11 +39,11 @@ This package provides the necessary development libraries and headers
 %configure
 
 %build
-make SUBDIRS="\${BASEDIRS} usenet"
+make
 
 %install
 rm -rf $RPM_BUILD_ROOT
-make install SUBDIRS="\${BASEDIRS} usenet" DESTDIR=$RPM_BUILD_ROOT
+make install DESTDIR=$RPM_BUILD_ROOT
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -55,7 +55,6 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %defattr(-,root,root)
 %doc  README
-%{_bindir}/adbmigrate
 %{_bindir}/dbdump
 %{_bindir}/dbm
 %{_bindir}/dbm_noauth
@@ -67,11 +66,9 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/lsdping
 %{_bindir}/nodeq
 %{_bindir}/nodeq-filter
-%{_bindir}/sfsrodb
 %{_bindir}/start-dhash
+%{_bindir}/sampled
 %{_bindir}/syncd
-%{_bindir}/usenet
-%{_bindir}/udbctl
 %{_bindir}/walk
 %{_bindir}/adbd
 %{_includedir}/chord-%{version}/chord_types.x
@@ -86,7 +83,6 @@ rm -rf $RPM_BUILD_ROOT
 
 %files vis
 %{_bindir}/vis
-%{_bindir}/usenetlsdmon.py
 %{_datadir}/chord-%{version}/vischat.py
 
 %files devel
