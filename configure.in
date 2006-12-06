@@ -29,6 +29,7 @@ AM_DISABLE_SHARED
 test -z "$target" && target=NONE
 AM_PROG_LIBTOOL
 
+SFS_TAG
 SFS_SFS
 SFS_CFLAGS
 
