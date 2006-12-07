@@ -101,16 +101,18 @@ $PID{lsd}   = spawn ($root, $LSD, "lsd",
 		     "-S", "./dhash-sock",
 		     "-C", "./lsd-sock",
 		     @ARGV);
-# Wait until DHash has started up
-sleep 1 until -e "$root/lsd-sock";
-$PID{syncd} = spawn ($root, $SYNCD, "syncd",
-		     "-C", "./lsd-sock");
+my $lsd_ready = 0;
 
 # Keep this process running until kids come home.
 my $killers  = 0;
 my $abnormal = 0;
 while (keys %PID) {
     sleep 1;
+    if (!$lsd_ready and -e "$root/lsd-sock") {
+	$lsd_ready = 1;
+	$PID{syncd} = spawn ($root, $SYNCD, "syncd",
+			     "-C", "./lsd-sock");
+    }
     if ($signaled >= 0) {
 	# Pass on the signal to children.
 	for (keys %PID) { kill $signaled, $PID{$_}; }
