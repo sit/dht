@@ -42,19 +42,22 @@ sub spawn {
 
 my $help = 0;
 my $root = "dhash-$ENV{USER}";
-my $bindir = $ENV{DHASH_RUNINPLACE} || "";
+my $userbindir = "";
 GetOptions (
     "help|?"      => \$help,
     "root|r=s"    => \$root,
-    "bindir=s"      => \$bindir,
+    "bindir=s"      => \$userbindir,
 );
 pod2usage(0) if $help;
 
 # Find binaries
+my $found = 1;
 my $LSD   = "lsd";
 my $ADBD  = "adbd";
 my $SYNCD = "syncd";
-if (length($bindir)) {
+for my $rawbindir ($userbindir, ".", split(/:/, $ENV{PATH})) {
+    next unless length($rawbindir) > 0;
+    my $bindir = $rawbindir;
     if ($bindir !~ /^\//) {
 	use File::Spec;
 	$bindir = File::Spec->rel2abs ($bindir);
@@ -77,12 +80,14 @@ if (length($bindir)) {
 	$ADBD   = "$bindir/adbd";
 	$SYNCD  = "$bindir/syncd";
     } 
+    $found = 1;
     for ($LSD, $ADBD, $SYNCD) {
-	if (! (-f $_ && -x _)) {
-	    die "Unable to find executable $_\n";
-	}
+	$found = $found && (-f $_ && -x _);
     }
+    last if $found;
 }
+pod2usage("Unable to find lsd/adbd/syncd executables; use --bindir.\n")
+    unless $found;
 
 # Be ready to pass on signals
 my $signaled = -1;
