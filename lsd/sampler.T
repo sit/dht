@@ -100,7 +100,7 @@ void sampler::update_neighbors() {
 
   if (!err) {
     size_t sz = lst->resok->nlist.size ();
-    for (size_t i = 0; i < sz; i++) {
+    for (size_t i = 1; i < sz; i++) {
       chord_node n = make_chord_node (lst->resok->nlist[i]);
       ptr<location> s = locations->lookup_or_create (n);
       locations->insert (s);

@@ -173,9 +173,9 @@ pred_list::fill_nodelistresext (chord_nodelistextres *res)
   //     into going backwards might point off the ring!
   u_int i = 0;
   unsigned int curnpred = num_pred ();
-  res->resok->nlist.setsize (curnpred); // over allocate
+  res->resok->nlist.setsize (curnpred + 1); // over allocate
   ptr<location> curpred = v_->my_location ();
-  for (i = 0; (i < curnpred); i++) {
+  for (i = 0; (i <= curnpred); i++) {
     curpred->fill_node_ext (res->resok->nlist[i]);
     curpred = locations->closestpredloc (decID (curpred->id ()));
   }
@@ -204,9 +204,9 @@ pred_list::fill_nodelistres (chord_nodelistres *res)
 #ifdef PRED_LIST  
   u_int i = 0;
   unsigned int curnpred = num_pred ();
-  res->resok->nlist.setsize (curnpred); // over allocate
+  res->resok->nlist.setsize (curnpred + 1); // over allocate
   ptr<location> curpred = v_->my_location ();
-  for (i = 0; (i < curnpred); i++) {
+  for (i = 0; (i <= curnpred); i++) {
     curpred->fill_node (res->resok->nlist[i]);
     curpred = locations->closestpredloc (decID (curpred->id ()));
   }
