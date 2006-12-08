@@ -202,9 +202,11 @@ update_pred_got_pred (chordID ID, str host, unsigned short port,
   if (nu->predecessor) delete nu->predecessor;
   nu->predecessor = res;
 
-  chord_node n = make_chord_node (res->resok->nlist[0].n);
-  if (nodes[n.x] == NULL) 
-    add_node (n);
+  if (res->resok->nlist.size()) {
+    chord_node n = make_chord_node (res->resok->nlist[0].n);
+    if (nodes[n.x] == NULL) 
+      add_node (n);
+  }
 }
 
 //----- update fingers -----------------------------------------------------
