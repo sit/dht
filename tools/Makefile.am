@@ -16,15 +16,14 @@ CLEANFILES = core *.core *~ *.rpo
 MAINTAINERCLEANFILES = Makefile.in
 
 noinst_PROGRAMS = coords kdb_stats 
-noinst_HEADERS = rpclib.h
 
 dbm_noauth_SOURCES = dbm_noauth.C
 dbm_noauth_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)
 
-lsdping_SOURCES = lsdping.C rpclib.C
-lsdping_LDADD =  ../svc/libsvc.la ../utils/libutil.a $(LDADD)
+lsdping_SOURCES = lsdping.C
+lsdping_LDADD =  ../utils/libutil.a ../svc/libsvc.la $(LDADD)
 
-walk_SOURCES = walk.C rpclib.C
+walk_SOURCES = walk.C
 walk_LDADD = ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
 
 coords_SOURCES = walk_coords.C
@@ -40,11 +39,11 @@ dbm_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDAD
 dbdump_SOURCES = dbdump.C
 dbdump_LDADD = $(DBLIB) ../utils/dbfe_sleepycat.o $(LDADD)
 
-findroute_SOURCES = findroute.C rpclib.C
-findroute_LDADD = ../chord/libchord.a ../svc/libsvc.la ../utils/libutil.a $(LDADD)
+findroute_SOURCES = findroute.C
+findroute_LDADD = ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)
 
-nodeq_SOURCES = nodeq.C rpclib.C
-nodeq_LDADD = ../svc/libsvc.la ../utils/libutil.a ../merkle/libmerkle.a $(LDADD)
+nodeq_SOURCES = nodeq.C
+nodeq_LDADD = ../utils/libutil.a ../svc/libsvc.la ../merkle/libmerkle.a $(LDADD)
 
 kdb_stats_SOURCES = kdb_stats.C
 kdb_stats_LDADD = ../utils/libutil.a ../svc/libsvc.la $(LIBARPC)  $(LIBSFSCRYPT) $(LIBGMP) $(DBLIB) $(LIBASYNC) 
@@ -52,5 +51,5 @@ kdb_stats_LDADD = ../utils/libutil.a ../svc/libsvc.la $(LIBARPC)  $(LIBSFSCRYPT)
 if GTK_AVAILABLE
 vis_SOURCES = vis.C vis.h vis_update.C vis_cmd.C
 INCLUDES = $(GSTUFF_CFLAGS) 
-vis_LDADD =  ../chord/libchord.a ../svc/libsvc.la ../utils/libutil.a $(GSTUFF_LIBS) $(LDADD)
+vis_LDADD =  ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la $(GSTUFF_LIBS) $(LDADD)
 endif

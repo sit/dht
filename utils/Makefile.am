@@ -15,6 +15,7 @@ noinst_HEADERS = \
 	modlogger.h \
 	ida-field.C \
 	libadb.h \
+	rpclib.h \
 	dbfe.h
 
 libutil_a_SOURCES = \
@@ -28,6 +29,7 @@ libutil_a_SOURCES = \
 	misc_utils.C \
 	modlogger.C \
 	libadb.C \
+	rpclib.C \
 	dbfe_sleepycat.C \
 	dbfe.C
 

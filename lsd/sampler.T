@@ -2,7 +2,7 @@
 // vim: filetype=cpp 
 
 #include <arpc.h>
-#include <../tools/rpclib.h>
+#include <rpclib.h>
 #include <comm.h>
 #include "libadb.h"
 

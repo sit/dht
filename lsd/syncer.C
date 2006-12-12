@@ -1,5 +1,5 @@
 #include <arpc.h>
-#include <../tools/rpclib.h>
+#include <rpclib.h>
 #include <comm.h>
 
 #include <dhash_prot.h>
