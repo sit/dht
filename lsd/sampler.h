@@ -38,7 +38,7 @@ public:
 		  u_int efrags = 0);
   ~sampler ();
 
-  ptr<adb> get_db() { return db; }
+  ptr<adb> get_db () { return db; }
   
 private:
 
@@ -51,17 +51,16 @@ private:
 	      int procno, const void *in, void *out, aclnt_cb cb);
   
   void sample_replicas ();
-  void resched();
+  void resched ();
   void update_neighbors (CLOSURE);
   void sample_replicas_gotneighbors (ptr<location> pred,
 				     ptr<location> succ,
 				     vec<ptr<location> > preds);
 
-  void wrap_call_getkeys( ptr<location> pred, bool pred, chordID rngmin, 
-			  callback<void>::ref cb );
-  void call_getkeys( ptr<location> pred, bool pred, chordID rngmin, 
-		     callback<void>::ref cb, CLOSURE );
-
+  void wrap_call_getkeys (ptr<location> pred, bool pred, chordID rngmin, 
+			  callback<void>::ref cb);
+  void call_getkeys (ptr<location> pred, bool pred, chordID rngmin, 
+		     callback<void>::ref cb, CLOSURE);
 };
 
 #endif // __SAMPLER_H

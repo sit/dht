@@ -8,22 +8,21 @@
 class sample_server {
  public:
   sample_server (int port, int num_vnodes);
-  void set_sampler( int vnode, dhash_ctype ctype, sampler *s );
+  void set_sampler (int vnode, dhash_ctype ctype, sampler *s);
 
  private:
   const static uint NUM_KEYS_AT_A_TIME;
   sampler ***_samplers;
 
   void dispatch (ptr<asrv> s, svccb *sbp);
-  void client_accept_socket( int lfd );
-  void init_listen( int port );
-  void client_listen( int fd );
+  void client_accept_socket (int lfd);
+  void init_listen (int port);
+  void client_listen (int fd);
 
-  void do_getkeys( ptr<asrv> s, svccb *sbp, ptr<adb> db,
-		   chordID min, chordID max, CLOSURE );
+  void do_getkeys (ptr<asrv> s, svccb *sbp, ptr<adb> db,
+		   chordID min, chordID max, CLOSURE);
 
-  void do_getdata( ptr<asrv> s, svccb *sbp, ptr<adb> db, CLOSURE );
-
+  void do_getdata (ptr<asrv> s, svccb *sbp, ptr<adb> db, CLOSURE);
 };
 
 
