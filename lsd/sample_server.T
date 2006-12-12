@@ -16,7 +16,8 @@
 const uint sample_server::NUM_KEYS_AT_A_TIME = 50;
 
 //next two methods lifted from lsd
-void sample_server::client_accept_socket (int lfd)
+void
+sample_server::client_accept_socket (int lfd)
 {
   sockaddr_un sun;
   bzero (&sun, sizeof (sun));
@@ -123,8 +124,7 @@ sample_server::dispatch (ptr<asrv> s, svccb *sbp)
   }
 }
 
-TAMED
-void
+TAMED void
 sample_server::do_getkeys (ptr<asrv> s, svccb *sbp, ptr<adb> db,
 			   chordID min, chordID max)
 {
@@ -187,8 +187,7 @@ sample_server::do_getkeys (ptr<asrv> s, svccb *sbp, ptr<adb> db,
   sbp->reply (&res);
 }
 
-TAMED
-void
+TAMED void
 sample_server::do_getdata (ptr<asrv> s, svccb *sbp, ptr<adb> db)
 {
   VARS {

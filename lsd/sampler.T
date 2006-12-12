@@ -58,8 +58,8 @@ sampler::doRPC (const rpc_program &prog,
   ::doRPC (dst, prog, procno, in, out, cb);
 }
 
-TAMED
-void sampler::update_neighbors ()
+TAMED void
+sampler::update_neighbors ()
 {
   VARS {
     ptr<chordID> id;
@@ -145,9 +145,10 @@ sampler::sample_replicas ()
   } 
 }
 
-void sampler::sample_replicas_gotneighbors (ptr<location> pred,
-					    ptr<location> succ,
-					    vec<ptr<location> > preds)
+void
+sampler::sample_replicas_gotneighbors (ptr<location> pred,
+				       ptr<location> succ,
+				       vec<ptr<location> > preds)
 {
   if (preds.size () < 2) {
     resched ();
@@ -166,20 +167,22 @@ void sampler::sample_replicas_gotneighbors (ptr<location> pred,
 			   rngmin, wrap (this, &sampler::resched)));
 }
 
-void sampler::resched ()
+void
+sampler::resched ()
 {
   delaycb (replica_timer, wrap (this, &sampler::sample_replicas));
 }
 
-void sampler::wrap_call_getkeys (ptr<location> neighbor, bool pred, 
-				 chordID rngmin, callback<void>::ref cb)
+void
+sampler::wrap_call_getkeys (ptr<location> neighbor, bool pred, 
+			    chordID rngmin, callback<void>::ref cb)
 {
   call_getkeys (neighbor, pred, rngmin, cb);
 }
 
-TAMED
-void sampler::call_getkeys (ptr<location> neighbor, bool pred, 
-			    chordID rngmin, callback<void>::ref cb)
+TAMED void
+sampler::call_getkeys (ptr<location> neighbor, bool pred, 
+		       chordID rngmin, callback<void>::ref cb)
 {
   VARS {
     vec<chordID> to_fetch;
@@ -244,12 +247,12 @@ void sampler::call_getkeys (ptr<location> neighbor, bool pred,
     _last_succ = neighbor;
     client = _succ_client;
   }
-  arg = New refcounted<getkeys_sample_arg>();
+  arg = New refcounted<getkeys_sample_arg> ();
   arg->ctype = ctype;
   arg->vnode = neighbor->vnode ();
   arg->rngmin = rngmin;
   arg->rngmax = host_loc->id ();
-  res = New refcounted<getkeys_sample_res>();
+  res = New refcounted<getkeys_sample_res> ();
 
   warn << host_loc << ":" << ctype << " Calling getkeys with min=" 
        << arg->rngmin << " and max=" << arg->rngmax << "\n";
@@ -294,8 +297,8 @@ void sampler::call_getkeys (ptr<location> neighbor, bool pred,
   }
 
   // now fetch all those keys from that pred
-  data_arg = New refcounted<getdata_sample_arg>();
-  data_res = New refcounted<getdata_sample_res>();
+  data_arg = New refcounted<getdata_sample_arg> ();
+  data_res = New refcounted<getdata_sample_res> ();
   
   data_arg->ctype = ctype;
   data_arg->vnode = neighbor->vnode ();  
