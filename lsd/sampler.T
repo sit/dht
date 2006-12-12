@@ -64,70 +64,43 @@ sampler::update_neighbors ()
   VARS {
     ptr<chordID> id;
     chord_noderes *res;
-    clnt_stat err;
+    chord_nodelistres *lst;
+    clnt_stat e1, e2;
     ptr<location> pred;
     ptr<location> succ;
-    chord_nodelistres *lst;
     vec<ptr<location> > predlist;
   }
-  // predecessor
   id = New refcounted<chordID> (host_loc->id ());
 
   res = New chord_noderes ();
-  BLOCK {
-    doRPC (chord_program_1, CHORDPROC_GETPREDECESSOR,
-	   id, res, @(err));
-  }
-  if (err) {
-    warn << "my local node is down?\n";
-    delaycb (replica_timer, wrap (this, &sampler::sample_replicas));
-    return;
-  } else {
-    chord_node n = make_chord_node (*res->resok);
-    ptr<location> x = locations->lookup_or_create (n);
-    locations->insert (x);
-    pred = x;
-  }
-  delete res;
-
-  // get predlist
   lst = New chord_nodelistres ();
   BLOCK {
-    doRPC (chord_program_1,
-	   CHORDPROC_GETPREDLIST, 
-	   id, lst, @(err));
-  }
-
-  if (!err) {
-    size_t sz = lst->resok->nlist.size ();
-    for (size_t i = 1; i < sz; i++) {
-      chord_node n = make_chord_node (lst->resok->nlist[i]);
-      ptr<location> s = locations->lookup_or_create (n);
-      locations->insert (s);
-      predlist.push_back (s);
-    }
-  } else {
-    warn << "my local node is down?\n";
-    delaycb (replica_timer, wrap (this, &sampler::sample_replicas));
-    return;
-  }
-
-  // get successor
-  res = New chord_noderes ();
-  BLOCK {
+    doRPC (chord_program_1, CHORDPROC_GETPREDLIST, 
+	   id, lst, @(e1));
     doRPC (chord_program_1, CHORDPROC_GETSUCCESSOR,
-	   id, res, @(err));
+	   id, res, @(e2));
   }
-  if (err) {
-    warn << "my local node is down?\n";
-    delaycb (replica_timer, wrap (this, &sampler::sample_replicas));
+  if (e1 || e2) {
+    warn << "my local node is down.\n";
+    resched ();
     return;
-  } else {
-    chord_node n = make_chord_node (*res->resok);
-    ptr<location> x = locations->lookup_or_create (n);
-    locations->insert (x);
-    succ = x;
   }
+
+  // Predecessor and predecessor list (for range).
+  size_t sz = lst->resok->nlist.size ();
+  for (size_t i = 1; i < sz; i++) {
+    chord_node n = make_chord_node (lst->resok->nlist[i]);
+    ptr<location> s = locations->lookup_or_create (n);
+    locations->insert (s);
+    predlist.push_back (s);
+  }
+  if (sz)
+    pred = predlist[0];
+  delete lst;
+
+  chord_node n = make_chord_node (*res->resok);
+  succ = locations->lookup_or_create (n);
+  locations->insert (succ);
   delete res;
 
   sample_replicas_gotneighbors (pred, succ, predlist);
