@@ -56,7 +56,7 @@ start (ptr<lsdctl_lsdparameters> p, clnt_stat err)
 
     //dbname format: ID.".c"
     str dbname = strbuf () << ret.x << ".c";
-    sampler *s = New sampler (locations, n, p->adbdsock, dbname, DHASH_CONTENTHASH);
+    sampler *s = New sampler (locations, n, p->adbdsock, dbname, DHASH_CONTENTHASH, p->dfrags, p->efrags);
     samplers.push_back (s);
     sserver->set_sampler( i, DHASH_CONTENTHASH, s );
 
