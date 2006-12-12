@@ -20,6 +20,7 @@ class sampler {
   ptr<adb> db;
 
   int replica_timer;
+  bool in_progress;
 
 public:
 
@@ -44,17 +45,15 @@ private:
   void doRPC (const rpc_program &prog,
 	      int procno, const void *in, void *out, aclnt_cb cb);
   
-  void sample_replicas ();
   void resched ();
+  void sample_replicas ();
   void update_neighbors (CLOSURE);
-  void sample_replicas_gotneighbors (ptr<location> pred,
-				     ptr<location> succ,
-				     vec<ptr<location> > preds);
-
-  void wrap_call_getkeys (ptr<location> pred, bool pred, chordID rngmin, 
-			  callback<void>::ref cb);
-  void call_getkeys (ptr<location> pred, bool pred, chordID rngmin, 
-		     callback<void>::ref cb, CLOSURE);
+  void call_getkeys (ptr<location> neighbor,
+		     ptr<location> last_neighbor,
+		     ptr<aclnt> client,
+		     chordID rngmin, 
+		     callback<void, ptr<aclnt> >::ref cb,
+		     CLOSURE);
 };
 
 #endif // __SAMPLER_H
