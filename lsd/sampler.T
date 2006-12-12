@@ -1,4 +1,5 @@
 // -*-c++-*-
+// vim: filetype=cpp 
 
 #include <arpc.h>
 #include <../tools/rpclib.h>

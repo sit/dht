@@ -1,4 +1,5 @@
 // -*-c++-*-
+// vim: filetype=cpp
 
 #include <chord.h>
 #include "sample_server.h"
