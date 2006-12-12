@@ -2,15 +2,11 @@
 #define __SAMPLER_H 1
 
 #include "dhash_types.h"
-#include "libadb.h"
-#include <sample_prot.h>
 #include <tame.h>
 
+class adb;
 class locationtable;
 class location;
-
-typedef callback<void, ptr<location> >::ref  cb_location;
-typedef callback<void, vec<ptr<location> > >::ref cb_locationlist;
 
 class sampler {
   ptr<locationtable> locations;
@@ -22,8 +18,6 @@ class sampler {
 
   ptr<location> host_loc;
   ptr<adb> db;
-
-  u_int cur_succ;
 
   int replica_timer;
 

@@ -4,6 +4,7 @@
 #include <arpc.h>
 #include <../tools/rpclib.h>
 #include <comm.h>
+#include "libadb.h"
 
 #include <dhash_prot.h>
 #include <locationtable.h>
@@ -23,7 +24,6 @@ sampler::sampler (ptr<locationtable> locations,
   : locations (locations), ctype (ctype), dfrags (dfrags), efrags (efrags),
     host_loc (h),
     db (New refcounted<adb> (dbpath, dbname)),
-    cur_succ (0),
     replica_timer (60), _pred_client (NULL), _last_pred (NULL), 
     _succ_client (NULL), _last_succ (NULL)
 { 
