@@ -15,13 +15,7 @@ typedef callback<void, bigint, bool, bool>::ref missingfnc_t;
 class merkle_syncer {
  private:
   ptr<bool> deleted;
-  strbuf log;
 
-  void setdone ();
-  void error (str err);
-  void missing (const merkle_hash &key);
-
- public:
   uint vnode;
   dhash_ctype ctype;
   ptr<merkle_tree> ltree; // local tree
@@ -39,6 +33,11 @@ class merkle_syncer {
 
   vec<pair<merkle_rpc_node, int> > st;
 
+  void setdone ();
+  void error (str err);
+  void missing (const merkle_hash &key);
+
+ public:
   merkle_syncer (uint vnode, dhash_ctype ctype,
 		 ptr<merkle_tree> ltree, rpcfnc_t rpcfnc, 
 		 missingfnc_t missingfnc);

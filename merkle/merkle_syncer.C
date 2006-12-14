@@ -133,9 +133,6 @@ merkle_syncer::getsummary ()
   if (fatal_err)
     sb << fatal_err;
 
-  if (0)
-    sb  << "<log " << log << ">\n";
-
   return sb;
 }
 
