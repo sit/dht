@@ -38,6 +38,9 @@ class merkle_syncer {
   void setdone ();
   void error (str err);
   void missing (const merkle_hash &key);
+  void sendnode_cb (ptr<bool> deleted,
+                    ref<sendnode_arg> arg, ref<sendnode_res> res, 
+		    clnt_stat err);
 
  public:
   merkle_syncer (uint vnode, dhash_ctype ctype,
@@ -48,15 +51,11 @@ class merkle_syncer {
   void dump ();
   str getsummary ();
   void doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb);
-  void send_some ();
   void next (void);
 
   bool done () { return sync_done; }
   void sync (bigint rngmin, bigint rngmax, cbi cb = cbi_null);
   void sendnode (u_int depth, const merkle_hash &prefix);
-  void sendnode_cb (ptr<bool> deleted,
-                    ref<sendnode_arg> arg, ref<sendnode_res> res, 
-		    clnt_stat err);
 };
 
 
