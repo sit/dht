@@ -237,10 +237,8 @@ syncer::doRPC_unbundler (RPC_delay_args *args)
 
 void
 syncer::missing (ptr<location> from, ptr<merkle_tree> tmptree,
-		 bigint key, bool missing_local,
-		 bool round_over)
+		 bigint key, bool missing_local)
 {
-  if (round_over) return;
   // if he tells us that we're missing it, then he has it.
   // otherwise, we found out he doesn't have it.
   // XXX this switch business is kinda gross.

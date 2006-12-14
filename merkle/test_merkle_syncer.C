@@ -22,10 +22,8 @@ vec<chordID> keys_for_server;
 vec<chordID> keys_for_syncer;
 
 static void
-sendblock (bigint blockID, bool missingLocal, bool done)
+sendblock (bigint blockID, bool missingLocal)
 {
-  if (done)
-    return;
   if (missingLocal)
     keys_for_syncer.push_back (blockID);
   else

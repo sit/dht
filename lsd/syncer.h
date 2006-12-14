@@ -65,5 +65,5 @@ protected:
 
   void doRPC_unbundler (RPC_delay_args *args);
   void missing (ptr<location> from, ptr<merkle_tree> tmptree,
-		bigint key, bool missing_local, bool round_over);
+		bigint key, bool missing_local);
 };

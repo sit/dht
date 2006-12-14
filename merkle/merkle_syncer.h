@@ -10,7 +10,7 @@
 // see comment in merkle_syncer::doRPC for this work around.
 struct RPC_delay_args;
 typedef callback<void, RPC_delay_args *>::ref rpcfnc_t;
-typedef callback<void, bigint, bool, bool>::ref missingfnc_t;
+typedef callback<void, bigint, bool>::ref missingfnc_t;
 
 class merkle_syncer {
  private:
@@ -33,6 +33,8 @@ class merkle_syncer {
 
   vec<pair<merkle_rpc_node, int> > st;
 
+  cbi completecb;
+
   void setdone ();
   void error (str err);
   void missing (const merkle_hash &key);
@@ -50,7 +52,7 @@ class merkle_syncer {
   void next (void);
 
   bool done () { return sync_done; }
-  void sync (bigint rngmin, bigint rngmax);
+  void sync (bigint rngmin, bigint rngmax, cbi cb = cbi_null);
   void sendnode (u_int depth, const merkle_hash &prefix);
   void sendnode_cb (ptr<bool> deleted,
                     ref<sendnode_arg> arg, ref<sendnode_res> res, 

@@ -65,7 +65,7 @@ merkle_syncer::merkle_syncer (uint vnode, dhash_ctype ctype,
 			      ptr<merkle_tree> ltree, 
 			      rpcfnc_t rpcfnc, missingfnc_t missingfnc)
   : vnode (vnode), ctype (ctype), ltree (ltree), rpcfnc (rpcfnc), 
-    missingfnc (missingfnc)
+    missingfnc (missingfnc), completecb (cbi_null)
 {
   deleted = New refcounted<bool> (false);
   fatal_err = NULL;
@@ -78,10 +78,11 @@ merkle_syncer::~merkle_syncer ()
 }
 
 void
-merkle_syncer::sync (bigint rngmin, bigint rngmax)
+merkle_syncer::sync (bigint rngmin, bigint rngmax, cbi cb)
 {
   local_rngmin = rngmin;
   local_rngmax = rngmax;
+  completecb = cb;
 
   // start at the root of the merkle tree
   sendnode (0, 0);
@@ -109,7 +110,9 @@ merkle_syncer::doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb)
 void
 merkle_syncer::setdone ()
 {
-  (*missingfnc) (0, false, true);
+  if (completecb != cbi_null) 
+    // Return 0 if everything was ok, 1 otherwise.
+    completecb (fatal_err != NULL);
   sync_done = true;
 }
 
@@ -362,7 +365,7 @@ compare_keylists (vec<chordID> lkeys,
 	betweenbothincl (rngmin, rngmax, lkeys[i])) {
       trace << "remote missing [" << rngmin << ", " 
 	    << rngmax << "] key=" << lkeys[i] << "\n";
-      (*missingfnc) (lkeys[i], false, false);
+      (*missingfnc) (lkeys[i], false);
     } else {
       if (rkeys[lkeys[i]]) trace << "remote has " << lkeys[i] << "\n";
       else trace << "out of range: " << lkeys[i] << "\n";
@@ -375,7 +378,7 @@ compare_keylists (vec<chordID> lkeys,
   while (slot) {
     trace << "local missing [" << rngmin << ", " 
 	  << rngmax << "] key=" << slot->key << "\n";
-    (*missingfnc) (slot->key, true, false);
+    (*missingfnc) (slot->key, true);
     slot = rkeys.next (slot);
   }
    
