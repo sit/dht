@@ -23,6 +23,7 @@ int main (int argc, char **argv) {
     c = make_randomID ();
     warn << "inserting " << c << " (" << i << ")\n";
     tree->insert (c);
+    tree->check_invariants();
   }
 
   // lookups

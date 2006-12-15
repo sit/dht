@@ -508,6 +508,7 @@ main (int argc, char **argv)
   toggle_profiling (); // turn profiling off
 #endif
 
+  mp_set_memory_functions (NULL, simple_realloc, NULL);
   setprogname (argv[0]);
   mp_clearscrub ();
   // sfsconst_init ();

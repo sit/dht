@@ -560,7 +560,7 @@ merkle_tree_disk::leaf2internal (uint depth, merkle_node_disk *n)
       child->add_key (v[j]);
     }
     added += child->count;
-    n->rehash ();
+    child->rehash ();
     n->set_child (child, i);
     child->write_out ();
     delete child;

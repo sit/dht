@@ -62,7 +62,7 @@ start (ptr<lsdctl_lsdparameters> p, clnt_stat err)
   ret.r.hostname = p->addr.hostname;
   ret.r.port = p->addr.port;
 
-  server = New refcounted<merkle_disk_server> (p->addr.port+2, p->nvnodes);
+  server = New refcounted<merkle_disk_server> (p->addr.port-1, p->nvnodes);
 
   for (int i = 0; i < p->nvnodes; i++) {
     ret.vnode_num = i;

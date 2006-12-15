@@ -168,7 +168,7 @@ syncer::sync_replicas_gotsucclist (ptr<location> pred,
   ptr<location> neighbor = succs[cur_succ];
   curr_dst = neighbor;
   tcpconnect (neighbor->address ().hostname,
-	      neighbor->address ().port+2,
+	      neighbor->address ().port-1,
 	      wrap (this, &syncer::tcp_connected, pred, succs));
 }
 
@@ -177,7 +177,7 @@ syncer::tcp_connected (ptr<location> pred,
 		       vec<ptr<location> > succs, int fd)
 {
   if (fd < 0) {
-    warn << "couldn't connect to neighbor, giving up\n";
+    warn << "couldn't connect to neighbor " << curr_dst << ", giving up\n";
     delaycb (replica_timer, wrap (this, &syncer::sync_replicas));
     return;
   }

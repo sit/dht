@@ -1414,6 +1414,7 @@ main (int argc, char **argv)
 {
 
   setprogname (argv[0]);
+  mp_set_memory_functions (NULL, simple_realloc, NULL);
 
   char ch;
   str db_name = "/var/tmp/db";
