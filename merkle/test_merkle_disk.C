@@ -1,5 +1,6 @@
 #include "merkle_tree_disk.h"
 #include <id_utils.h>
+#include <rxx.h>
 
 int main (int argc, char **argv) {
 
@@ -13,6 +14,40 @@ int main (int argc, char **argv) {
   merkle_tree *tree = New merkle_tree_disk ("/tmp/index.mrk", 
 					    "/tmp/internal.mrk",
 					    "/tmp/leaf.mrk", true);
+
+  // if a trace is provided, execute the trace
+  if (argc > 2) {
+    str filename = argv[2];
+    str file = file2str (filename);
+    rxx newline ("\\n");
+    vec<str> lines;
+    split (&lines, newline, file);
+    
+    for (uint i = 0; i < lines.size(); i++) {
+      if (i > num_keys) {
+	warn << "did enough keys!\n";
+	exit(0);
+      }
+      static const rxx space_rx ("\\s+");
+      vec<str> parts;
+      split (&parts, space_rx, lines[i]);
+      if (parts.size() != 2) {
+	continue;
+      }
+      chordID c;
+      str2chordID (parts[1], c);
+      if (parts[0] == "I") {
+	warn << i << ") going to insert " << c << "\n";
+	tree->insert (c);
+      } else {
+	warn << i << ") going to remove " << c << "\n";
+	tree->remove (c);
+      }
+      tree->check_invariants ();
+    }
+    exit(0);
+  }
+
 
   //tree->dump ();
 

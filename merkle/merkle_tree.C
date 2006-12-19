@@ -107,7 +107,9 @@ merkle_tree::check_invariants ()
   if (!do_rehash)
     return;
   merkle_hash prefix (0);
-  _hash_tree (0, prefix, get_root(), true);
+  merkle_node *root = get_root ();
+  _hash_tree (0, prefix, root, true);
+  lookup_release (root);  // semantic mismatch, I know, I know
 }
 
 void
