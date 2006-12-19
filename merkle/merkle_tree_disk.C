@@ -376,18 +376,6 @@ merkle_tree_disk::make_node (u_int32_t pointer)
   }
 }
 
-void
-merkle_tree_disk::free_block (u_int32_t pointer)
-{
-  // even == internal, odd == leaf
-  if (pointer % 2 == 0) {
-    return free_block (pointer >> 1, MERKLE_DISK_INTERNAL);
-  } else {
-    return free_block (pointer >> 1, MERKLE_DISK_LEAF);
-  }
-}
-
-
 // returns a block_no without the type bit on the end
 void
 merkle_tree_disk::free_block (u_int32_t block_no, MERKLE_DISK_TYPE type)
@@ -480,7 +468,7 @@ merkle_tree_disk::remove (u_int depth, merkle_hash& key,
     uint added = 0;
     for (uint i = 0; i < 64; i++) {
       merkle_node_disk *child = (merkle_node_disk *) nd->child(i);
-      free_block (child->get_block_no());
+      free_block (child->get_block_no(), MERKLE_DISK_LEAF);
       assert (child->isleaf ());
       merkle_key *k = child->keylist.first ();
       uint j = 0;

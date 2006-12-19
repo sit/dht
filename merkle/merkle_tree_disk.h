@@ -94,7 +94,6 @@ private:
   merkle_node *make_node (u_int32_t block_no, MERKLE_DISK_TYPE type);
   u_int32_t alloc_free_block (MERKLE_DISK_TYPE type);
   void free_block (u_int32_t block_no, MERKLE_DISK_TYPE type);
-  void free_block (u_int32_t pointer);
   void write_metadata ();
   void leaf2internal (uint depth, merkle_node_disk *n);
   void switch_root (merkle_node_disk *n);
