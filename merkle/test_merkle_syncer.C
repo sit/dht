@@ -2,6 +2,7 @@
 #include <modlogger.h>
 #include <id_utils.h>
 #include "merkle.h"
+#include "merkle_tree_disk.h"
 #include <location.h>
 #include <transport_prot.h>
 #include <comm.h>
@@ -20,6 +21,13 @@ static struct {
 
 vec<chordID> keys_for_server;
 vec<chordID> keys_for_syncer;
+
+str server_index = "/tmp/server.index.mrk";
+str server_internal = "/tmp/server.internal.mrk";
+str server_leaf = "/tmp/server.leaf.mrk";
+str syncer_index = "/tmp/syncer.index.mrk";
+str syncer_internal = "/tmp/syncer.internal.mrk";
+str syncer_leaf = "/tmp/syncer.leaf.mrk";
 
 static void
 sendblock (bigint blockID, bool missingLocal)
@@ -141,6 +149,15 @@ finish ()
   SERVER.srv  = NULL;
   SYNCER.tree = NULL;
   SERVER.tree = NULL;
+
+  unlink (server_index);
+  unlink (server_internal);
+  unlink (server_leaf);
+
+  unlink (syncer_index);
+  unlink (syncer_internal);
+  unlink (syncer_leaf);
+
 }
 
 void
@@ -149,8 +166,12 @@ setup ()
   warn << " => setup() +++++++++++++++++++++++++++\n";
   err_flush ();
 
-  SERVER.tree = New refcounted<merkle_tree> ();
-  SYNCER.tree = New refcounted<merkle_tree> ();
+  SERVER.tree = New refcounted<merkle_tree_disk> (server_index, 
+						  server_internal, server_leaf,
+						  true);
+  SYNCER.tree = New refcounted<merkle_tree_disk> (syncer_index, 
+						  syncer_internal, syncer_leaf,
+						  true);
 
   // these are closed by axprt_stream's dtor, right? 
   int fds[2];
@@ -195,8 +216,12 @@ void
 dump_stats ()
 {
   warn << "\n\n=======================================================================\n";
-  warn << "SERVER.tree->root " << SERVER.tree->root->hash << " cnt " << SERVER.tree->root->count << "\n";
-  warn << "SYNCER.tree->root " << SYNCER.tree->root->hash << " cnt " << SYNCER.tree->root->count << "\n";
+  merkle_node *serv_root = SERVER.tree->get_root();
+  merkle_node *sync_root = SYNCER.tree->get_root();
+  warn << "SERVER.tree->root " << serv_root->hash << " cnt " << serv_root->count << "\n";
+  warn << "SYNCER.tree->root " << sync_root->hash << " cnt " << sync_root->count << "\n";
+  SERVER.tree->lookup_release(serv_root);
+  SYNCER.tree->lookup_release(sync_root);
 
   warn  << "+++++++++++++++++++++++++SERVER.tree++++++++++++++++++++++++++++++\n";
   SERVER.tree->compute_stats ();
