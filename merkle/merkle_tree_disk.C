@@ -712,7 +712,8 @@ merkle_tree_disk::database_get_keys (u_int depth, const merkle_hash &prefix)
 
 bool
 get_keyrange_recurs (merkle_hash min, chordID max, u_int n, 
-		     uint depth, vec<chordID> *keys, merkle_node_disk *node)
+		     uint depth, vec<chordID> *keys, merkle_node_disk *node,
+		     bool start_left)
 {
   // go down until you find the leaf responsible for min
   // add all of its keys up to n, less than max.  If you haven't
@@ -727,25 +728,41 @@ get_keyrange_recurs (merkle_hash min, chordID max, u_int n,
     merkle_key *last_key = NULL;
 
     while (k != NULL && keys->size () < n) {
-      if (betweenbothincl (min_id, max, k->id))
+      if (betweenbothincl (min_id, max, k->id)) {
 	keys->push_back (k->id);
+      }
       last_key = k;
       k = node->keylist.next (k);
     }
     
-    if (last_key != NULL && betweenbothincl (min_id, last_key->id, max)) {
+    // it's only over the maximum if:
+    //   a) there's a key in this node, AND
+    //   b) some other node has already been tried, AND
+    //   c) that key is greater than max
+    if (last_key != NULL && start_left && 
+	betweenbothincl (min_id, last_key->id, max)) {
       over_max = true;
     } else {
       over_max = false;
     }
     // don't need a special case here, since we look at all the keys
   } else {
-    bool over_max = false;
     u_int32_t branch = min.read_slot (depth);
+    if (start_left) {
+      branch = 0;
+    }
+    bool first_time = true;
 
     while (keys->size () < n && branch < 64 && !over_max) {
       merkle_node_disk *child = (merkle_node_disk *) node->child (branch);
-      over_max = get_keyrange_recurs (min, max, n, depth+1, keys, child);
+      bool sl = start_left;
+      // if we've already gone down one branch at this depth, don't read the
+      // slot for the starting branch on any branch
+      if (!first_time) {
+	sl = true;
+      }
+      over_max = get_keyrange_recurs (min, max, n, depth+1, keys, child, sl);
+      first_time = false;
       branch++;
     }
 
@@ -753,7 +770,7 @@ get_keyrange_recurs (merkle_hash min, chordID max, u_int n,
     if (depth == 0 && !over_max && keys->size () < n && 
 	betweenrightincl (tobigint (min), max, 0))
     {
-      over_max = get_keyrange_recurs (0, max, n, depth, keys, node);
+      over_max = get_keyrange_recurs (0, max, n, depth, keys, node, true);
     }
   }
 
@@ -768,7 +785,7 @@ merkle_tree_disk::get_keyrange (chordID min, chordID max, u_int n)
   merkle_node *root = get_root ();
   if(root->count > 0) {
     get_keyrange_recurs (to_merkle_hash(min), max, n, 0, &keys, 
-			 (merkle_node_disk *) root);
+			 (merkle_node_disk *) root, false);
   }
   delete root;
 

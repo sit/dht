@@ -389,6 +389,16 @@ merkle_tree::get_keyrange (chordID min, chordID max, u_int n)
   return keys;
 }
 
+bool
+merkle_tree::key_exists (chordID id, uint aux)
+{
+  chordID key = id;
+  key >>= 32;
+  key <<= 32;
+  assert (key > 0);
+  key |= aux;
+  return key_exists (key);
+}
 
 void
 merkle_tree::dump ()

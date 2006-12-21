@@ -80,6 +80,7 @@ public:
 					      const merkle_hash &prefix);
   vec<chordID> database_get_IDs (u_int depth, const merkle_hash &prefix);
   virtual bool key_exists (chordID key) { return keylist[key] != NULL; };
+  bool key_exists (chordID key, uint aux);
   virtual vec<chordID> get_keyrange (chordID min, chordID max, u_int n);
 
   void dump ();
