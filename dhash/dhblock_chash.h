@@ -9,7 +9,7 @@ struct dhblock_chash : public dhblock {
   str result_str;
   bool done_flag;
 
-  dhblock_chash::dhblock_chash () : done_flag (false) {};
+  dhblock_chash () : done_flag (false) {};
 
   int process_download (blockID k, str frag);
   str produce_block_data ();

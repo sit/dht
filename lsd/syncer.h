@@ -33,7 +33,7 @@ class syncer {
 
 public:
 
-  syncer::syncer (ptr<locationtable> locations,
+  syncer (ptr<locationtable> locations,
 		  ptr<location> h,
 		  str dbdir,
 		  str dbname,

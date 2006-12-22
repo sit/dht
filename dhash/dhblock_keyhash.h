@@ -48,7 +48,7 @@ public:
 };
 
 struct dhblock_keyhash : public dhblock_replicated {
-  dhblock_keyhash::dhblock_keyhash () : dhblock_replicated () {};
+  dhblock_keyhash () : dhblock_replicated () {};
   
   str produce_fragment (ptr<dhash_block> block, int n);
 

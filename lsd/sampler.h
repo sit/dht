@@ -24,7 +24,7 @@ class sampler {
 
 public:
 
-  sampler::sampler (ptr<locationtable> locations,
+  sampler (ptr<locationtable> locations,
 		  ptr<location> h,
 		  str dbname,
 		  str dbext,
