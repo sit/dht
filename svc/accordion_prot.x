@@ -3,7 +3,8 @@
 
 struct accordion_fillgap_arg {
   chord_node_wire end;
-  unsigned para; //sender's parallelism, used to determine the freshness of the replied routing entries
+  /* sender's parallelism, used to determine the freshness of the replied routing entries */
+  unsigned para;
 };
 
 program ACCORDION_PROGRAM {
