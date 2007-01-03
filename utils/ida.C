@@ -198,11 +198,17 @@ Ida::gen_frag (int m, const str &in)
 inline u_long
 Ida::unpackone (const str &in, int &inp)
 {
-  // XXX handle cases where input string is too short
+  int lastp = in.len ();
+  if (inp >= lastp)
+    return 0;
   u_long x;
-  if (in[inp] != magic)
+  if (in[inp] != magic) {
+    if (inp + 2 > lastp)
+      return 0;
     x = ((u_char) in[inp++] << 8) | (u_char) in[inp++];
-  else {
+  } else {
+    if (inp + 4 > lastp)
+      return 0;
     inp++;
     x = (((u_char) in[inp++] << 16) |
 	 ((u_char) in[inp++] <<  8) |
@@ -219,12 +225,12 @@ Ida::unpack (const str &in, vec<u_long> &out)
   u_long n = unpackone (in, inp);
   
   inp = 0;
-  out.setsize (n);
-  for (u_long i = 0; i < n; i++) {
-    out[i] = unpackone (in, inp);
+  out.clear ();
+  for (u_long i = 0; i < n && inp < (int) in.len (); i++) {
+    out.push_back (unpackone (in, inp));
   }
 
-  return true;
+  return inp == (int) in.len ();
 }
 
 static void
@@ -314,7 +320,7 @@ Ida::reconstruct (const vec<str> &f, strbuf &out)
 
     // Extract row of encode matrix
     vec<u_long> arow;
-    for (size_t j = 0; j < m; j++) {
+    for (size_t j = 0; j < m && inp < (int) in.len (); j++) {
       arow.push_back (unpackone (in, inp));
     }
 
@@ -333,9 +339,15 @@ Ida::reconstruct (const vec<str> &f, strbuf &out)
 
     // Extract encoded block
     vec<u_long> drow;
-    while (len > 0) {
+    while (len > 0 && inp < (int) in.len ()) {
       drow.push_back (unpackone (in, inp));
       len--;
+    }
+    if (len) {
+      idatrace << "fragment " << i << " did not have enough elements ("
+	       << len << " missing)!\n";
+      drop (frags, i);
+      continue;
     }
 
     // If all good, push things onto our to-be-decoded matrix.
