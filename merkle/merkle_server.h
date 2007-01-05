@@ -18,9 +18,13 @@ class merkle_server {
 
   void dispatch (user_args *a);
   merkle_server (ptr<merkle_tree> ltree);
-  void handle_get_keys( getkeys_arg *arg, getkeys_res *res );
-  void handle_send_node( sendnode_arg *arg, sendnode_res *res );
+  void handle_get_keys (getkeys_arg *arg, getkeys_res *res);
+  void handle_send_node (sendnode_arg *arg, sendnode_res *res);
 
+  static void handle_get_keys (ptr<merkle_tree> ltree,
+      getkeys_arg *arg, getkeys_res *res);
+  static void handle_send_node (ptr<merkle_tree> ltree,
+      sendnode_arg *arg, sendnode_res *res);
 };
 
 

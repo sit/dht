@@ -19,6 +19,19 @@ merkle_server::merkle_server (ptr<merkle_tree> ltree) : ltree (ltree)
 void
 merkle_server::handle_get_keys (getkeys_arg *arg, getkeys_res *res)
 {
+  handle_get_keys (ltree, arg, res);
+}
+
+void
+merkle_server::handle_send_node (sendnode_arg *arg, sendnode_res *res)
+{
+  handle_send_node (ltree, arg, res);
+}
+
+void
+merkle_server::handle_get_keys (ptr<merkle_tree> ltree,
+    getkeys_arg *arg, getkeys_res *res)
+{
   //get the first 65 keys in the range. We'll return 64, but we get
   // 65 so we can tell if we got them all
   vec<chordID> keys = ltree->get_keyrange (arg->rngmin, arg->rngmax, 65);
@@ -33,7 +46,8 @@ merkle_server::handle_get_keys (getkeys_arg *arg, getkeys_res *res)
 }
 
 void
-merkle_server::handle_send_node (sendnode_arg *arg, sendnode_res *res)
+merkle_server::handle_send_node (ptr<merkle_tree> ltree,
+    sendnode_arg *arg, sendnode_res *res)
 {
   merkle_rpc_node *rnode = &arg->node;
   merkle_node *lnode;
@@ -70,7 +84,7 @@ merkle_server::dispatch (user_args *sbp)
     {
       sendnode_arg *arg = sbp->Xtmpl getarg<sendnode_arg> ();
       sendnode_res res (MERKLE_OK);
-      handle_send_node (arg, &res);
+      handle_send_node (ltree, arg, &res);
       sbp->reply (&res);
       break;
     }
@@ -79,7 +93,7 @@ merkle_server::dispatch (user_args *sbp)
     {
       getkeys_arg *arg = sbp->Xtmpl getarg<getkeys_arg> ();
       getkeys_res res (MERKLE_OK);
-      handle_get_keys (arg, &res);
+      handle_get_keys (ltree, arg, &res);
       sbp->reply (&res);
       break;
     }
