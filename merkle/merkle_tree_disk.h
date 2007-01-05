@@ -98,6 +98,8 @@ private:
   void leaf2internal (uint depth, merkle_node_disk *n);
   void switch_root (merkle_node_disk *n);
 
+  void init ();
+
 public:
   vec<merkle_hash> database_get_keys (u_int depth,
 					      const merkle_hash &prefix);
@@ -105,7 +107,8 @@ public:
   bool key_exists (chordID key);
   vec<chordID> get_keyrange (chordID min, chordID max, u_int n);
 
-  merkle_tree_disk (str index, str internal, str leaf, bool writer = false );
+  merkle_tree_disk (str index, str internal, str leaf, bool writer = false);
+  merkle_tree_disk (str path, bool writer = false);
   ~merkle_tree_disk ();
   int insert (merkle_hash &key);
   merkle_node *get_root ();

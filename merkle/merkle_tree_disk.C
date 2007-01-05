@@ -244,13 +244,8 @@ void merkle_node_disk::leaf2internal () {
 
 //////////////// merkle_tree_disk /////////////////
 
-merkle_tree_disk::merkle_tree_disk (str index, str internal, str leaf,
-				    bool writer) :
-  merkle_tree (),
-  _index_name (index), 
-  _internal_name (internal),
-  _leaf_name (leaf), 
-  _writer (writer)
+void
+merkle_tree_disk::init ()
 {
   _internal = open_file (_internal_name);
   _leaf = open_file (_leaf_name);
@@ -262,6 +257,27 @@ merkle_tree_disk::merkle_tree_disk (str index, str internal, str leaf,
   if (_writer) {
     write_metadata ();
   }
+}
+
+merkle_tree_disk::merkle_tree_disk (str path, bool writer) :
+  merkle_tree (),
+  _index_name (strbuf () << path << "/index.mrk"),
+  _internal_name (strbuf () << path << "/internal.mrk"),
+  _leaf_name (strbuf () << path << "/leaf.mrk"),
+  _writer (writer)
+{
+  init ();
+}
+
+merkle_tree_disk::merkle_tree_disk (str index, str internal, str leaf,
+				    bool writer) :
+  merkle_tree (),
+  _index_name (index), 
+  _internal_name (internal),
+  _leaf_name (leaf), 
+  _writer (writer)
+{
+  init ();
 }
 
 merkle_tree_disk::~merkle_tree_disk ()
