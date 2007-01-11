@@ -87,6 +87,6 @@ ETAGS_ARGS='-C /dev/null'
 AC_SUBST(ETAGS_ARGS)
 
 AC_OUTPUT(Makefile svc/Makefile utils/Makefile 
-	dhash/Makefile lsd/Makefile
+	dhash/Makefile maint/Makefile lsd/Makefile
 	merkle/Makefile chord/Makefile 
 	tools/Makefile) 
