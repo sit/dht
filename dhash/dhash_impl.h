@@ -84,27 +84,11 @@ class dhash_impl : public dhash, public virtual refcount {
   void doRPC (const chord_node_wire &n, const rpc_program &prog, int procno,
 	      ptr<void> in, void *out, aclnt_cb cb,
 	      cbtmo_t cb_tmo = NULL);
-  void doRPC_reply (svccb *sbp, void *res, 
-		    const rpc_program &prog, int procno);
   void dispatch (user_args *a);
 
   void storesvc_cb (user_args *sbp, s_dhash_insertarg *arg, 
 		    bool already_present, dhash_stat err);
-  dhash_fetchiter_res * block_to_res (dhash_stat err, s_dhash_fetch_arg *arg,
-				      str val);
-  void fetchiter_gotdata_cb (cbupcalldone_t cb, s_dhash_fetch_arg *farg,
-			     str val, dhash_stat stat);
-  void fetchiter_sbp_gotdata_cb (user_args *sbp, s_dhash_fetch_arg *farg,
-				 str val, dhash_stat stat);
-  void sent_block_cb (dhash_stat *s, clnt_stat err);
-
-  void fetch (blockID id, cbvalue cb);
-  void fetch_after_db (blockID id, cbvalue cb,
-		       adb_status stat, chordID k, str data);
-
   void store (s_dhash_insertarg *arg, cbstore cb);
-  
-  bool key_present (const blockID &n);
 
   void dofetchrec (user_args *sbp, dhash_fetchrec_arg *arg);
   void dofetchrec_nexthop (user_args *sbp, dhash_fetchrec_arg *arg,
