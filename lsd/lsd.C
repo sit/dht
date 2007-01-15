@@ -467,16 +467,23 @@ static void
 usage ()
 {
   warnx << "Usage: " << progname << " -j hostname:port -p port\n"
-    "\t[-d <dbprefix>]\n" 
-    "\t[-v <number of vnodes>]\n"
-    "\t[-S <sock>]\n"
-    "\t[-C <ctlsock>]\n"
-    "\t[-l <locally bound IP>]\n"
-    "\t[-m successors|chord|pns|pnsrec|...]\n"
-    "\t[-s <server select mode>]\n"
-    "\t[-L <warn/fatal/panic output file name>]\n"
-    "\t[-T <trace file name (aka new log)>]\n"
-    "\t[-O <config file>]\n"
+    "Options:\n"
+    "  DHash/Chord configuration:\n"
+    "    [-v <number of vnodes>]\n"
+    "    [-l <locally bound IP>]\n"
+    "    [-m successors|chord|pns|pnsrec|...]\n"
+    "    [-s <server select mode>]\n"
+    "  Control sockets:\n"
+    "    [-d <adbd socket path>]\n" 
+    "    [-S <dhashgateway sock path>]\n"
+    "    [-C <lsdctl sock path>]\n"
+    "  Misc configuration:\n"
+    "    [-D] # Daemonize\n"
+    "    [-H <heartbeatfile>]\n"
+    "    [-L <warn/fatal/panic output file name>]\n"
+    "    [-t] # Enable trace logging\n"
+    "    [-T <trace file name (aka new log)>]\n"
+    "    [-O <config file>]\n"
     ;
   exit (1);
 }
