@@ -66,8 +66,8 @@ merge_data (chordID key, str new_data, str prev_data)
 dhblock_noauth_srv::dhblock_noauth_srv (ptr<vnode> node, 
 					ptr<dhashcli> cli,
 					str desc, 
-					str dbname, str dbext, cbv donecb) :
-  dhblock_replicated_srv (node, cli, desc, dbname, dbext, DHASH_NOAUTH, donecb)
+					str dbsock, str dbname, cbv donecb) :
+  dhblock_replicated_srv (node, cli, desc, dbsock, dbname, DHASH_NOAUTH, donecb)
 {
 }
 

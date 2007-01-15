@@ -51,7 +51,7 @@ protected:
 
 public:
   dhblock_replicated_srv (ptr<vnode> node, ptr<dhashcli> cli,
-			  str dbname, str dbext, str desc,
+			  str desc, str dbsock, str dbname,
                           dhash_ctype ctype, cbv donecb);
 
   virtual void store (chordID key, str d, cb_dhstat cb);

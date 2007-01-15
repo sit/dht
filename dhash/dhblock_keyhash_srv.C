@@ -19,9 +19,9 @@
 dhblock_keyhash_srv::dhblock_keyhash_srv (ptr<vnode> node,
 					  ptr<dhashcli> cli,
 				          str desc,
-					  str dbname,
-					  str dbext, cbv donecb) :
-  dhblock_replicated_srv (node, cli, desc, dbname, dbext, DHASH_KEYHASH, 
+					  str dbsock,
+					  str dbname, cbv donecb) :
+  dhblock_replicated_srv (node, cli, desc, dbsock, dbname, DHASH_KEYHASH, 
 			  donecb)
 {
 }

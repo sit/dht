@@ -495,7 +495,7 @@ int wellknownport = 0;
 int nreplica = 0;
 bool replicate = true;
 bool do_daemonize = false;
-str db_name = "/tmp/db-sock";
+str dbsock = "/tmp/db-sock";
 str my_name;
 
 char *cffile = NULL;
@@ -536,7 +536,7 @@ main (int argc, char **argv)
       do_daemonize = true;
       break;
     case 'd':
-      db_name = optarg;
+      dbsock = optarg;
       break;
     case 'f':
       warnx << "-f mode is no longer supported... using -F.\n";
@@ -699,7 +699,7 @@ main (int argc, char **argv)
                                      max_loccache);
   for (int i = 0; i < vnodes; i++) {
     ptr<vnode> v = chordnode->get_vnode (i);
-    dh.push_back (dhash::produce_dhash (v, db_name, wrap(&finish_start)));
+    dh.push_back (dhash::produce_dhash (v, dbsock, wrap (&finish_start)));
   }
 
   info << "starting amain.\n";
@@ -731,7 +731,7 @@ void finish_start ()
 
   // Initialize for use by LSDCTL_GETLSDPARAMETERS
   parameters.nvnodes       = vnodes;
-  parameters.adbdsock      = db_name;
+  parameters.adbdsock      = dbsock;
   Configurator::only ().get_int ("dhash.efrags", parameters.efrags);
   Configurator::only ().get_int ("dhash.dfrags", parameters.dfrags);
   Configurator::only ().get_int ("dhash.replica", parameters.nreplica);

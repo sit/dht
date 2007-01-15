@@ -71,7 +71,7 @@ class dhblock_srv : virtual public refcount {
 
  public:
   dhblock_srv (ptr<vnode> node, ptr<dhashcli> cli,
-	       str desc, str dbpath, str dbtype, bool hasaux, cbv donecb);
+	       str desc, str dbsock, str dbname, bool hasaux, cbv donecb);
   virtual ~dhblock_srv ();
 
   virtual void start (bool randomize);

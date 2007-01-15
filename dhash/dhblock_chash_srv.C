@@ -45,15 +45,15 @@ struct rjchash : public repair_job {
 dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
 				      ptr<dhashcli> cli,
 				      str desc,
+				      str dbsock,
 				      str dbname,
-				      str dbext,
 				      cbv donecb) :
-  dhblock_srv (node, cli, desc, dbname, dbext, false, donecb),
+  dhblock_srv (node, cli, desc, dbsock, dbname, false, donecb),
   cache_db (NULL),
   pmaint_obj (NULL)
 {
   pmaint_obj = New pmaint (cli, node, mkref (this)); 
-  cache_db = New refcounted<adb> (dbname, "ccache");
+  cache_db = New refcounted<adb> (dbsock, "ccache");
 
   (*donecb)();
 

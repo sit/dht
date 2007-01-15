@@ -13,7 +13,7 @@
 dhblock_srv::dhblock_srv (ptr<vnode> node,
 			  ptr<dhashcli> cli,
 		          str desc,
-			  str dbpath,
+			  str dbsock,
 			  str dbname,
 			  bool hasaux,
 			  cbv dcb) :
@@ -24,8 +24,8 @@ dhblock_srv::dhblock_srv (ptr<vnode> node,
   cli (cli),
   donecb (dcb)
 {
-  db = New refcounted<adb> (dbpath, dbname, hasaux);
-  warn << "opened " << dbpath << " with space " << dbname 
+  db = New refcounted<adb> (dbsock, dbname, hasaux);
+  warn << "opened " << dbsock << " with space " << dbname 
        << (hasaux ? " (hasaux)\n" : "\n");
 }
 

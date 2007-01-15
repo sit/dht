@@ -8,5 +8,5 @@ class dhblock_keyhash_srv : public dhblock_replicated_srv
 
 public:
   dhblock_keyhash_srv (ptr<vnode> node, ptr<dhashcli> cli,
-		       str desc, str dbname, str dbext, cbv donecb);
+		       str desc, str dbsock, str dbname, cbv donecb);
 };

@@ -110,7 +110,7 @@ dhash_impl::~dhash_impl ()
 {
 }
 
-dhash_impl::dhash_impl (ptr<vnode> node, str dbname, cbv dcb) :
+dhash_impl::dhash_impl (ptr<vnode> node, str dbsock, cbv dcb) :
   host_node (node),
   cli (NULL),
   bytes_stored (0),
@@ -123,28 +123,26 @@ dhash_impl::dhash_impl (ptr<vnode> node, str dbname, cbv dcb) :
   rpc_answered (0),
   donecb (dcb)
 {
-
   ptr<dhblock_srv> srv;
 
   cli = New refcounted<dhashcli> (host_node, mkref(this));
 
   ptr<uint> num_to_go = New refcounted<uint>;
   (*num_to_go) = 3;
-  str ext = strbuf () << host_node->my_ID () << ".c";
+  str dbname = strbuf () << host_node->my_ID () << ".c";
   srv = New refcounted<dhblock_chash_srv> (node, cli, "db file",
-      dbname, ext, wrap (this, &dhash_impl::srv_ready, num_to_go));
+      dbsock, dbname, wrap (this, &dhash_impl::srv_ready, num_to_go));
   blocksrv.insert (DHASH_CONTENTHASH, srv);
 
-  ext = strbuf () << host_node->my_ID () << ".k";
+  dbname = strbuf () << host_node->my_ID () << ".k";
   srv = New refcounted<dhblock_keyhash_srv> (node, cli, "keyhash db file",
-      dbname, ext, wrap (this, &dhash_impl::srv_ready, num_to_go));
+      dbsock, dbname, wrap (this, &dhash_impl::srv_ready, num_to_go));
   blocksrv.insert (DHASH_KEYHASH, srv);
 
-  ext = strbuf () << host_node->my_ID () << ".n";
+  dbname = strbuf () << host_node->my_ID () << ".n";
   srv = New refcounted<dhblock_noauth_srv> (node, cli, "noauth db file",
-      dbname, ext, wrap (this, &dhash_impl::srv_ready, num_to_go));
+      dbsock, dbname, wrap (this, &dhash_impl::srv_ready, num_to_go));
   blocksrv.insert (DHASH_NOAUTH, srv);
-
 }
 
 void
