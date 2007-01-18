@@ -988,9 +988,7 @@ public:
 dbmanager::dbmanager (str p) :
   dbpath (p)
 {
-  if (p[p.len () - 1] != '/')
-    dbpath = strbuf () << p << "/";
-
+  // Make path if necessary
   struct stat sb;
   if (stat (dbpath, &sb) < 0) {
     if (errno == ENOENT) {
@@ -1005,6 +1003,27 @@ dbmanager::dbmanager (str p) :
     if (access (dbpath, W_OK) < 0)
       fatal ("dbmanager::manager: access (%s, W_OK): %m\n", dbpath.cstr ());
   }
+
+  // Convert path to full path
+  char realpath[256];
+  int fd = -1;
+  if (((fd = open (".", O_RDONLY)) >= 0)
+     && chdir (dbpath) >= 0)
+  {
+    if (getcwd (realpath, sizeof (realpath)))
+      errno = 0;
+    else if (!errno)
+      errno = EINVAL;
+    if (fchdir (fd))
+      warn ("fchdir: %m\n");
+  }
+
+  // Add trailing slash if necessary
+  str x (realpath);
+  if (x[x.len () - 1] != '/')
+    dbpath = strbuf () << x << "/";
+  else 
+    dbpath = x;
 }
 
 dbmanager::~dbmanager ()
@@ -1317,6 +1336,26 @@ do_getinfo (dbmanager *dbm, svccb *sbp)
   sbp->replyref (res);
 }
 // }}}
+// {{{ do_getspaceinfo
+void
+do_getspaceinfo (dbmanager *dbm, svccb *sbp)
+{
+  static int fd = -1; // Remember the real cwd.
+
+  adb_getspaceinfoarg *arg = sbp->Xtmpl getarg<adb_getspaceinfoarg> ();
+  adb_getspaceinfores *res = sbp->Xtmpl getres<adb_getspaceinfores> ();
+  res->status = ADB_OK;
+  dbns *db = dbm->get (arg->name);
+  if (!db) {
+    sbp->replyref (ADB_ERR);
+    return;
+  }
+
+  res->fullpath = strbuf () << dbm->getdbpath () << arg->name;
+  res->hasaux = db->hasaux ();
+  sbp->reply (res);
+}
+// }}}
 // }}}
 
 // {{{ RPC accept and dispatch
@@ -1359,6 +1398,9 @@ dispatch (ref<axprt_stream> s, ptr<asrv> a, dbmanager *dbm, svccb *sbp)
     break;
   case ADBPROC_GETINFO:
     do_getinfo (dbm, sbp);
+    break;
+  case ADBPROC_GETSPACEINFO:
+    do_getspaceinfo (dbm, sbp);
     break;
   default:
     fatal << "unknown procedure: " << sbp->proc () << "\n";

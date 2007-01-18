@@ -371,3 +371,24 @@ adb::getinfocb (chordID key, ptr<adb_getinfores> res,
   }
   cb (err, res->status, bi);
 }
+
+void
+adb::getspaceinfo (cb_getspace_t cb)
+{
+  adb_getspaceinfoarg arg;
+  arg.name = name_space;
+  ptr<adb_getspaceinfores> res = New refcounted<adb_getspaceinfores> ();
+  c->call (ADBPROC_GETSPACEINFO, &arg, res,
+           wrap (this, &adb::getspaceinfocb, res, cb));
+}
+
+void
+adb::getspaceinfocb (ptr<adb_getspaceinfores> res, cb_getspace_t cb,
+		     clnt_stat err)
+{
+  if (err || (res && res->status == ADB_ERR)) {
+    cb (res->status, "", false);
+  } else {
+    cb (res->status, res->fullpath, res->hasaux);
+  }
+}

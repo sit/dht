@@ -144,6 +144,16 @@ struct adb_getinfores {
   adb_vnodeid nlist<>;
 };
 /* }}} */
+/* {{{ ADBPROC_GETSPACEINFO */
+struct adb_getspaceinfoarg {
+  str name;
+};
+struct adb_getspaceinfores {
+  adb_status status;
+  str fullpath; /* Full path to local database */
+  bool hasaux;
+};
+/* }}} */
 
 program ADB_PROGRAM {
 	version ADB_VERSION {
@@ -188,6 +198,9 @@ program ADB_PROGRAM {
 		adb_getinfores
 		ADBPROC_GETINFO (adb_getinfoarg) = 10;
 		/* Get list of nodes that have b */
+
+		adb_getspaceinfores
+		ADBPROC_GETSPACEINFO (adb_getspaceinfoarg) = 11;
 	} = 1;
 } = 344501;
 

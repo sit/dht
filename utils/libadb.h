@@ -18,6 +18,8 @@ typedef callback<void, adb_status, vec<chordID>, vec<u_int32_t> >::ptr cb_getkey
 typedef callback<void, clnt_stat, adb_status, vec<block_info> >::ref cbvblock_info_t;
 typedef callback<void, clnt_stat, adb_status, block_info>::ref cbblock_info_t;
 
+typedef callback<void, adb_status, str, bool>::ptr cb_getspace_t;
+
 struct block_info {
   chordID k;
   vec<chord_node> on;
@@ -57,6 +59,8 @@ class adb {
   void getkeyson_cb (bool getaux, adb_getkeysres *res, cb_getkeyson cb, clnt_stat err);
   void getblockrangecb (ptr<adb_getblockrangeres> res, cbvblock_info_t cb, clnt_stat err);
   void getinfocb (chordID block, ptr<adb_getinfores> res, cbblock_info_t cb, clnt_stat err);
+  void getspaceinfocb (ptr<adb_getspaceinfores> res, cb_getspace_t cb, clnt_stat err);
+
   void batch_update ();
 
 public:
@@ -80,6 +84,7 @@ public:
   void update (const chordID &block, const ptr<location> n, u_int32_t auxdata, 
 	       bool present, bool batchable = false);
   void getinfo (const chordID &block, cbblock_info_t cb);
+  void getspaceinfo (cb_getspace_t cb);
 };
 
 #endif

@@ -3,6 +3,7 @@
 
 void res (int, adb_status);
 void res2 (int, adb_status, chordID, str);
+void res3 (adb_status, str, bool);
 
 adb *db;
 
@@ -15,11 +16,14 @@ main (int argc, char **argv)
     exit (0);
   }
   db = New adb (argv[1], argv[2]);
+  db->getspaceinfo (wrap (&res3));
+
   for (int i = 0; i < atoi(argv[4]); i++) 
     if (argv[3][0] == 's')
       db->store (bigint(1 + i*1000), str ("foo"), wrap (res, 1 + i*1000));
     else
       db->fetch (bigint(1 + i+1000), wrap (res2, 1 + i*1000));
+
   amain ();
 }
 
@@ -40,3 +44,11 @@ res2 (int i, adb_status stat, chordID key, str data)
   if (i % 1000 < 100) 
     db->fetch (bigint(1 + i), wrap (res2, 1 + i));
 }
+
+void
+res3 (adb_status err, str fullpath, bool hasaux)
+{
+  warn << "getinfo: path " << fullpath 
+       << " hasaux " << hasaux << "\n";
+}
+
