@@ -40,8 +40,9 @@ struct block_info {
 
 class adb {
   ptr<aclnt> c;
+  str dbsock_;
   str name_space;
-  bool hasaux;
+  bool hasaux_;
 
   qhash<u_int32_t, chordID> getkeystab;
 
@@ -65,6 +66,10 @@ class adb {
 
 public:
   adb (str sock_name, str name = "default", bool hasaux = false);
+
+  str name () const { return name_space; }
+  str dbsock () const { return dbsock_; } 
+  bool hasaux () const { return hasaux_; }
 
   void store (chordID key, str data, u_int32_t auxdata, cb_adbstat cb);
   void store (chordID key, str data, cb_adbstat cb);
