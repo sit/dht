@@ -18,6 +18,10 @@ struct merkle_rpc_node {
   merkle_hash child_hash<64>;
 };
 
+struct syncdest_t {
+  u_int32_t vnode;
+  dhash_ctype ctype;
+};
 
 /***********************************************************/
 /* GETKEYS */

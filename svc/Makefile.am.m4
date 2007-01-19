@@ -57,6 +57,7 @@ rpcmk(accordion_prot)
 rpcmk(transport_prot)
 rpcmk(adb_prot)
 rpcmk(sample_prot)
+rpcmk(maint_prot)
 
 $(DEP_FILES): rpcmk_headers
 

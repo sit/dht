@@ -19,8 +19,9 @@ make_chord_node (const adb_vnodeid &n)
 }
 
 adb::adb (str sock_name, str name, bool hasaux) :
+  dbsock_ (sock_name),
   name_space (name),
-  hasaux (hasaux),
+  hasaux_ (hasaux),
   next_batch (NULL)
 {
   int fd = unixsocket_connect (sock_name);
@@ -55,7 +56,7 @@ adb::initspace_cb (adb_status *astat, clnt_stat stat)
 void
 adb::store (chordID key, str data, u_int32_t auxdata, cb_adbstat cb)
 {
-  assert (hasaux);
+  assert (hasaux_);
   adb_storearg arg;
   arg.key = key;
   arg.name = name_space;
@@ -72,7 +73,7 @@ adb::store (chordID key, str data, u_int32_t auxdata, cb_adbstat cb)
 void
 adb::store (chordID key, str data, cb_adbstat cb)
 {
-  assert (!hasaux);
+  assert (!hasaux_);
   adb_storearg arg;
   arg.key = key;
   arg.name = name_space;
@@ -183,7 +184,7 @@ adb::getkeys_cb (bool getaux, adb_getkeysres *res, cb_getkeys cb, clnt_stat err)
 void
 adb::remove (chordID key, cb_adbstat cb)
 {
-  assert(!hasaux);
+  assert (!hasaux_);
 
   adb_deletearg arg;
   arg.name = name_space;
@@ -197,8 +198,7 @@ adb::remove (chordID key, cb_adbstat cb)
 void
 adb::remove (chordID key, u_int32_t auxdata, cb_adbstat cb)
 {
-
-  assert(hasaux);
+  assert (hasaux_);
 
   adb_deletearg arg;
   arg.name = name_space;
@@ -370,4 +370,25 @@ adb::getinfocb (chordID key, ptr<adb_getinfores> res,
       bi.on.push_back (make_chord_node (res->nlist[i]));
   }
   cb (err, res->status, bi);
+}
+
+void
+adb::getspaceinfo (cb_getspace_t cb)
+{
+  adb_getspaceinfoarg arg;
+  arg.name = name_space;
+  ptr<adb_getspaceinfores> res = New refcounted<adb_getspaceinfores> ();
+  c->call (ADBPROC_GETSPACEINFO, &arg, res,
+           wrap (this, &adb::getspaceinfocb, res, cb));
+}
+
+void
+adb::getspaceinfocb (ptr<adb_getspaceinfores> res, cb_getspace_t cb,
+		     clnt_stat err)
+{
+  if (err || (res && res->status == ADB_ERR)) {
+    cb (res->status, "", false);
+  } else {
+    cb (res->status, res->fullpath, res->hasaux);
+  }
 }
