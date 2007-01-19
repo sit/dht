@@ -158,6 +158,7 @@ maintainer::start (u_int32_t d)
 }
 void maintainer::start_helper ()
 {
+  mainttimer = NULL;
   // Helper is needed for delaycb since run_cycle is TAMED.
   run_cycle (wrap (this, &maintainer::restart, delay));
 }
