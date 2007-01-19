@@ -54,7 +54,7 @@ pod2usage(0) if $help;
 my $found = 1;
 my $LSD   = "lsd";
 my $ADBD  = "adbd";
-my $SYNCD = "syncd";
+my $MAINTD = "maintd";
 for my $rawbindir ($userbindir, ".", split(/:/, $ENV{PATH})) {
     next unless length($rawbindir) > 0;
     my $bindir = $rawbindir;
@@ -73,20 +73,20 @@ for my $rawbindir ($userbindir, ".", split(/:/, $ENV{PATH})) {
 	# e.g. bindir is top of builddir
 	$LSD    = "$bindir/lsd/lsd";
 	$ADBD   = "$bindir/lsd/adbd";
-	$SYNCD  = "$bindir/lsd/syncd";
+	$MAINTD = "$bindir/maint/maintd";
     } elsif (-x "$bindir/lsd" and ! -d _) {
 	# e.g. bindir=/usr/bin
 	$LSD    = "$bindir/lsd";
 	$ADBD   = "$bindir/adbd";
-	$SYNCD  = "$bindir/syncd";
+	$MAINTD = "$bindir/maintd";
     } 
     $found = 1;
-    for ($LSD, $ADBD, $SYNCD) {
+    for ($LSD, $ADBD, $MAINTD) {
 	$found = $found && (-f $_ && -x _);
     }
     last if $found;
 }
-pod2usage("Unable to find lsd/adbd/syncd executables; use --bindir.\n")
+pod2usage("Unable to find lsd/adbd/maintd executables; use --bindir.\n")
     unless $found;
 
 # Be ready to pass on signals
@@ -100,24 +100,23 @@ my %PID = ();
 $PID{adbd}  = spawn ($root, $ADBD, "adbd",
 		     "-d", "./db",
 		     "-S", "./adbd-sock");
-sleep 5; # Figure out way to wait until adbd is ready
+$PID{maintd} = spawn ($root, $MAINTD, "maintd",
+		     "-d", "./maintdata",
+		     "-m", "carbonite",
+		     "-C", "./maint-sock");
+sleep 5; # Figure out way to wait until maintd and adbd are ready
 $PID{lsd}   = spawn ($root, $LSD, "lsd",
 		     "-d", "./adbd-sock", 
 		     "-S", "./dhash-sock",
+		     "-R", "./maint-sock",
 		     "-C", "./lsd-sock",
 		     @ARGV);
-my $lsd_ready = 0;
 
 # Keep this process running until kids come home.
 my $killers  = 0;
 my $abnormal = 0;
 while (keys %PID) {
     sleep 1;
-    if (!$lsd_ready and -e "$root/lsd-sock") {
-	$lsd_ready = 1;
-	$PID{syncd} = spawn ($root, $SYNCD, "syncd",
-			     "-C", "./lsd-sock");
-    }
     if ($signaled >= 0) {
 	# Pass on the signal to children.
 	for (keys %PID) { kill $signaled, $PID{$_}; }
