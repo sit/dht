@@ -128,6 +128,8 @@ init_remote_server (const net_address &addr)
   if (ret < 0)
     fatal ("listen (%d, 5): %m\n", tcpfd);
   fdcb (tcpfd, selread, wrap (&srvaccept, tcpfd));
+  warn << "Listening for sync requests on " 
+       << addr.hostname << ":" << addr.port-1 << ".\n";
 }
 
 static void
