@@ -6,6 +6,7 @@
 
 #include <qhash.h>
 #include <libadb.h>
+#include <maint_prot.h>
 
 class vnode;
 class dhashcli;
@@ -41,19 +42,21 @@ class dhblock_srv : virtual public refcount {
 
   // Generic cb_adbstat to cb_dhstat translator
   void adbcb (cb_dhstat cb, adb_status astat); 
+  void maintinitcb (maint_status *res, clnt_stat err);
 
  protected:
+  const dhash_ctype ctype;
   ptr<adb> db;
+  ptr<aclnt> maint;
 
   const ptr<vnode> node;
-  const str desc;
+
+  ptr<dhashcli> cli;
 
   enum {
     REPAIR_OUTSTANDING_MAX = 16,
     REPAIR_QUEUE_MAX = 64
   };
-
-  ptr<dhashcli> cli;
 
   bhash<blockID, bhashID> repairs_queued;
   bhash<blockID, bhashID> repairs_inprogress;
@@ -67,11 +70,15 @@ class dhblock_srv : virtual public refcount {
   virtual void db_store (chordID k, str d, cb_dhstat cb);
   virtual void db_store (chordID k, str d, u_int32_t aux, cb_dhstat cb);
 
+  static ptr<aclnt> get_maint_aclnt (str msock);
+  void maint_initspace (int efrags, int dfrags);
+
   cbv donecb;
 
  public:
   dhblock_srv (ptr<vnode> node, ptr<dhashcli> cli,
-	       str desc, str dbsock, str dbname, bool hasaux, cbv donecb);
+    dhash_ctype c, str msock, str dbsock, str dbname, bool hasaux,
+    cbv donecb);
   virtual ~dhblock_srv ();
 
   virtual void start (bool randomize);

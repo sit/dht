@@ -1,7 +1,9 @@
 #include <tame.h>
 #include <qhash.h>
 #include <dhash_types.h>
+#include <adb_prot.h>
 
+class adb;
 class merkle_tree; 
 struct maint_dhashinfo_t;
 struct maint_repair_t;
@@ -22,6 +24,7 @@ protected:
 public:
   int vnode () const { return n.vnode_num; }
   chordID id () const { return n.x; }
+  const chord_node &chordnode () const { return n; }
   static ptr<locationcc> alloc (const chord_node &n);
   void fill_ipportvn (u_int32_t &a, u_int32_t &b);
   void get_stream_aclnt (const rpc_program &p,
@@ -87,7 +90,8 @@ public:
 protected:
   u_int32_t efrags;
   u_int32_t dfrags;
-  const str hostdb_path;
+
+  ptr<adb> db;
   const str private_path;
 
   bool running;     // Is maintenance in general active?
@@ -124,6 +128,7 @@ public:
 };
 
 class carbonite: public maintainer {
+  void init_ltree (adb_status err, str path, bool hasaux);
   void handle_missing (ptr<locationcc> from, ptr<merkle_tree> t, chordID id, bool local);
   void process_neighbors (const vec<ptr<locationcc> > &preds,
       const vec<ptr<locationcc> > &succs, cbv cb, CLOSURE);

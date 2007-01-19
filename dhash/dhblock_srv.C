@@ -3,6 +3,7 @@
 #include "dhash_common.h"
 #include "dhashcli.h"
 
+#include <location.h>
 #include <libadb.h>
 
 #include <dhblock_srv.h>
@@ -12,19 +13,20 @@
 
 dhblock_srv::dhblock_srv (ptr<vnode> node,
 			  ptr<dhashcli> cli,
-		          str desc,
+		          dhash_ctype c,
+			  str msock,
 			  str dbsock,
 			  str dbname,
 			  bool hasaux,
 			  cbv dcb) :
   repair_tcb (NULL),
-  db (NULL),
+  ctype (c),
+  db (New refcounted<adb> (dbsock, dbname, hasaux)),
+  maint (get_maint_aclnt (msock)),
   node (node),
-  desc (desc),
   cli (cli),
   donecb (dcb)
 {
-  db = New refcounted<adb> (dbsock, dbname, hasaux);
   warn << "opened " << dbsock << " with space " << dbname 
        << (hasaux ? " (hasaux)\n" : "\n");
 }
@@ -32,6 +34,43 @@ dhblock_srv::dhblock_srv (ptr<vnode> node,
 dhblock_srv::~dhblock_srv ()
 {
   stop ();
+}
+
+ptr<aclnt>
+dhblock_srv::get_maint_aclnt (str msock)
+{
+  int fd = unixsocket_connect (msock);
+  if (fd < 0)
+    fatal ("get_maint_aclnt: Error connecting to %s: %m\n", msock.cstr ());
+  make_async (fd);
+  ptr<aclnt> c = aclnt::alloc (axprt_unix::alloc (fd, 1024*1025),
+      maint_program_1);
+  return c;
+}
+
+void
+dhblock_srv::maint_initspace (int efrags, int dfrags)
+{
+  maint_dhashinfo_t dhi;
+  node->my_location ()->fill_node (dhi.host);
+  dhi.ctype = ctype;
+  dhi.dbsock = db->dbsock ();
+  dhi.dbname = db->name ();
+  dhi.hasaux = db->hasaux ();
+  dhi.efrags = efrags;
+  dhi.dfrags = dfrags;
+  maint_status *res = New maint_status (MAINTPROC_OK);
+  maint->call (MAINTPROC_INITSPACE, &dhi, res,
+      wrap (this, &dhblock_srv::maintinitcb, res));
+}
+
+void
+dhblock_srv::maintinitcb (maint_status *res, clnt_stat err)
+{
+  if (err || *res)
+    warn << "Maintenance initialization failed for " 
+      << db->name () << ": " << err << "/" << *res << "\n";
+  delete res;
 }
 
 // These 2 functions exist just so that we can have a generic adbcb.

@@ -40,17 +40,16 @@ dhblock_replicated_srv::idaux_to_mkey (chordID key, u_int32_t hash)
 
 dhblock_replicated_srv::dhblock_replicated_srv (ptr<vnode> node,
 						ptr<dhashcli> cli,
-						str desc,
+						dhash_ctype ctype,
+						str msock,
 						str dbsock,
 						str dbname,
-						dhash_ctype ctype,
 						cbv donecb) :
-  dhblock_srv (node, cli, desc, dbsock, dbname, true, donecb),
-  ctype (ctype)
+  dhblock_srv (node, cli, ctype, msock, dbsock, dbname, true, donecb)
 {
-
+  maint_initspace (dhblock_replicated::num_replica (),
+                   dhblock_replicated::num_replica ());
   (*donecb)();
-
 }
 
 void

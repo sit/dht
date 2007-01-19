@@ -122,7 +122,7 @@ class dhash_impl : public dhash, public virtual refcount {
   cbv donecb;
 
  public:
-  dhash_impl (ptr<vnode> v, str dbsock, cbv donecb);
+  dhash_impl (ptr<vnode> v, str dbsock, str msock, cbv donecb);
   ~dhash_impl ();
 
   vec<dstat> stats ();

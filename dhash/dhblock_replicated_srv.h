@@ -37,8 +37,6 @@ class dhblock_replicated_srv : public dhblock_srv
   void localqueue (clnt_stat err, adb_status stat, vec<block_info> blocks);
 
 protected:
-  const dhash_ctype ctype;
-
   qhash<chordID, vec<cbv> *, hashID> _paused_stores;
 
 
@@ -51,8 +49,7 @@ protected:
 
 public:
   dhblock_replicated_srv (ptr<vnode> node, ptr<dhashcli> cli,
-			  str desc, str dbsock, str dbname,
-                          dhash_ctype ctype, cbv donecb);
+    dhash_ctype c, str msock, str dbsock, str dbname, cbv donecb);
 
   virtual void store (chordID key, str d, cb_dhstat cb);
   virtual void fetch (chordID key, cb_fetch cb);

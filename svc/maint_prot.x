@@ -16,9 +16,13 @@ struct maint_setmaintarg {
 struct maint_dhashinfo_t {
   chord_node host;	/* ip, port and vnum */
   dhash_ctype ctype;
-  str path;		/* (absolute??) path to host db */
-  int efrags;		/* Desired number of replicas/frags */
-  int dfrags;		/* Minimum number required */
+  /* How to contact adbd and create an adb object */
+  str dbsock;
+  str dbname;
+  bool hasaux;
+  /* How to replicate this ctype */
+  int efrags;
+  int dfrags;
 };
 /* }}} */
 /* {{{ MAINTPROC_GETREPAIRS */

@@ -101,16 +101,16 @@ DECL_CONFIG_METHOD(dhash_disable_db_env, "dhash.disable_db_env")
 dhash::~dhash () {}
 
 ref<dhash>
-dhash::produce_dhash (ptr<vnode> v, str dbname, cbv donecb)
+dhash::produce_dhash (ptr<vnode> v, str dbsock, str msock, cbv donecb)
 {
-  return New refcounted<dhash_impl> (v, dbname, donecb);
+  return New refcounted<dhash_impl> (v, dbsock, msock, donecb);
 }
 
 dhash_impl::~dhash_impl ()
 {
 }
 
-dhash_impl::dhash_impl (ptr<vnode> node, str dbsock, cbv dcb) :
+dhash_impl::dhash_impl (ptr<vnode> node, str dbsock, str msock, cbv dcb) :
   host_node (node),
   cli (NULL),
   bytes_stored (0),
@@ -130,18 +130,21 @@ dhash_impl::dhash_impl (ptr<vnode> node, str dbsock, cbv dcb) :
   ptr<uint> num_to_go = New refcounted<uint>;
   (*num_to_go) = 3;
   str dbname = strbuf () << host_node->my_ID () << ".c";
-  srv = New refcounted<dhblock_chash_srv> (node, cli, "db file",
-      dbsock, dbname, wrap (this, &dhash_impl::srv_ready, num_to_go));
+  srv = New refcounted<dhblock_chash_srv> (node, cli, msock,
+      dbsock, dbname, 
+      wrap (this, &dhash_impl::srv_ready, num_to_go));
   blocksrv.insert (DHASH_CONTENTHASH, srv);
 
   dbname = strbuf () << host_node->my_ID () << ".k";
-  srv = New refcounted<dhblock_keyhash_srv> (node, cli, "keyhash db file",
-      dbsock, dbname, wrap (this, &dhash_impl::srv_ready, num_to_go));
+  srv = New refcounted<dhblock_keyhash_srv> (node, cli, msock,
+      dbsock, dbname,
+      wrap (this, &dhash_impl::srv_ready, num_to_go));
   blocksrv.insert (DHASH_KEYHASH, srv);
 
   dbname = strbuf () << host_node->my_ID () << ".n";
-  srv = New refcounted<dhblock_noauth_srv> (node, cli, "noauth db file",
-      dbsock, dbname, wrap (this, &dhash_impl::srv_ready, num_to_go));
+  srv = New refcounted<dhblock_noauth_srv> (node, cli, msock,
+      dbsock, dbname,
+      wrap (this, &dhash_impl::srv_ready, num_to_go));
   blocksrv.insert (DHASH_NOAUTH, srv);
 }
 

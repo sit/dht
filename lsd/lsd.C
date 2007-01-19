@@ -32,6 +32,7 @@
 #include "dhashgateway.h"
 #include <sys/types.h>
 
+#include <maint_prot.h>
 #include "lsdctl_prot.h"
 
 #include <location.h>
@@ -503,6 +504,7 @@ int nreplica = 0;
 bool replicate = true;
 bool do_daemonize = false;
 str dbsock = "/tmp/db-sock";
+str maintsock = "/tmp/maint-sock";
 str my_name;
 
 char *cffile = NULL;
@@ -534,7 +536,7 @@ main (int argc, char **argv)
   ctlsocket = "/tmp/lsdctl-sock";
   mode = MODE_CHORD;
 
-  while ((ch = getopt (argc, argv, "b:C:d:fFH:j:l:L:M:m:n:O:Pp:rS:s:T:tv:D"))!=-1)
+  while ((ch = getopt (argc, argv, "b:C:d:fFH:j:l:L:M:m:n:O:Pp:R:rS:s:T:tv:D"))!=-1)
     switch (ch) {
     case 'C':
       ctlsocket = optarg;
@@ -616,6 +618,9 @@ main (int argc, char **argv)
       break;
     case 'p':
       myport = atoi (optarg);
+      break;
+    case 'R':
+      maintsock = optarg;
       break;
     case 'r':
       replicate = false;
@@ -699,6 +704,15 @@ main (int argc, char **argv)
 
   assert (mode == modes[mode].m);
 
+  // Initialize for use by LSDCTL_GETLSDPARAMETERS
+  parameters.nvnodes       = vnodes;
+  parameters.adbdsock      = dbsock;
+  Configurator::only ().get_int ("dhash.efrags", parameters.efrags);
+  Configurator::only ().get_int ("dhash.dfrags", parameters.dfrags);
+  Configurator::only ().get_int ("dhash.replica", parameters.nreplica);
+  parameters.addr.hostname = my_name;
+  parameters.addr.port     = myport; // chord->get_port ();
+
   chordnode = New refcounted<chord> (my_name,
 				     myport,
 				     modes[mode].producer,
@@ -706,22 +720,38 @@ main (int argc, char **argv)
                                      max_loccache);
   for (int i = 0; i < vnodes; i++) {
     ptr<vnode> v = chordnode->get_vnode (i);
-    dh.push_back (dhash::produce_dhash (v, dbsock, wrap (&finish_start)));
+    dh.push_back (
+      dhash::produce_dhash (v, dbsock, maintsock,
+	wrap (&finish_start)));
   }
 
   info << "starting amain.\n";
 
   amain ();
+}
 
+void start_maint ()
+{
+  int fd = unixsocket_connect (maintsock);
+  if (fd < 0)
+    fatal ("get_maint_aclnt: Error connecting to %s: %m\n", maintsock.cstr ());
+  make_async (fd);
+  ptr<aclnt> c = aclnt::alloc (axprt_unix::alloc (fd, 1024*1025),
+      maint_program_1);
+  c->call (MAINTPROC_LISTEN, &parameters.addr, NULL, aclnt_cb_null);
+
+  maint_setmaintarg arg;
+  arg.enable = true;
+  arg.delay = 15;
+  c->call (MAINTPROC_SETMAINT, &arg, NULL, aclnt_cb_null);
 }
 
 int dhashes_finished = 0;
 void finish_start ()
 {
-
   dhashes_finished++;
   info << "DHash " << dhashes_finished << " is ready.\n";
-  if( dhashes_finished != vnodes ) {
+  if (dhashes_finished != vnodes) {
     return;
   }
 
@@ -736,14 +766,7 @@ void finish_start ()
   warn << "  lookup_mode: " << mode << "\n";
   warn << "  ss_mode: " << ss_mode << "\n";
 
-  // Initialize for use by LSDCTL_GETLSDPARAMETERS
-  parameters.nvnodes       = vnodes;
-  parameters.adbdsock      = dbsock;
-  Configurator::only ().get_int ("dhash.efrags", parameters.efrags);
-  Configurator::only ().get_int ("dhash.dfrags", parameters.dfrags);
-  Configurator::only ().get_int ("dhash.replica", parameters.nreplica);
-  parameters.addr.hostname = my_name;
-  parameters.addr.port     = myport; // chord->get_port ();
+  start_maint ();
 
   if (heartbeatfn)
     delaycb (0, wrap (&do_heartbeat, heartbeatfn));

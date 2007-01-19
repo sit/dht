@@ -18,8 +18,8 @@ class dhblock_chash_srv : public dhblock_srv {
   void localqueue (u_int32_t frags, clnt_stat err, adb_status stat, vec<block_info> keys);
 
 public:
-  dhblock_chash_srv (ptr<vnode> node, ptr<dhashcli> cli, 
-      str desc, str dbsock, str dbname, cbv donecb);
+  dhblock_chash_srv (ptr<vnode> node, ptr<dhashcli> cli,
+      str msock, str dbsock, str dbname, cbv donecb);
   ~dhblock_chash_srv ();
 
   void start (bool randomize);

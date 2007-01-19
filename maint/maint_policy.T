@@ -11,6 +11,8 @@
 #include <merkle_tree_disk.h>
 
 #include <id_utils.h>
+#include <location.h>
+#include <libadb.h>
 #include <rpclib.h>
 
 #include <maint_prot.h>
@@ -133,7 +135,7 @@ maintainer::maintainer (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s) :
   sync (s),
   efrags (hostinfo->dfrags),
   dfrags (hostinfo->efrags),
-  hostdb_path (hostinfo->path),
+  db (New refcounted<adb> (hostinfo->dbsock, hostinfo->dbname, hostinfo->hasaux)),
   private_path (path),
   running (false),
   in_progress (false),
@@ -269,9 +271,19 @@ carbonite::produce_maintainer (str path, maint_dhashinfo_t *hostinfo, ptr<syncer
 
 carbonite::carbonite (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s) :
     maintainer (path, hostinfo, s),
-    ltree (New refcounted<merkle_tree_disk> (hostinfo->path,
-	  /* rw = */ false))
+    ltree (NULL)
 {
+  db->getspaceinfo (wrap (this, &carbonite::init_ltree));
+}
+
+void 
+carbonite::init_ltree (adb_status err, str path, bool hasaux)
+{
+  if (err) {
+    warn << "carbonite::init_ltree: Unexpected adbd error: " << err << "\n";
+    return;
+  }
+  ltree = New refcounted<merkle_tree_disk> (path, /* rw = */ false);
 }
 
 carbonite::~carbonite ()
@@ -284,10 +296,24 @@ carbonite::handle_missing (ptr<locationcc> from,
     bigint key, bool missing_local)
 {
   // Make the local tree look identical to the remote tree.
-  if (missing_local) {
-    t->insert (key);
+  // For now, also keep the adbd register up to date.
+  ptr<location> rfrom = New refcounted<location> (from->chordnode ());
+  if (db->hasaux ()) {
+    chordID aux = (key & 0xFFFFFFFF);
+    chordID dbkey = (key >> 32) << 32;
+    db->update (dbkey, rfrom, aux.getui (), missing_local, true);
+    if (missing_local) {
+      t->insert (dbkey, aux.getui ());
+    } else {
+      t->remove (dbkey, aux.getui ());
+    }
   } else {
-    t->remove (key);
+    db->update (key, rfrom, missing_local, true);
+    if (missing_local) {
+      t->insert (key);
+    } else {
+      t->remove (key);
+    }
   }
 }
 
