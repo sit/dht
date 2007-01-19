@@ -41,6 +41,11 @@ class merkle_syncer {
   void sendnode_cb (ptr<bool> deleted,
                     ref<sendnode_arg> arg, ref<sendnode_res> res, 
 		    clnt_stat err);
+  void compare_nodes (bigint rngmin, bigint rngmax,
+      merkle_node *lnode, merkle_rpc_node *rnode);
+
+  unsigned int outstanding_keyranges;
+  void collect_keyranges ();
 
  public:
   merkle_syncer (uint vnode, dhash_ctype ctype,
@@ -58,20 +63,8 @@ class merkle_syncer {
   void sendnode (u_int depth, const merkle_hash &prefix);
 };
 
-
 void
 format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
 		merkle_node *node, merkle_rpc_node *rpcnode);
-
-void
-compare_nodes (merkle_tree *ltree, bigint rngmin, bigint rngmax, 
-	       merkle_node *lnode, merkle_rpc_node *rnode,
-	       uint vnode, dhash_ctype ctype, missingfnc_t missingfnc, 
-	       rpcfnc_t rpcfnc);
-
-void
-compare_keylists (vec<chordID> lkeys, vec<chordID> rkeys,
-		  chordID rngmin, chordID rngmax,
-		  missingfnc_t missingfnc);
 
 #endif /* _MERKLE_SYNCER_H_ */
