@@ -153,8 +153,9 @@ void
 maintainer::start (u_int32_t d)
 {
   delay = d;
-  if (running)
+  if (mainttimer || in_progress)
     return;
+  running = true;
   mainttimer = delaycb (delay,
       wrap (this, &maintainer::start_helper));
 }
@@ -197,6 +198,7 @@ maintainer::run_cycle (cbv cb)
     }
   }
   in_progress = false;
+  delaycb (0, cb);
 }
 
 TAMED void
