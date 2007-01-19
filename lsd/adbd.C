@@ -1340,8 +1340,6 @@ do_getinfo (dbmanager *dbm, svccb *sbp)
 void
 do_getspaceinfo (dbmanager *dbm, svccb *sbp)
 {
-  static int fd = -1; // Remember the real cwd.
-
   adb_getspaceinfoarg *arg = sbp->Xtmpl getarg<adb_getspaceinfoarg> ();
   adb_getspaceinfores *res = sbp->Xtmpl getres<adb_getspaceinfores> ();
   res->status = ADB_OK;
