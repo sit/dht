@@ -74,8 +74,7 @@ halt ()
 {
   warnx << "Exiting on command.\n";
   while (maintainers.size ()) {
-    maintainer *m = maintainers.pop_back ();
-    delete m;
+    maintainers.pop_back ();
   }
   exit (0);
 }
