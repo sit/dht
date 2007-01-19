@@ -220,6 +220,9 @@ dump_stats ()
   merkle_node *sync_root = SYNCER.tree->get_root();
   warn << "SERVER.tree->root " << serv_root->hash << " cnt " << serv_root->count << "\n";
   warn << "SYNCER.tree->root " << sync_root->hash << " cnt " << sync_root->count << "\n";
+  if (serv_root->hash != sync_root->hash)
+    fatal << "Roots do not match!\n";
+    
   SERVER.tree->lookup_release(serv_root);
   SYNCER.tree->lookup_release(sync_root);
 
@@ -232,9 +235,9 @@ dump_stats ()
   SYNCER.tree->check_invariants ();
   // SYNCER.tree->dump ();
 }
- 
+
 void
-test (uint progress, uint data_points)
+joshtree (uint progress, uint data_points)
 {
   u_int64_t large_sz = (1 << 30) / (1 << 13);  // 1 GB
   large_sz /= 100;
@@ -250,7 +253,11 @@ test (uint progress, uint data_points)
     addrand (SERVER.tree, small_sz);
     addrand (SYNCER.tree, large_sz);
   }
-
+}
+ 
+void
+test ()
+{
   warn  << "+++++++++++++++++++++++++server tree++++++++++++++++++++++++++++++\n";
   SERVER.tree->compute_stats ();
   warn  << "+++++++++++++++++++++++++syncer tree++++++++++++++++++++++++++++++\n";
@@ -290,8 +297,14 @@ main (int argc, char *argv[])
 {
   if (argc > 1)
     modlogger::setmaxprio (modlogger::TRACE);
+
+  // Make sure no old state remains on disk.
+  finish ();
+
   u_int start_point = 0;
   u_int data_points = 100;
-  for (u_int i = start_point; i < data_points; i++) 
-    test (i, data_points);
+  for (u_int i = start_point; i < data_points; i++) {
+    joshtree (i, data_points);
+    test ();
+  }
 }
