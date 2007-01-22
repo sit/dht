@@ -2,8 +2,20 @@
 #include <id_utils.h>
 #include <rxx.h>
 
-int main (int argc, char **argv) {
+static char *indexpath = "/tmp/index.mrk";
+static char *internalpath = "/tmp/internal.mrk";
+static char *leafpath  = "/tmp/leaf.mrk";
 
+void
+cleanup ()
+{
+  unlink (indexpath);
+  unlink (internalpath);
+  unlink (leafpath);
+}
+
+int main (int argc, char **argv)
+{
   uint num_keys = 150;
   if (argc > 1) {
     num_keys = atoi (argv[1]);
@@ -11,9 +23,9 @@ int main (int argc, char **argv) {
 
   srandom (time (NULL));
 
-  merkle_tree *tree = New merkle_tree_disk ("/tmp/index.mrk", 
-					    "/tmp/internal.mrk",
-					    "/tmp/leaf.mrk", true);
+  merkle_tree *tree = New merkle_tree_disk (indexpath,
+					    internalpath,
+					    leafpath, true);
 
   // if a trace is provided, execute the trace
   if (argc > 2) {
@@ -97,7 +109,5 @@ int main (int argc, char **argv) {
   delete tree;
   tree = NULL;
 
-  unlink("/tmp/index.mrk");
-  unlink("/tmp/internal.mrk");
-  unlink("/tmp/leaf.mrk");
+  cleanup ();
 }
