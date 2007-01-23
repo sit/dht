@@ -137,6 +137,7 @@ merkle_node_disk::write_out ()
     int seekval = fseek (_leaf, _block_no*sizeof(merkle_leaf_node), SEEK_SET);
     assert (seekval == 0);
     fwrite (&leaf, sizeof(merkle_leaf_node), 1, _leaf);
+    fflush (_leaf);
   } else {
     merkle_internal_node internal;
     internal.key_count = htonl(count);
@@ -144,12 +145,14 @@ merkle_node_disk::write_out ()
       mpz_get_rawmag_be (internal.hashes[i].key, 
 			 sizeof (internal.hashes[i].key), &((*hashes)[i].id));
       internal.child_pointers[i] = htonl ((*children)[i]);
+      //      warn << _block_no << ") writing out child " << i << ") " << ((*children)[i] >> 1) << "\n";
     }
 
     int seekval = fseek (_internal, _block_no*sizeof(merkle_internal_node), 
 			 SEEK_SET);
     assert (seekval == 0);
     fwrite (&internal, sizeof(merkle_internal_node), 1, _internal);
+    fflush (_internal);
   }
 }
 
@@ -416,16 +419,16 @@ merkle_tree_disk::alloc_free_block (MERKLE_DISK_TYPE type)
   u_int32_t ret;
   // if there are any free
   if (type == MERKLE_DISK_LEAF) {
-    if (_md.num_leaf_free > 0) {
-      ret = _free_leafs.pop_back ();
+    if (_md.num_leaf_free > 0 && _md.next_leaf > 1000) {
+      ret = _free_leafs.pop_front ();
       _md.num_leaf_free--;
     } else {
       ret = _md.next_leaf;
       _md.next_leaf++; 
     }
   } else {
-    if (_md.num_internal_free > 0) {
-      ret = _free_internals.pop_back();
+    if (_md.num_internal_free > 0 && _md.next_internal > 1000) {
+      ret = _free_internals.pop_front ();
       _md.num_internal_free--;
     } else {
       ret = _md.next_internal;
@@ -712,7 +715,10 @@ merkle_tree_disk::database_get_keys (u_int depth, const merkle_hash &prefix)
   vec<merkle_hash> keys;
 
   // find all the keys matching this prefix
-  merkle_node *r = get_root ();
+  merkle_node *r = _fixed_root;
+  if (r == NULL) {
+    r = get_root ();
+  }
   merkle_node *n = r;
   for (u_int i = 0; i < depth && !n->isleaf (); i++) {
     u_int32_t branch = prefix.read_slot (i);
@@ -722,7 +728,9 @@ merkle_tree_disk::database_get_keys (u_int depth, const merkle_hash &prefix)
   // now we have the node and the right depth that matches the prefix.
   // Read all the keys under this node that match the prefix
   keys = get_all_keys (depth, prefix, (merkle_node_disk *) n);
-  delete r;
+  if (_fixed_root == NULL) {
+    delete r;
+  }
   return keys;
 }
 
