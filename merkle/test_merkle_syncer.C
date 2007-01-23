@@ -29,15 +29,7 @@ str syncer_index = "/tmp/syncer.index.mrk";
 str syncer_internal = "/tmp/syncer.internal.mrk";
 str syncer_leaf = "/tmp/syncer.leaf.mrk";
 
-static void
-sendblock (bigint blockID, bool missingLocal)
-{
-  if (missingLocal)
-    keys_for_syncer.push_back (blockID);
-  else
-    keys_for_server.push_back (blockID);
-}
-
+// {{{ RPC Magic
 static void
 doRPCcb (xdrproc_t proc, dorpc_res *res, aclnt_cb cb, void *out, clnt_stat err)
 {
@@ -82,7 +74,6 @@ doRPC (RPC_delay_args *a)
   SYNCER.clnt->call (TRANSPORTPROC_DORPC, arg, res,
                      wrap (&doRPCcb, outproc, res, a->cb, a->out));
 }
-
 
 vec<const rpc_program *> handledProgs;
 vec<cbdispatch_t> handlers;
@@ -135,29 +126,15 @@ addHandler (const rpc_program &prog, cbdispatch_t cb)
   handledProgs.push_back (&prog);
   handlers.push_back (cb);
 }
-
-void
-finish ()
+// }}}
+// {{{ Testing framework - setup/finish/addrand/dump_stats
+static void
+sendblock (bigint blockID, bool missingLocal)
 {
-  // Force all destructors to be called, hopefully.
-  handledProgs.clear ();
-  handlers.clear ();
-
-  SYNCER.syncer = NULL;
-  SERVER.server = NULL;
-  SYNCER.clnt = NULL;
-  SERVER.srv  = NULL;
-  SYNCER.tree = NULL;
-  SERVER.tree = NULL;
-
-  unlink (server_index);
-  unlink (server_internal);
-  unlink (server_leaf);
-
-  unlink (syncer_index);
-  unlink (syncer_internal);
-  unlink (syncer_leaf);
-
+  if (missingLocal)
+    keys_for_syncer.push_back (blockID);
+  else
+    keys_for_server.push_back (blockID);
 }
 
 void
@@ -193,6 +170,29 @@ setup ()
   err_flush ();
 }
 
+void
+finish ()
+{
+  // Force all destructors to be called, hopefully.
+  handledProgs.clear ();
+  handlers.clear ();
+
+  SYNCER.syncer = NULL;
+  SERVER.server = NULL;
+  SYNCER.clnt = NULL;
+  SERVER.srv  = NULL;
+  SYNCER.tree = NULL;
+  SERVER.tree = NULL;
+
+  unlink (server_index);
+  unlink (server_internal);
+  unlink (server_leaf);
+
+  unlink (syncer_index);
+  unlink (syncer_internal);
+  unlink (syncer_leaf);
+
+}
 
 void
 addrand (ptr<merkle_tree> tr, int count)
@@ -235,6 +235,7 @@ dump_stats ()
   SYNCER.tree->check_invariants ();
   // SYNCER.tree->dump ();
 }
+// }}}
 
 void
 joshtree (uint progress, uint data_points)
@@ -290,8 +291,6 @@ test ()
   finish ();
 }
 
-
-
 int
 main (int argc, char *argv[])
 {
@@ -308,3 +307,5 @@ main (int argc, char *argv[])
     test ();
   }
 }
+
+/* vim:set foldmethod=marker: */
