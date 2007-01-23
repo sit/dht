@@ -31,7 +31,7 @@ closestsucc (itree<chordID, merkle_key, &merkle_key::id, &merkle_key::ik> &keyli
 }
 
 merkle_tree::merkle_tree () :
-  do_rehash (true)
+  do_rehash (true), _fixed_root(NULL)
 {
   root = New merkle_node();
   // warn << "root: " << root->isleaf() << "\n";
@@ -97,7 +97,11 @@ void
 merkle_tree::hash_tree ()
 {
   merkle_hash prefix (0);
-  _hash_tree (0, prefix, get_root());
+  merkle_node *root = get_root ();
+  _fixed_root = root;
+  _hash_tree (0, prefix, root);
+  lookup_release (root);
+  _fixed_root = NULL;
 }
 
 void
@@ -108,8 +112,10 @@ merkle_tree::check_invariants ()
     return;
   merkle_hash prefix (0);
   merkle_node *root = get_root ();
+  _fixed_root = root;
   _hash_tree (0, prefix, root, true);
   lookup_release (root);  // semantic mismatch, I know, I know
+  _fixed_root = NULL;
 }
 
 void

@@ -64,6 +64,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/lsd
 %{_bindir}/lsdctl
 %{_bindir}/lsdping
+%{_bindir}/maintd
 %{_bindir}/nodeq
 %{_bindir}/nodeq-filter
 %{_bindir}/start-dhash

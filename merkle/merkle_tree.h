@@ -35,6 +35,10 @@ struct merkle_key {
 class merkle_tree {
 protected:
   bool do_rehash;
+  // the fixed root is a hack that ensures that a _hash_tree call will see
+  // the same root as any subsequent calls to database_get_keys in 
+  // merkle_tree_disk
+  merkle_node *_fixed_root;
   void _hash_tree (u_int depth, const merkle_hash &key, merkle_node *n, bool check);
   void rehash (u_int depth, const merkle_hash &key, merkle_node *n);
   void count_blocks (u_int depth, const merkle_hash &key,
