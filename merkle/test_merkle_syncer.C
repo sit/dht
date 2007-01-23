@@ -7,6 +7,7 @@
 #include <transport_prot.h>
 #include <comm.h>
 
+// {{{ Globals
 static struct {
   ptr<merkle_tree> tree;
   ptr<merkle_server> server;
@@ -19,6 +20,8 @@ static struct {
   ptr<aclnt> clnt;
 } SYNCER;
 
+u_int32_t nkeyspushed = 0;
+u_int32_t nkeyspulled = 0;
 vec<chordID> keys_for_server;
 vec<chordID> keys_for_syncer;
 
@@ -28,6 +31,7 @@ str server_leaf = "/tmp/server.leaf.mrk";
 str syncer_index = "/tmp/syncer.index.mrk";
 str syncer_internal = "/tmp/syncer.internal.mrk";
 str syncer_leaf = "/tmp/syncer.leaf.mrk";
+// }}}
 
 // {{{ RPC Magic
 static void
@@ -38,6 +42,7 @@ doRPCcb (xdrproc_t proc, dorpc_res *res, aclnt_cb cb, void *out, clnt_stat err)
 
   if (err) {
     warnx << "doRPC: err = " << err << "\n";
+    assert (!err);
   } else if (!proc (x.xdrp (), out)) {
     warnx << "failed to unmarshall result\n";
     cb (RPC_CANTSEND);
@@ -138,11 +143,20 @@ sendblock (bigint blockID, bool missingLocal)
 }
 
 void
+dump_stats ()
+{
+  warn  << "+++++++++++++++++++++++++SERVER.tree++++++++++++++++++++++++++++++\n";
+  SERVER.tree->compute_stats ();
+  // SERVER.tree->dump ();
+  warn  << "+++++++++++++++++++++++++SYNCER.tree++++++++++++++++++++++++++++++\n";
+  SYNCER.tree->compute_stats ();
+  // SYNCER.tree->dump ();
+}
+
+void
 setup ()
 {
-  warn << " => setup() +++++++++++++++++++++++++++\n";
-  err_flush ();
-
+  warn << "===> setup() +++++++++++++++++++++++++++\n";
   SERVER.tree = New refcounted<merkle_tree_disk> (server_index, 
 						  server_internal, server_leaf,
 						  true);
@@ -153,7 +167,7 @@ setup ()
   // these are closed by axprt_stream's dtor, right? 
   int fds[2];
   assert (socketpair (AF_UNIX, SOCK_STREAM, 0, fds) == 0);
-  warn << "sockets: " << fds[0] << ":" << fds[1] << "\n";
+  warn << "  sockets: " << fds[0] << ":" << fds[1] << "\n";
   SERVER.srv = asrv::alloc (axprt_stream::alloc (fds[0]), transport_program_1);
   SYNCER.clnt = aclnt::alloc (axprt_stream::alloc (fds[1]), transport_program_1);
   assert (SERVER.srv && SYNCER.clnt);
@@ -164,9 +178,8 @@ setup ()
 						 wrap (doRPC),
 						 wrap (sendblock));
   SERVER.server = New refcounted<merkle_server> (SERVER.tree);
-  addHandler(merklesync_program_1,
-      wrap(SERVER.server, &merkle_server::dispatch));
-  warn << " <= setup() DONE!\n";
+  addHandler (merklesync_program_1,
+      wrap (SERVER.server, &merkle_server::dispatch));
   err_flush ();
 }
 
@@ -191,85 +204,55 @@ finish ()
   unlink (syncer_index);
   unlink (syncer_internal);
   unlink (syncer_leaf);
-
 }
 
 void
 addrand (ptr<merkle_tree> tr, int count)
 {
   for (int i = 0; i < count; i++) {
-    if (i == 40000)
-      exit (0);
-
     merkle_hash key;
     key.randomize ();
     tr->insert (key);
-
     if ((i % 1000) == 0) {
-      warn << "a) inserted " << i << " blocks..of " << count << "\n";
+      warn << "inserted " << i << " blocks..of " << count << "\n";
       err_flush ();
     }
   }
 }
 
 void
-dump_stats ()
+check_invariants ()
 {
-  warn << "\n\n=======================================================================\n";
-  merkle_node *serv_root = SERVER.tree->get_root();
-  merkle_node *sync_root = SYNCER.tree->get_root();
-  warn << "SERVER.tree->root " << serv_root->hash << " cnt " << serv_root->count << "\n";
-  warn << "SYNCER.tree->root " << sync_root->hash << " cnt " << sync_root->count << "\n";
-  if (serv_root->hash != sync_root->hash)
-    fatal << "Roots do not match!\n";
-    
-  SERVER.tree->lookup_release(serv_root);
-  SYNCER.tree->lookup_release(sync_root);
-
-  warn  << "+++++++++++++++++++++++++SERVER.tree++++++++++++++++++++++++++++++\n";
-  SERVER.tree->compute_stats ();
+  warn << "Checking server invariants... ";
   SERVER.tree->check_invariants ();
-  // SERVER.tree->dump ();
-  warn  << "+++++++++++++++++++++++++SYNCER.tree++++++++++++++++++++++++++++++\n";
-  SYNCER.tree->compute_stats ();
+  warn << "OK\n";
+  warn << "Checking syncer invariants... ";
   SYNCER.tree->check_invariants ();
-  // SYNCER.tree->dump ();
+  warn << "OK\n";
+}
+
+void check_equal_roots ()
+{
+  warn << "Checking that roots are equal... ";
+  merkle_node *serv_root = SERVER.tree->get_root ();
+  merkle_node *sync_root = SYNCER.tree->get_root ();
+  if (serv_root->hash != sync_root->hash) {
+    warn << "SERVER.tree->root " << serv_root->hash << " cnt " << serv_root->count << "\n";
+    warn << "SYNCER.tree->root " << sync_root->hash << " cnt " << sync_root->count << "\n";
+    fatal << "NOT OK!\n";
+  }
+  SERVER.tree->lookup_release (serv_root);
+  SYNCER.tree->lookup_release (sync_root);
+  warn << "OK\n";
 }
 // }}}
-
-void
-joshtree (uint progress, uint data_points)
-{
-  u_int64_t large_sz = (1 << 30) / (1 << 13);  // 1 GB
-  large_sz /= 100;
-  u_int64_t small_sz = (large_sz * progress) / (data_points - 1);
-
-  warn << "\n\n\n\n############################################################\n";
-  warn << "REPLICA TEST " << large_sz << "/" << small_sz << "\n";
-  setup ();
-  if (progress % 2) {
-    addrand (SERVER.tree, large_sz);
-    addrand (SYNCER.tree, small_sz);
-  } else {
-    addrand (SERVER.tree, small_sz);
-    addrand (SYNCER.tree, large_sz);
-  }
-}
  
 void
-test ()
+runsync (chordID rngmin, chordID rngmax)
 {
-  warn  << "+++++++++++++++++++++++++server tree++++++++++++++++++++++++++++++\n";
-  SERVER.tree->compute_stats ();
-  warn  << "+++++++++++++++++++++++++syncer tree++++++++++++++++++++++++++++++\n";
-  SYNCER.tree->compute_stats ();
-  err_flush();
-
-  warn << "\n\n************************* RUNNING TEST ************************\n";
-  bigint rngmin = 0;
-  bigint rngmax = (bigint (1) << 160)  - 1;
+  nkeyspushed = 0;
+  nkeyspulled = 0;
   SYNCER.syncer->sync (rngmin, rngmax);
-
   while (!SYNCER.syncer->done ()) {
     acheck ();
 
@@ -277,18 +260,15 @@ test ()
       chordID k = keys_for_server.pop_front ();
       merkle_hash key = to_merkle_hash (k);
       SERVER.tree->insert (key);
+      nkeyspushed++;
     }
     while (keys_for_syncer.size ()) {
       chordID k = keys_for_syncer.pop_front ();
       merkle_hash key = to_merkle_hash (k);
       SYNCER.tree->insert (key);
+      nkeyspulled++;
     }
   }
-
-  warn << "\n\n*********************** DONE *****************************\n";
-
-  dump_stats ();
-  finish ();
 }
 
 int
@@ -300,12 +280,76 @@ main (int argc, char *argv[])
   // Make sure no old state remains on disk.
   finish ();
 
-  u_int start_point = 0;
-  u_int data_points = 100;
-  for (u_int i = start_point; i < data_points; i++) {
-    joshtree (i, data_points);
-    test ();
-  }
+  bigint idzero = 0;
+  bigint idmax  = (bigint (1) << 160)  - 1;
+
+  // Empty A, Empty B, Complete range
+  // ==> A should equal B.
+  // ==> Resync should move no keys.
+  setup ();
+  runsync (idzero, idmax);
+  check_invariants ();
+  assert (nkeyspushed == 0);
+  assert (nkeyspulled == 0);
+  check_equal_roots ();
+  runsync (idzero, idmax);
+  check_invariants ();
+  assert (nkeyspushed == 0);
+  assert (nkeyspulled == 0);
+  dump_stats ();
+  finish ();
+ 
+  // Empty A, Non-empty B, Complete range
+  // ==> A should equal B.
+  // ==> Resync should move no keys.
+  setup ();
+  addrand (SERVER.tree, 256);
+  runsync (idzero, idmax);
+  check_invariants ();
+  check_equal_roots ();
+  runsync (idzero, idmax);
+  check_invariants ();
+  assert (nkeyspushed == 0);
+  assert (nkeyspulled == 0);
+  dump_stats ();
+  finish ();
+
+  // Non-empty A, Empty B, Complete range
+  // ==> A should equal B.
+  // ==> Resync should move no keys.
+  setup ();
+  addrand (SYNCER.tree, 1024);
+  runsync (idzero, idmax);
+  check_invariants ();
+  check_equal_roots ();
+  runsync (idzero, idmax);
+  check_invariants ();
+  assert (nkeyspushed == 0);
+  assert (nkeyspulled == 0);
+  dump_stats ();
+  finish ();
+
+  // Non-empty A, Non-empty B, Complete range
+  // ==> A should equal B.
+  // ==> Resync should move no keys.
+  setup ();
+  addrand (SYNCER.tree, 4097);
+  addrand (SERVER.tree, 4097);
+  runsync (idzero, idmax);
+  check_invariants ();
+  check_equal_roots ();
+  runsync (idzero, idmax);
+  check_invariants ();
+  assert (nkeyspushed == 0);
+  assert (nkeyspulled == 0);
+  dump_stats ();
+  finish ();
+
+  // XXX Should we test various degrees of commonality in A/B?
+  //
+  // Same as above, but for a partial range.
+  // The results are that A will not equal B, but resync won't
+  // exchange any keys.
 }
 
 /* vim:set foldmethod=marker: */
