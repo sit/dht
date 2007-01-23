@@ -89,6 +89,9 @@ merkle_syncer::~merkle_syncer ()
 void
 merkle_syncer::sync (bigint rngmin, bigint rngmax, cbi cb)
 {
+  assert (outstanding_keyranges == 0);
+  assert (st.size () == 0);
+  sync_done = false;
   local_rngmin = rngmin;
   local_rngmax = rngmax;
   completecb = cb;
