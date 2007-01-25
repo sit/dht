@@ -8,6 +8,8 @@
 #include <comm.h>
 
 // {{{ Globals
+static const bool usedisk = false;
+
 static struct {
   ptr<merkle_tree> tree;
   ptr<merkle_server> server;
@@ -157,12 +159,17 @@ void
 setup ()
 {
   warn << "===> setup() +++++++++++++++++++++++++++\n";
-  SERVER.tree = New refcounted<merkle_tree_disk> (server_index, 
-						  server_internal, server_leaf,
-						  true);
-  SYNCER.tree = New refcounted<merkle_tree_disk> (syncer_index, 
-						  syncer_internal, syncer_leaf,
-						  true);
+  if (usedisk) {
+    SERVER.tree = New refcounted<merkle_tree_disk> (server_index, 
+						    server_internal, server_leaf,
+						    true);
+    SYNCER.tree = New refcounted<merkle_tree_disk> (syncer_index, 
+						    syncer_internal, syncer_leaf,
+						    true);
+  } else {
+    SERVER.tree = New refcounted<merkle_tree> ();
+    SYNCER.tree = New refcounted<merkle_tree> ();
+  }
 
   // these are closed by axprt_stream's dtor, right? 
   int fds[2];
@@ -197,13 +204,15 @@ finish ()
   SYNCER.tree = NULL;
   SERVER.tree = NULL;
 
-  unlink (server_index);
-  unlink (server_internal);
-  unlink (server_leaf);
+  if (usedisk) {
+    unlink (server_index);
+    unlink (server_internal);
+    unlink (server_leaf);
 
-  unlink (syncer_index);
-  unlink (syncer_internal);
-  unlink (syncer_leaf);
+    unlink (syncer_index);
+    unlink (syncer_internal);
+    unlink (syncer_leaf);
+  }
 }
 
 void
