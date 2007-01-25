@@ -32,12 +32,10 @@ void
 merkle_server::handle_get_keys (ptr<merkle_tree> ltree,
     getkeys_arg *arg, getkeys_res *res)
 {
-  //get the first 65 keys in the range. We'll return 64, but we get
+  // get the first 65 keys in the range. We'll return 64, but we get
   // 65 so we can tell if we got them all
   vec<chordID> keys = ltree->get_keyrange (arg->rngmin, arg->rngmax, 65);
-  
-  warn << "get keys (" << arg->rngmin << ", " << arg->rngmax << " returning " << keys.size () << " keys\n";
-  bool more = (keys.size () == 65); // there is at least one more key to get
+  bool more = (keys.size () == 65);
   
   res->resok->morekeys = more;
   //trim off the extra key if necessary
