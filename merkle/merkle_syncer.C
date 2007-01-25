@@ -2,7 +2,6 @@
 #include "merkle_syncer.h"
 #include "qhash.h"
 #include "async.h"
-#include "bigint.h"
 #include <id_utils.h>
 #include <comm.h>
 
@@ -11,8 +10,10 @@
 #define info  modlogger ("merkle", modlogger::INFO)
 #define trace modlogger ("merkle", modlogger::TRACE)
 
-
-// ---------------------------------------------------------------------------
+// {{{ merkle_getkeyrange
+// {{{ merkle_getkeyrange declarations
+static void compare_keylists (vec<chordID> lkeys, vec<chordID> vrkeys,
+    chordID rngmin, chordID rngmax, missingfnc_t missingfnc);
 
 class merkle_getkeyrange {
 private:
@@ -28,32 +29,133 @@ private:
   cbv completecb;
 
   void finish ();
+  void doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb);
   void go ();
   void getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res, clnt_stat err);
-  void doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb);
 
 public:
   ~merkle_getkeyrange () {}
-  merkle_getkeyrange (uint vnode, dhash_ctype ctype, 
-		      bigint rngmin, bigint rngmax, 
+  merkle_getkeyrange (uint vnode, dhash_ctype ctype,
+		      bigint rngmin, bigint rngmax,
 		      vec<chordID> plkeys,
 		      missingfnc_t missing, rpcfnc_t rpcfnc,
 		      cbv completecb)
-    : vnode (vnode), ctype (ctype), rngmin (rngmin), 
-      rngmax (rngmax), current (rngmin), 
+    : vnode (vnode), ctype (ctype), rngmin (rngmin),
+      rngmax (rngmax), current (rngmin),
       missing (missing), rpcfnc (rpcfnc), lkeys (plkeys),
       completecb (completecb)
     { go (); }
 };
+// }}}
+// {{{ merkle_getkeyrange utility
+void
+merkle_getkeyrange::finish ()
+{
+  delaycb (0, completecb);
+  delete this;
+}
 
 void
-compare_keylists (vec<chordID> lkeys, vec<chordID> rkeys,
-		  chordID rngmin, chordID rngmax,
-		  missingfnc_t missingfnc);
+merkle_getkeyrange::doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb)
+{
+  // Must resort to bundling all values into one argument since
+  // async/callback.h is configured with too few parameters.
+  struct RPC_delay_args args (merklesync_program_1, procno, in, out, cb,
+			      NULL);
+  (*rpcfnc) (&args);
+}
+// }}}
+void
+merkle_getkeyrange::go ()
+{
+  if (!betweenbothincl (rngmin, rngmax, current)) {
+    trace << "merkle_getkeyrange::go () ==> DONE\n";
+    finish ();
+    return;
+  }
 
-// ---------------------------------------------------------------------------
-// util junk
+  ref<getkeys_arg> arg = New refcounted<getkeys_arg> ();
+  arg->ctype = ctype;
+  arg->vnode = vnode;
+  arg->rngmin = current;
+  arg->rngmax = rngmax;
+  ref<getkeys_res> res = New refcounted<getkeys_res> ();
+  doRPC (MERKLESYNC_GETKEYS, arg, res,
+	 wrap (this, &merkle_getkeyrange::getkeys_cb, arg, res));
+}
 
+void
+merkle_getkeyrange::getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res,
+				clnt_stat err)
+
+{
+  if (err) {
+    warn << "GETKEYS: rpc error " << err << "\n";
+    finish ();
+    return;
+  } else if (res->status != MERKLE_OK) {
+    warn << "GETKEYS: protocol error " << err2str (res->status) << "\n";
+    finish ();
+    return;
+  }
+//  warn << "getkeys_cb: [" << arg->rngmin << "," << arg->rngmax << "] "
+//       << res->resok->keys.size () << " keys, with "
+//       << (res->resok->morekeys ? "more" : "no") << " keys left.\n";
+
+  // Assuming keys are sent back in increasing clockwise order
+  vec<chordID> rkeys;
+  for (u_int i = 0; i < res->resok->keys.size (); i++)
+    rkeys.push_back (res->resok->keys[i]);
+
+  chordID sentmax = rngmax;
+  if (res->resok->keys.size () > 0)
+    sentmax = res->resok->keys.back ();
+  compare_keylists (lkeys, rkeys, current, sentmax, missing);
+
+  current = incID (sentmax);
+  if (!res->resok->morekeys) {
+    finish ();
+    return;
+  }
+  go ();
+}
+// }}}
+
+// {{{ General utility functions
+void
+format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
+		merkle_node *node, merkle_rpc_node *rpcnode)
+{
+  rpcnode->depth = depth;
+  rpcnode->prefix = prefix;
+  rpcnode->count = node->count;
+  rpcnode->hash = node->hash;
+  rpcnode->isleaf = node->isleaf ();
+
+  if (!node->isleaf ()) {
+    rpcnode->child_hash.setsize (64);
+    for (int i = 0; i < 64; i++)
+      rpcnode->child_hash[i] = node->child_hash (i);
+  } else {
+    vec<merkle_hash> keys = ltree->database_get_keys (depth, prefix);
+
+    if (keys.size () != rpcnode->count) {
+      warn << "\n\n\n----------------------------------------------------------\n";
+      warn << "BUG BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG BUG\n";
+      warn << "Send this output to chord@pdos.lcs.mit.edu\n";
+      warn << "BUG: " << depth << " " << prefix << "\n";
+      warn << "BUG: " << keys.size () << " != " << rpcnode->count << "\n";
+      ltree->check_invariants ();
+      warn << "BUG BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG BUG\n";
+      panic << "----------------------------------------------------------\n\n\n";
+    }
+
+    rpcnode->child_hash.setsize (keys.size ());
+    for (u_int i = 0; i < keys.size (); i++) {
+      rpcnode->child_hash[i] = keys[i];
+    }
+  }
+}
 
 // Check whether [l1, r1] overlaps [l2, r2] on the circle.
 static bool
@@ -64,15 +166,53 @@ overlap (const bigint &l1, const bigint &r1, const bigint &l2, const bigint &r2)
 	  || betweenbothincl (l2, r2, l1) || betweenbothincl (l2, r2, r1));
 }
 
+static void
+compare_keylists (vec<chordID> lkeys,
+		  vec<chordID> vrkeys,
+		  chordID rngmin, chordID rngmax,
+		  missingfnc_t missingfnc)
+{
+  // populate a hash table with the remote keys
+  qhash<chordID, int, hashID> rkeys;
+  for (u_int i = 0; i < vrkeys.size (); i++) {
+    if (betweenbothincl (rngmin, rngmax, vrkeys[i])) {
+      // trace << "remote key: " << vrkeys[i] << "\n";
+      rkeys.insert (vrkeys[i], 1);
+    }
+  }
 
-// ---------------------------------------------------------------------------
-// merkle_syncer
+  // do I have something he doesn't have?
+  for (unsigned int i = 0; i < lkeys.size (); i++) {
+    if (!rkeys[lkeys[i]] &&
+	betweenbothincl (rngmin, rngmax, lkeys[i])) {
+      trace << "remote missing [" << rngmin << ", "
+	    << rngmax << "] key=" << lkeys[i] << "\n";
+      (*missingfnc) (lkeys[i], false);
+    } else {
+      if (rkeys[lkeys[i]]) trace << "remote has " << lkeys[i] << "\n";
+      else trace << "out of range: " << lkeys[i] << "\n";
+      rkeys.remove (lkeys[i]);
+    }
+  }
 
+  //anything left: he has and I don't
+  qhash_slot<chordID, int> *slot = rkeys.first ();
+  while (slot) {
+    trace << "local missing [" << rngmin << ", "
+	  << rngmax << "] key=" << slot->key << "\n";
+    (*missingfnc) (slot->key, true);
+    slot = rkeys.next (slot);
+  }
 
-merkle_syncer::merkle_syncer (uint vnode, dhash_ctype ctype, 
-			      ptr<merkle_tree> ltree, 
+}
+// }}}
+
+// {{{ merkle_syncer
+// {{{ merkle_syncer utility
+merkle_syncer::merkle_syncer (uint vnode, dhash_ctype ctype,
+			      ptr<merkle_tree> ltree,
 			      rpcfnc_t rpcfnc, missingfnc_t missingfnc)
-  : vnode (vnode), ctype (ctype), ltree (ltree), rpcfnc (rpcfnc), 
+  : vnode (vnode), ctype (ctype), ltree (ltree), rpcfnc (rpcfnc),
     missingfnc (missingfnc), completecb (cbi_null),
     outstanding_keyranges (0)
 {
@@ -87,34 +227,18 @@ merkle_syncer::~merkle_syncer ()
 }
 
 void
-merkle_syncer::sync (bigint rngmin, bigint rngmax, cbi cb)
-{
-  assert (outstanding_keyranges == 0);
-  assert (st.size () == 0);
-  sync_done = false;
-  local_rngmin = rngmin;
-  local_rngmax = rngmax;
-  completecb = cb;
-
-  // start at the root of the merkle tree
-  sendnode (0, 0);
-}
-
-
-void
 merkle_syncer::dump ()
-{    
+{
   warn << "THIS: " << (u_int)this << "\n";
-  warn << "  st.size () " << st.size () << "\n"; 
+  warn << "  st.size () " << st.size () << "\n";
 }
-
 
 void
 merkle_syncer::doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb)
 {
   // Must resort to bundling all values into one argument since
   // async/callback.h is configured with too few parameters.
-  struct RPC_delay_args args (merklesync_program_1, procno, in, out, cb, 
+  struct RPC_delay_args args (merklesync_program_1, procno, in, out, cb,
 			      NULL);
   (*rpcfnc) (&args);
 }
@@ -122,12 +246,11 @@ merkle_syncer::doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb)
 void
 merkle_syncer::setdone ()
 {
-  if (completecb != cbi_null) 
+  if (completecb != cbi_null)
     // Return 0 if everything was ok, 1 otherwise.
     completecb (fatal_err.cstr () != NULL);
   sync_done = true;
 }
-
 
 void
 merkle_syncer::error (str err)
@@ -150,85 +273,25 @@ merkle_syncer::getsummary ()
 
   return sb;
 }
+// }}}
 
 void
-merkle_syncer::next (void)
+merkle_syncer::sync (bigint rngmin, bigint rngmax, cbi cb)
 {
-  trace << "local range [" <<  local_rngmin << "," << local_rngmax << "]\n";
-  assert (!sync_done);
-  assert (!fatal_err);
+  assert (outstanding_keyranges == 0);
+  assert (st.size () == 0);
+  sync_done = false;
+  local_rngmin = rngmin;
+  local_rngmax = rngmax;
+  completecb = cb;
 
-  // st is queue of pending index nodes
-  while (st.size ()) {
-    pair<merkle_rpc_node, int> &p = st.back ();
-    merkle_rpc_node *rnode = &p.first;
-    assert (!rnode->isleaf);
-    
-    merkle_node *lnode = ltree->lookup_exact (rnode->depth, rnode->prefix);
-
-    if (!lnode) {
-      fatal << "lookup_exact didn't match for " << rnode->prefix << " at depth " << rnode->depth << "\n";
-    }
-    
-
-    trace << "starting from slot " << p.second << "\n";
-
-    while (p.second < 64) {
-      u_int i = p.second;
-      p.second += 1;
-      trace << "CHECKING: " << i << "\n";
-
-      bigint remote = tobigint (rnode->child_hash[i]);
-      bigint local = tobigint (lnode->child_hash(i));
-
-      u_int depth = rnode->depth + 1;
-
-      //prefix is the high bits of the first key 
-      // the node is responsible for.
-      merkle_hash prefix = rnode->prefix;
-      prefix.write_slot (rnode->depth, i);
-      bigint slot_rngmin = tobigint (prefix);
-      bigint slot_width = bigint (1) << (160 - 6*depth);
-      bigint slot_rngmax = slot_rngmin + slot_width - 1;
-
-      bool overlaps = overlap (local_rngmin, local_rngmax, slot_rngmin, slot_rngmax);
-
-      strbuf tr;
-      if (remote != local) {
-	tr << " differ. local " << local << " != remote " << remote;
-
-	if (overlaps) {
-	  tr << " .. sending\n";
-	  sendnode (depth, prefix);
-	  trace << tr;
-	  ltree->lookup_release(lnode);
-	  return;
-	} else {
-	  tr << " .. not sending\n";
-	}
-      } else {
-	tr << " same. local " << local << " == remote " << remote << "\n";
-      }
-      trace << tr;
-    }
-
-    ltree->lookup_release(lnode);
-    assert (p.second == 64);
-    st.pop_back ();
-  }
-  trace << "DONE with internal nodes in NEXT\n";
-
-  if (!outstanding_keyranges) {
-    setdone ();
-    trace << "All OK!\n";
-  }
+  // start at the root of the merkle tree
+  sendnode (0, 0);
 }
-
 
 void
 merkle_syncer::sendnode (u_int depth, const merkle_hash &prefix)
 {
-
   ref<sendnode_arg> arg = New refcounted<sendnode_arg> ();
   ref<sendnode_res> res = New refcounted<sendnode_res> ();
 
@@ -245,15 +308,14 @@ merkle_syncer::sendnode (u_int depth, const merkle_hash &prefix)
   arg->ctype = ctype;
   arg->rngmin = local_rngmin;
   arg->rngmax = local_rngmax;
-  ltree->lookup_release(lnode);
+  ltree->lookup_release (lnode);
   doRPC (MERKLESYNC_SENDNODE, arg, res,
 	 wrap (this, &merkle_syncer::sendnode_cb, deleted, arg, res));
 }
 
-
 void
 merkle_syncer::sendnode_cb (ptr<bool> deleted,
-			    ref<sendnode_arg> arg, ref<sendnode_res> res, 
+			    ref<sendnode_arg> arg, ref<sendnode_res> res,
 			    clnt_stat err)
 {
   if (*deleted)
@@ -272,7 +334,7 @@ merkle_syncer::sendnode_cb (ptr<bool> deleted,
   if (!lnode) {
     fatal << "lookup failed: " << rnode->prefix << " at " << rnode->depth << "\n";
   }
-  
+
   compare_nodes (local_rngmin, local_rngmax, lnode, rnode);
 
   if (!lnode->isleaf () && !rnode->isleaf) {
@@ -280,142 +342,86 @@ merkle_syncer::sendnode_cb (ptr<bool> deleted,
     st.push_back (pair<merkle_rpc_node, int> (*rnode, 0));
   }
 
-  ltree->lookup_release(lnode);
+  ltree->lookup_release (lnode);
 
   next ();
 }
 
 void
-merkle_syncer::collect_keyranges ()
+merkle_syncer::next (void)
 {
-  assert (outstanding_keyranges > 0);
-  outstanding_keyranges--;
-  if (!outstanding_keyranges)
-    next ();
-}
+  trace << "local range [" <<  local_rngmin << "," << local_rngmax << "]\n";
+  assert (!sync_done);
+  assert (!fatal_err);
 
-// ---------------------------------------------------------------------------
-// merkle_getkeyrange
+  // st is queue of pending index nodes
+  while (st.size ()) {
+    pair<merkle_rpc_node, int> &p = st.back ();
+    merkle_rpc_node *rnode = &p.first;
+    assert (!rnode->isleaf);
 
-void
-merkle_getkeyrange::go ()
-{
-  if (!betweenbothincl (rngmin, rngmax, current)) {
-    trace << "merkle_getkeyrange::go () ==> DONE\n";
-    finish ();
-    return;
-  }
+    merkle_node *lnode = ltree->lookup_exact (rnode->depth, rnode->prefix);
 
-  ref<getkeys_arg> arg = New refcounted<getkeys_arg> ();
-  arg->ctype = ctype;
-  arg->vnode = vnode;
-  arg->rngmin = current;
-  arg->rngmax = rngmax;
-  ref<getkeys_res> res = New refcounted<getkeys_res> ();
-  doRPC (MERKLESYNC_GETKEYS, arg, res,
-	 wrap (this, &merkle_getkeyrange::getkeys_cb, arg, res));
-}
-
-void
-merkle_getkeyrange::finish ()
-{
-  delaycb (0, completecb);
-  delete this;
-}
-
-
-void
-merkle_getkeyrange::getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res, 
-				clnt_stat err)
-
-{
-  if (err) {
-    warn << "GETKEYS: rpc error " << err << "\n";
-    finish ();
-    return;
-  } else if (res->status != MERKLE_OK) {
-    warn << "GETKEYS: protocol error " << err2str (res->status) << "\n";
-    finish ();
-    return;
-  }
-//  warn << "getkeys_cb: [" << arg->rngmin << "," << arg->rngmax << "] "
-//       << res->resok->keys.size () << " keys, with "
-//       << (res->resok->morekeys ? "more" : "no") << " keys left.\n";
-
-  // Assuming keys are sent back in increasing clockwise order
-  vec<chordID> rkeys;
-  for (u_int i = 0; i < res->resok->keys.size (); i++) 
-    rkeys.push_back (res->resok->keys[i]);
-
-  chordID sentmax = rngmax;
-  if (res->resok->keys.size () > 0)
-    sentmax = res->resok->keys.back ();
-  compare_keylists (lkeys, rkeys, current, sentmax, missing);
-
-  current = incID (sentmax);
-  if (!res->resok->morekeys) {
-    finish ();
-    return;
-  }
-  go ();
-}
-
-
-void
-merkle_getkeyrange::doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb)
-{
-  // Must resort to bundling all values into one argument since
-  // async/callback.h is configured with too few parameters.
-  struct RPC_delay_args args (merklesync_program_1, procno, in, out, cb,
-			      NULL);
-  (*rpcfnc) (&args);
-}
-
-
-// ---------------------------------------------------------------------------
-
-void
-compare_keylists (vec<chordID> lkeys,
-		  vec<chordID> vrkeys,
-		  chordID rngmin, chordID rngmax,
-		  missingfnc_t missingfnc)
-{
-  // populate a hash table with the remote keys
-  qhash<chordID, int, hashID> rkeys;
-  for (u_int i = 0; i < vrkeys.size (); i++) {
-    if (betweenbothincl (rngmin, rngmax, vrkeys[i])) {
-      // trace << "remote key: " << vrkeys[i] << "\n";
-      rkeys.insert (vrkeys[i], 1);
+    if (!lnode) {
+      fatal << "lookup_exact didn't match for " << rnode->prefix << " at depth " << rnode->depth << "\n";
     }
-  }
-    
-  // do I have something he doesn't have?
-  for (unsigned int i = 0; i < lkeys.size (); i++) {
-    if (!rkeys[lkeys[i]] && 
-	betweenbothincl (rngmin, rngmax, lkeys[i])) {
-      trace << "remote missing [" << rngmin << ", " 
-	    << rngmax << "] key=" << lkeys[i] << "\n";
-      (*missingfnc) (lkeys[i], false);
-    } else {
-      if (rkeys[lkeys[i]]) trace << "remote has " << lkeys[i] << "\n";
-      else trace << "out of range: " << lkeys[i] << "\n";
-      rkeys.remove (lkeys[i]);
-    }
-  }
 
-  //anything left: he has and I don't
-  qhash_slot<chordID, int> *slot = rkeys.first ();
-  while (slot) {
-    trace << "local missing [" << rngmin << ", " 
-	  << rngmax << "] key=" << slot->key << "\n";
-    (*missingfnc) (slot->key, true);
-    slot = rkeys.next (slot);
+
+    trace << "starting from slot " << p.second << "\n";
+
+    while (p.second < 64) {
+      u_int i = p.second;
+      p.second += 1;
+      trace << "CHECKING: " << i << "\n";
+
+      bigint remote = tobigint (rnode->child_hash[i]);
+      bigint local = tobigint (lnode->child_hash (i));
+
+      u_int depth = rnode->depth + 1;
+
+      //prefix is the high bits of the first key
+      // the node is responsible for.
+      merkle_hash prefix = rnode->prefix;
+      prefix.write_slot (rnode->depth, i);
+      bigint slot_rngmin = tobigint (prefix);
+      bigint slot_width = bigint (1) << (160 - 6*depth);
+      bigint slot_rngmax = slot_rngmin + slot_width - 1;
+
+      bool overlaps = overlap (local_rngmin, local_rngmax, slot_rngmin, slot_rngmax);
+
+      strbuf tr;
+      if (remote != local) {
+	tr << " differ. local " << local << " != remote " << remote;
+
+	if (overlaps) {
+	  tr << " .. sending\n";
+	  sendnode (depth, prefix);
+	  trace << tr;
+	  ltree->lookup_release (lnode);
+	  return;
+	} else {
+	  tr << " .. not sending\n";
+	}
+      } else {
+	tr << " same. local " << local << " == remote " << remote << "\n";
+      }
+      trace << tr;
+    }
+
+    ltree->lookup_release (lnode);
+    assert (p.second == 64);
+    st.pop_back ();
   }
-   
+  trace << "DONE with internal nodes in NEXT\n";
+
+  if (!outstanding_keyranges) {
+    setdone ();
+    trace << "All OK!\n";
+  }
 }
 
 void
-merkle_syncer::compare_nodes (bigint rngmin, bigint rngmax, 
+merkle_syncer::compare_nodes (bigint rngmin, bigint rngmax,
 	       merkle_node *lnode, merkle_rpc_node *rnode)
 {
   trace << (lnode->isleaf ()  ? "L" : "I")
@@ -423,16 +429,14 @@ merkle_syncer::compare_nodes (bigint rngmin, bigint rngmax,
        << (rnode->isleaf ? "L" : "I")
        << "\n";
 
-  vec<chordID> lkeys = ltree->database_get_IDs (rnode->depth, 
+  vec<chordID> lkeys = ltree->database_get_IDs (rnode->depth,
 						rnode->prefix);
   if (rnode->isleaf) {
-    
     vec<chordID> rkeys;
-    for (u_int i = 0; i < rnode->child_hash.size (); i++) 
-	rkeys.push_back (tobigint(rnode->child_hash[i]));
+    for (u_int i = 0; i < rnode->child_hash.size (); i++)
+	rkeys.push_back (tobigint (rnode->child_hash[i]));
 
-    compare_keylists (lkeys, rkeys, rngmin, rngmax, missingfnc);    
-	
+    compare_keylists (lkeys, rkeys, rngmin, rngmax, missingfnc);
   } else if (lnode->isleaf () && !rnode->isleaf) {
     bigint tmpmin = tobigint (rnode->prefix);
     bigint node_width = bigint (1) << (160 - rnode->depth);
@@ -445,45 +449,20 @@ merkle_syncer::compare_nodes (bigint rngmin, bigint rngmax,
       tmpmax = rngmax;
 
     outstanding_keyranges++;
-    vNew merkle_getkeyrange (vnode, ctype, tmpmin, tmpmax, lkeys, 
+    vNew merkle_getkeyrange (vnode, ctype, tmpmin, tmpmax, lkeys,
 	missingfnc, rpcfnc,
 	wrap (this, &merkle_syncer::collect_keyranges));
   }
 }
 
-// ---------------------------------------------------------------------------
-
 void
-format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
-		merkle_node *node, merkle_rpc_node *rpcnode)
+merkle_syncer::collect_keyranges ()
 {
-  rpcnode->depth = depth;
-  rpcnode->prefix = prefix;
-  rpcnode->count = node->count;
-  rpcnode->hash = node->hash;
-  rpcnode->isleaf = node->isleaf ();
-  
-  if (!node->isleaf ()) {
-    rpcnode->child_hash.setsize (64);
-    for (int i = 0; i < 64; i++)
-      rpcnode->child_hash[i] = node->child_hash(i);
-  } else {
-    vec<merkle_hash> keys = ltree->database_get_keys (depth, prefix);
-
-    if (keys.size () != rpcnode->count) {
-      warn << "\n\n\n----------------------------------------------------------\n";
-      warn << "BUG BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG BUG\n";
-      warn << "Send this output to chord@pdos.lcs.mit.edu\n";
-      warn << "BUG: " << depth << " " << prefix << "\n";
-      warn << "BUG: " << keys.size () << " != " << rpcnode->count << "\n";
-      ltree->check_invariants ();
-      warn << "BUG BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG BUG\n";
-      panic << "----------------------------------------------------------\n\n\n";
-    }
-
-    rpcnode->child_hash.setsize (keys.size ());
-    for (u_int i = 0; i < keys.size (); i++) {
-      rpcnode->child_hash[i] = keys[i];
-    }
-  }
+  assert (outstanding_keyranges > 0);
+  outstanding_keyranges--;
+  if (!outstanding_keyranges)
+    next ();
 }
+// }}}
+
+/* vim:set foldmethod=marker: */
