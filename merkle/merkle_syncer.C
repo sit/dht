@@ -436,7 +436,7 @@ merkle_syncer::compare_nodes (bigint rngmin, bigint rngmax,
     compare_keylists (lkeys, rkeys, rngmin, rngmax, missingfnc);
   } else if (lnode->isleaf () && !rnode->isleaf) {
     bigint tmpmin = tobigint (rnode->prefix);
-    bigint node_width = bigint (1) << (160 - rnode->depth);
+    bigint node_width = bigint (1) << (160 - 6*rnode->depth);
     bigint tmpmax = tmpmin + node_width - 1;
 
     // further constrain to be within the host's range of interest
