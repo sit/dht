@@ -421,6 +421,10 @@ merkle_syncer::compare_nodes (bigint rngmin, bigint rngmax,
        << (rnode->isleaf ? "L" : "I")
        << " at " << rnode->prefix << " depth " << rnode->depth << "\n";
 
+  if (lnode->hash == rnode->hash) {
+    trace << "Hashes identical!\n";
+    return;
+  }
   if (!lnode->isleaf () && !rnode->isleaf) {
     st.push_back (pair<merkle_rpc_node, int> (*rnode, 0));
     return;
