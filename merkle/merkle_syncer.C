@@ -56,8 +56,8 @@ overlap (const bigint &l1, const bigint &r1, const bigint &l2, const bigint &r2)
 }
 
 static void
-compare_keylists (vec<chordID> lkeys,
-		  vec<chordID> vrkeys,
+compare_keylists (const vec<chordID> &lkeys,
+		  const vec<chordID> &vrkeys,
 		  chordID rngmin, chordID rngmax,
 		  missingfnc_t missingfnc)
 {
@@ -120,7 +120,7 @@ public:
   ~merkle_getkeyrange () {}
   merkle_getkeyrange (uint vnode, dhash_ctype ctype,
 		      bigint rngmin, bigint rngmax,
-		      vec<chordID> plkeys,
+		      const vec<chordID> &plkeys,
 		      missingfnc_t missing, rpcfnc_t rpcfnc,
 		      cbv completecb)
     : vnode (vnode), ctype (ctype), rngmin (rngmin),
