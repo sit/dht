@@ -191,7 +191,7 @@ merkle_getkeyrange::getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res,
     rkeys.push_back (res->resok->keys[i]);
 
   chordID sentmax = rngmax;
-  if (res->resok->keys.size () > 0)
+  if (res->resok->morekeys && res->resok->keys.size () > 0)
     sentmax = res->resok->keys.back ();
   compare_keylists (lkeys, rkeys, current, sentmax, missing);
 
