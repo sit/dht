@@ -44,6 +44,7 @@ class merkle_syncer {
   void compare_nodes (bigint rngmin, bigint rngmax,
       merkle_node *lnode, merkle_rpc_node *rnode);
 
+  unsigned int outstanding_sendnodes;
   unsigned int outstanding_keyranges;
   void collect_keyranges ();
 

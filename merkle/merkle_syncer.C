@@ -211,6 +211,7 @@ merkle_syncer::merkle_syncer (uint vnode, dhash_ctype ctype,
 			      rpcfnc_t rpcfnc, missingfnc_t missingfnc)
   : vnode (vnode), ctype (ctype), ltree (ltree), rpcfnc (rpcfnc),
     missingfnc (missingfnc), completecb (cbi_null),
+    outstanding_sendnodes (0),
     outstanding_keyranges (0)
 {
   deleted = New refcounted<bool> (false);
@@ -275,6 +276,7 @@ merkle_syncer::getsummary ()
 void
 merkle_syncer::sync (bigint rngmin, bigint rngmax, cbi cb)
 {
+  assert (outstanding_sendnodes == 0);
   assert (outstanding_keyranges == 0);
   assert (st.size () == 0);
   sync_done = false;
@@ -306,6 +308,7 @@ merkle_syncer::sendnode (u_int depth, const merkle_hash &prefix)
   arg->rngmin = local_rngmin;
   arg->rngmax = local_rngmax;
   ltree->lookup_release (lnode);
+  outstanding_sendnodes++;
   doRPC (MERKLESYNC_SENDNODE, arg, res,
 	 wrap (this, &merkle_syncer::sendnode_cb, deleted, arg, res));
 }
@@ -317,6 +320,7 @@ merkle_syncer::sendnode_cb (ptr<bool> deleted,
 {
   if (*deleted)
     return;
+  outstanding_sendnodes--;
   if (err) {
     error (strbuf () << "SENDNODE: rpc error " << err);
     return;
@@ -406,7 +410,7 @@ merkle_syncer::next (void)
   }
   trace << "DONE with internal nodes in NEXT\n";
 
-  if (!outstanding_keyranges) {
+  if (!outstanding_keyranges && !outstanding_sendnodes) {
     setdone ();
     trace << "All OK!\n";
   }
