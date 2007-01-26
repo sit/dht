@@ -10,11 +10,94 @@
 #define info  modlogger ("merkle", modlogger::INFO)
 #define trace modlogger ("merkle", modlogger::TRACE)
 
+// {{{ General utility functions
+void
+format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
+		merkle_node *node, merkle_rpc_node *rpcnode)
+{
+  rpcnode->depth = depth;
+  rpcnode->prefix = prefix;
+  rpcnode->count = node->count;
+  rpcnode->hash = node->hash;
+  rpcnode->isleaf = node->isleaf ();
+
+  if (!node->isleaf ()) {
+    rpcnode->child_hash.setsize (64);
+    for (int i = 0; i < 64; i++)
+      rpcnode->child_hash[i] = node->child_hash (i);
+  } else {
+    vec<merkle_hash> keys = ltree->database_get_keys (depth, prefix);
+
+    if (keys.size () != rpcnode->count) {
+      warn << "\n\n\n----------------------------------------------------------\n";
+      warn << "BUG BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG BUG\n";
+      warn << "Send this output to chord@pdos.lcs.mit.edu\n";
+      warn << "BUG: " << depth << " " << prefix << "\n";
+      warn << "BUG: " << keys.size () << " != " << rpcnode->count << "\n";
+      ltree->check_invariants ();
+      warn << "BUG BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG BUG\n";
+      panic << "----------------------------------------------------------\n\n\n";
+    }
+
+    rpcnode->child_hash.setsize (keys.size ());
+    for (u_int i = 0; i < keys.size (); i++) {
+      rpcnode->child_hash[i] = keys[i];
+    }
+  }
+}
+
+// Check whether [l1, r1] overlaps [l2, r2] on the circle.
+static bool
+overlap (const bigint &l1, const bigint &r1, const bigint &l2, const bigint &r2)
+{
+  // There might be a more efficient way to do this..
+  return (betweenbothincl (l1, r1, l2) || betweenbothincl (l1, r1, r2)
+	  || betweenbothincl (l2, r2, l1) || betweenbothincl (l2, r2, r1));
+}
+
+static void
+compare_keylists (vec<chordID> lkeys,
+		  vec<chordID> vrkeys,
+		  chordID rngmin, chordID rngmax,
+		  missingfnc_t missingfnc)
+{
+  // populate a hash table with the remote keys
+  qhash<chordID, int, hashID> rkeys;
+  for (u_int i = 0; i < vrkeys.size (); i++) {
+    if (betweenbothincl (rngmin, rngmax, vrkeys[i])) {
+      // trace << "remote key: " << vrkeys[i] << "\n";
+      rkeys.insert (vrkeys[i], 1);
+    }
+  }
+
+  // do I have something he doesn't have?
+  for (unsigned int i = 0; i < lkeys.size (); i++) {
+    if (!rkeys[lkeys[i]] &&
+	betweenbothincl (rngmin, rngmax, lkeys[i])) {
+      trace << "remote missing [" << rngmin << ", "
+	    << rngmax << "] key=" << lkeys[i] << "\n";
+      (*missingfnc) (lkeys[i], false);
+    } else {
+      if (rkeys[lkeys[i]]) trace << "remote has " << lkeys[i] << "\n";
+      else trace << "out of range: " << lkeys[i] << "\n";
+      rkeys.remove (lkeys[i]);
+    }
+  }
+
+  //anything left: he has and I don't
+  qhash_slot<chordID, int> *slot = rkeys.first ();
+  while (slot) {
+    trace << "local missing [" << rngmin << ", "
+	  << rngmax << "] key=" << slot->key << "\n";
+    (*missingfnc) (slot->key, true);
+    slot = rkeys.next (slot);
+  }
+
+}
+// }}}
+
 // {{{ merkle_getkeyrange
 // {{{ merkle_getkeyrange declarations
-static void compare_keylists (vec<chordID> lkeys, vec<chordID> vrkeys,
-    chordID rngmin, chordID rngmax, missingfnc_t missingfnc);
-
 class merkle_getkeyrange {
 private:
   uint vnode;
@@ -118,92 +201,6 @@ merkle_getkeyrange::getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res,
     return;
   }
   go ();
-}
-// }}}
-
-// {{{ General utility functions
-void
-format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
-		merkle_node *node, merkle_rpc_node *rpcnode)
-{
-  rpcnode->depth = depth;
-  rpcnode->prefix = prefix;
-  rpcnode->count = node->count;
-  rpcnode->hash = node->hash;
-  rpcnode->isleaf = node->isleaf ();
-
-  if (!node->isleaf ()) {
-    rpcnode->child_hash.setsize (64);
-    for (int i = 0; i < 64; i++)
-      rpcnode->child_hash[i] = node->child_hash (i);
-  } else {
-    vec<merkle_hash> keys = ltree->database_get_keys (depth, prefix);
-
-    if (keys.size () != rpcnode->count) {
-      warn << "\n\n\n----------------------------------------------------------\n";
-      warn << "BUG BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG BUG\n";
-      warn << "Send this output to chord@pdos.lcs.mit.edu\n";
-      warn << "BUG: " << depth << " " << prefix << "\n";
-      warn << "BUG: " << keys.size () << " != " << rpcnode->count << "\n";
-      ltree->check_invariants ();
-      warn << "BUG BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG BUG\n";
-      panic << "----------------------------------------------------------\n\n\n";
-    }
-
-    rpcnode->child_hash.setsize (keys.size ());
-    for (u_int i = 0; i < keys.size (); i++) {
-      rpcnode->child_hash[i] = keys[i];
-    }
-  }
-}
-
-// Check whether [l1, r1] overlaps [l2, r2] on the circle.
-static bool
-overlap (const bigint &l1, const bigint &r1, const bigint &l2, const bigint &r2)
-{
-  // There might be a more efficient way to do this..
-  return (betweenbothincl (l1, r1, l2) || betweenbothincl (l1, r1, r2)
-	  || betweenbothincl (l2, r2, l1) || betweenbothincl (l2, r2, r1));
-}
-
-static void
-compare_keylists (vec<chordID> lkeys,
-		  vec<chordID> vrkeys,
-		  chordID rngmin, chordID rngmax,
-		  missingfnc_t missingfnc)
-{
-  // populate a hash table with the remote keys
-  qhash<chordID, int, hashID> rkeys;
-  for (u_int i = 0; i < vrkeys.size (); i++) {
-    if (betweenbothincl (rngmin, rngmax, vrkeys[i])) {
-      // trace << "remote key: " << vrkeys[i] << "\n";
-      rkeys.insert (vrkeys[i], 1);
-    }
-  }
-
-  // do I have something he doesn't have?
-  for (unsigned int i = 0; i < lkeys.size (); i++) {
-    if (!rkeys[lkeys[i]] &&
-	betweenbothincl (rngmin, rngmax, lkeys[i])) {
-      trace << "remote missing [" << rngmin << ", "
-	    << rngmax << "] key=" << lkeys[i] << "\n";
-      (*missingfnc) (lkeys[i], false);
-    } else {
-      if (rkeys[lkeys[i]]) trace << "remote has " << lkeys[i] << "\n";
-      else trace << "out of range: " << lkeys[i] << "\n";
-      rkeys.remove (lkeys[i]);
-    }
-  }
-
-  //anything left: he has and I don't
-  qhash_slot<chordID, int> *slot = rkeys.first ();
-  while (slot) {
-    trace << "local missing [" << rngmin << ", "
-	  << rngmax << "] key=" << slot->key << "\n";
-    (*missingfnc) (slot->key, true);
-    slot = rkeys.next (slot);
-  }
-
 }
 // }}}
 
