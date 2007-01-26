@@ -334,11 +334,6 @@ merkle_syncer::sendnode_cb (ptr<bool> deleted,
 
   compare_nodes (local_rngmin, local_rngmax, lnode, rnode);
 
-  if (!lnode->isleaf () && !rnode->isleaf) {
-    trace << "I vs I\n";
-    st.push_back (pair<merkle_rpc_node, int> (*rnode, 0));
-  }
-
   ltree->lookup_release (lnode);
 
   next ();
@@ -369,7 +364,7 @@ merkle_syncer::next (void)
     while (p.second < 64) {
       u_int i = p.second;
       p.second += 1;
-      trace << "CHECKING: " << i << "\n";
+      trace << "CHECKING: " << i << " of " << rnode->prefix << " at depth " << rnode->depth << "\n";
 
       bigint remote = tobigint (rnode->child_hash[i]);
       bigint local = tobigint (lnode->child_hash (i));
@@ -424,7 +419,12 @@ merkle_syncer::compare_nodes (bigint rngmin, bigint rngmax,
   trace << (lnode->isleaf ()  ? "L" : "I")
        << " vs "
        << (rnode->isleaf ? "L" : "I")
-       << "\n";
+       << " at " << rnode->prefix << " depth " << rnode->depth << "\n";
+
+  if (!lnode->isleaf () && !rnode->isleaf) {
+    st.push_back (pair<merkle_rpc_node, int> (*rnode, 0));
+    return;
+  }
 
   vec<chordID> lkeys = ltree->database_get_IDs (rnode->depth,
 						rnode->prefix);
