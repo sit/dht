@@ -351,6 +351,26 @@ main (int argc, char *argv[])
   check_invariants ();
   assert (nkeyspushed == 0);
   assert (nkeyspulled == 0);
+
+  // Now test resynchronization after writes.
+  addrand (SERVER.tree, 257);
+  runsync (idzero, idmax);
+  check_equal_roots ();
+  assert (nkeyspulled == 257);
+  assert (nkeyspushed == 0);
+  addrand (SYNCER.tree, 257);
+  runsync (idzero, idmax);
+  check_equal_roots ();
+  assert (nkeyspulled == 0);
+  assert (nkeyspushed == 257);
+
+  addrand (SERVER.tree, 3);
+  addrand (SYNCER.tree, 5);
+  runsync (idzero, idmax);
+  check_equal_roots ();
+  assert (nkeyspulled == 3);
+  assert (nkeyspushed == 5);
+
   dump_stats ();
   finish ();
 
