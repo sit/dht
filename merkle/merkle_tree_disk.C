@@ -21,7 +21,7 @@ open_file (str name) {
     struct stat st;
     if (stat (dirpath, &st) < 0) {
       if (mkdir(dirpath, S_IRWXU|S_IRWXG|S_IROTH|S_IXOTH) != 0) {
-	fatal << "open_file: Couldn't make dir " << dirpath << ": " << strerror (errno) << ".\n";
+	fatal << "open_file: mkdir (" << dirpath << "): " << strerror (errno) << ".\n";
       }
     }
   }
@@ -31,7 +31,7 @@ open_file (str name) {
     f = fopen (name, "w+");
   }
   if (f == NULL) {
-    fatal << "open_file: Couldn't open or create " << name << " for read/write\n";
+    fatal << "open_file: fopen (" << name << "): " << strerror (errno) << ".\n"; 
   }
   return f;
 }
