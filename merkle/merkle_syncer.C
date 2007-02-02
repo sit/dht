@@ -244,9 +244,11 @@ merkle_syncer::doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb)
 void
 merkle_syncer::setdone ()
 {
-  if (completecb != cbi_null)
+  if (completecb != cbi_null) {
     // Return 0 if everything was ok, 1 otherwise.
     completecb (fatal_err.cstr () != NULL);
+    completecb = cbi_null;
+  }
   sync_done = true;
 }
 
