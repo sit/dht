@@ -290,6 +290,8 @@ dbns::~dbns ()
 #undef DBNS_DBCLOSE
   delete kdb;
   kdb = NULL;
+  delete mtree;
+  mtree = NULL;
   warn << "dbns::~dbns (" << name << ")\n";
 }
 // }}}
