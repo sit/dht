@@ -43,15 +43,17 @@ merkle_sync::sync_with (ptr<locationcc> who,
   BLOCK {
     who->get_stream_aclnt (merklesync_program_1, @(client));
   }
-  BLOCK {
-    msyncer = New refcounted<merkle_syncer> (
-	who->vnode (), ctype,
-	localtree,
-	wrap (&doRPCer, client),
-	missing);
-    msyncer->sync (rngmin, rngmax, @(err));
+  if (client) {
+    BLOCK {
+      msyncer = New refcounted<merkle_syncer> (
+	  who->vnode (), ctype,
+	  localtree,
+	  wrap (&doRPCer, client),
+	  missing);
+      msyncer->sync (rngmin, rngmax, @(err));
+    }
   }
-  // Ignore err?
+  // Ignore !client and any syncer err; we'll retry later.
   cb ();
 }
 
