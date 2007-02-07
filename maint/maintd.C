@@ -160,9 +160,12 @@ sync_dispatch (ptr<asrv> srv, svccb *sbp)
   bool ok = false;
   syncdest_t *discrim = sbp->Xtmpl getarg<syncdest_t> ();
   for (size_t i = 0; i < maintainers.size (); i++) {
+    // maintainer takes some time to get local db info from adbd;
+    // must check for valid localtree before dispatching
     if (maintainers[i]->sync->sync_program ().progno == sbp->prog () &&
 	maintainers[i]->sync->ctype == discrim->ctype &&
-	maintainers[i]->host.vnode_num == (int) discrim->vnode)
+	maintainers[i]->host.vnode_num == (int) discrim->vnode &&
+	maintainers[i]->localtree () != NULL)
     {
       ok = true;
       ptr<merkle_tree> t = maintainers[i]->localtree ();
