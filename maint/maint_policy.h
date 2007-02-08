@@ -146,16 +146,21 @@ public:
 };
 
 class passingtone: public maintainer {
+  vec<chordID> repairqueue;
   void handle_missing (ptr<locationcc> from, ptr<merkle_tree> t, chordID key, bool missing_local);
   void process_neighbors (const vec<ptr<locationcc> > &preds,
       const vec<ptr<locationcc> > &succs, cbv cb, CLOSURE);
 
+  void init_ltree (adb_status err, str path, bool hasaux);
+  passingtone (const passingtone &m);
 protected:
   passingtone (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s);
 public:
   static ref<maintainer> produce_maintainer (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s);
-  passingtone (const passingtone &m);
   ~passingtone ();
+
+  void getrepairs (chordID start, int thresh, int count,
+      rpc_vec<maint_repair_t, RPC_INFINITY> &repairs);
 };
 // }}}
 

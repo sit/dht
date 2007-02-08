@@ -477,6 +477,17 @@ passingtone::produce_maintainer (str path, maint_dhashinfo_t *hostinfo, ptr<sync
 passingtone::passingtone (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s) :
   maintainer (path, hostinfo, s)
 {
+  db->getspaceinfo (wrap (this, &passingtone::init_ltree));
+}
+
+void 
+passingtone::init_ltree (adb_status err, str path, bool hasaux)
+{
+  if (err) {
+    warn << "passingtone::init_ltree: Unexpected adbd error: " << err << "\n";
+    return;
+  }
+  ltree = New refcounted<merkle_tree_disk> (path, /* rw = */ false);
 }
 
 passingtone::~passingtone ()
@@ -488,11 +499,28 @@ passingtone::handle_missing (ptr<locationcc> from,
     ptr<merkle_tree> t,
     chordID key, bool missing_local)
 {
-  if (missing_local) {
-    // Enqueue a repair job to pull the object over locally.
+  // For completeness, keep adbd up to date.
+  ptr<location> rfrom = New refcounted<location> (from->chordnode ());
+  if (db->hasaux ()) {
+    chordID aux = (key & 0xFFFFFFFF);
+    chordID dbkey = (key >> 32) << 32;
+    db->update (dbkey, rfrom, aux.getui (), missing_local, true);
   } else {
-    // Enqueue a repair job to send the object to the remote side.
+    db->update (key, rfrom, missing_local, true);
   }
+
+  // for key on succ/pred:
+  //   if key in responsible range and not locally present:
+  //     replicate key locally
+  if (!missing_local)
+    return;
+  // XXX Should do better than linear scan here...
+  for (size_t i = 0; i < repairqueue.size (); i++) {
+    if (repairqueue[i] == key)
+      return;
+  }
+  warn << "passingtone " << host << " needs " << key << "\n";
+  repairqueue.push_back (key);
 }
 
 TAMED void
@@ -501,13 +529,60 @@ passingtone::process_neighbors (
     const vec<ptr<locationcc> > &succs,
     cbv cb)
 {
-  // for key on succ/pred:
-  //   if key in responsible range and not locally present:
-  //     replicate key
-  //
+  VARS {
+    chordID rngmin, rngmax;
+  }
+
+  // If there are repairs queued, don't bother re-syncing.
+  if (repairqueue.size ())
+    return;
+
+  // Our range starts before our efrag-th predecessor.
+  // Unless there are so few nodes that all objects are fully replicated.
+  if (preds.size() > efrags) 
+    rngmin = preds[efrags]->id ();
+  else
+    rngmin = incID (host.x);
+  rngmax = host.x;
 
   // merkle_sync with succ and pred.  If any keys missing
   // locally, fetch them.
+  BLOCK {
+    // Sync the entire tree range using the current live tree.
+    sync->sync_with (succs[0], rngmin, rngmax,
+	ltree, 
+	wrap (this, &passingtone::handle_missing, succs[0], ltree),
+	@());
+    sync->sync_with (preds[0], rngmin, rngmax,
+	ltree, 
+	wrap (this, &passingtone::handle_missing, preds[0], ltree),
+	@());
+  }
   cb ();
+}
+
+void
+passingtone::getrepairs (chordID start, int thresh, int count,
+      rpc_vec<maint_repair_t, RPC_INFINITY> &repairs)
+{
+  // ignore thresh.
+  // ignore start.
+  sockaddr_in saddr;
+  bzero (&saddr, sizeof(sockaddr_in));
+  // saddr.sin_family = AF_INET;
+  inet_aton (host.r.hostname.cstr (), &saddr.sin_addr);
+  saddr.sin_port = htons (host.r.port);
+  /* saddr fields are in network byte order */
+  u_int32_t a = ntohl (saddr.sin_addr.s_addr);
+  u_int32_t b = (ntohs (saddr.sin_port) << 16) | host.vnode_num;
+  while (repairqueue.size () && count > 0) {
+    chordID k = repairqueue.pop_front ();
+    maint_repair_t r;
+    r.id = k;
+    r.machine_order_ipv4_addr = a;
+    r.machine_order_port_vnnum = b;
+    repairs.push_back (r);
+    count--;
+  }
 }
 // }}}
