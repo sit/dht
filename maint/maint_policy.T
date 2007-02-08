@@ -295,7 +295,7 @@ carbonite::~carbonite ()
 void 
 carbonite::handle_missing (ptr<locationcc> from,
     ptr<merkle_tree> t,
-    bigint key, bool missing_local)
+    chordID key, bool missing_local)
 {
   // Make the local tree look identical to the remote tree.
   // For now, also keep the adbd register up to date.
@@ -486,7 +486,7 @@ passingtone::~passingtone ()
 void 
 passingtone::handle_missing (ptr<locationcc> from,
     ptr<merkle_tree> t,
-    bigint key, bool missing_local)
+    chordID key, bool missing_local)
 {
   if (missing_local) {
     // Enqueue a repair job to pull the object over locally.

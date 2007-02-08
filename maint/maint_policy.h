@@ -131,7 +131,7 @@ public:
 
 class carbonite: public maintainer {
   void init_ltree (adb_status err, str path, bool hasaux);
-  void handle_missing (ptr<locationcc> from, ptr<merkle_tree> t, chordID id, bool local);
+  void handle_missing (ptr<locationcc> from, ptr<merkle_tree> t, chordID key, bool missing_local);
   void process_neighbors (const vec<ptr<locationcc> > &preds,
       const vec<ptr<locationcc> > &succs, cbv cb, CLOSURE);
 
@@ -146,7 +146,7 @@ public:
 };
 
 class passingtone: public maintainer {
-  void handle_missing (ptr<locationcc> from, ptr<merkle_tree> t, chordID id, bool local);
+  void handle_missing (ptr<locationcc> from, ptr<merkle_tree> t, chordID key, bool missing_local);
   void process_neighbors (const vec<ptr<locationcc> > &preds,
       const vec<ptr<locationcc> > &succs, cbv cb, CLOSURE);
 
