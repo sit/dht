@@ -174,7 +174,7 @@ sync_dispatch (ptr<asrv> srv, svccb *sbp)
     }
   }
   if (!ok)
-    sbp->reject (PROG_UNAVAIL);
+    sbp->reject (PROC_UNAVAIL);
 }
 // }}}
 // {{{ Control-side RPC execution
