@@ -140,7 +140,8 @@ maintainer::maintainer (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s) :
   running (false),
   in_progress (false),
   delay (default_delay),
-  mainttimer (NULL)
+  mainttimer (NULL),
+  ltree (NULL)
 {
 }
 
@@ -272,8 +273,7 @@ carbonite::produce_maintainer (str path, maint_dhashinfo_t *hostinfo, ptr<syncer
 }
 
 carbonite::carbonite (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s) :
-    maintainer (path, hostinfo, s),
-    ltree (NULL)
+    maintainer (path, hostinfo, s)
 {
   db->getspaceinfo (wrap (this, &carbonite::init_ltree));
 }

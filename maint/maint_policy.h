@@ -106,6 +106,8 @@ protected:
   timecb_t *mainttimer;
   // RepInv: (!running && mainttimer == NULL)
 
+  ptr<merkle_tree> ltree;
+
   virtual void run_cycle (cbv cb, CLOSURE);
   void start_helper ();
   virtual void update_neighbors (cbv cb, CLOSURE);
@@ -122,7 +124,7 @@ public:
   virtual void start (u_int32_t delay = default_delay);
   virtual void stop ();
 
-  virtual ptr<merkle_tree> localtree () { return NULL; }
+  virtual ptr<merkle_tree> localtree () { return ltree; }
   virtual void getrepairs (chordID start, int thresh, int count,
       rpc_vec<maint_repair_t, RPC_INFINITY> &repairs) {}
 };
@@ -135,11 +137,9 @@ class carbonite: public maintainer {
 
   carbonite (const carbonite &m);
 protected:
-  ptr<merkle_tree> ltree;
   carbonite (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s);
 public:
   static ref<maintainer> produce_maintainer (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s);
-  ptr<merkle_tree> localtree () { return ltree; }
   void getrepairs (chordID start, int thresh, int count,
       rpc_vec<maint_repair_t, RPC_INFINITY> &repairs);
   ~carbonite ();
