@@ -361,7 +361,7 @@ struct keycounter {
   itree_entry<keycounter> ik;
   keycounter (chordID id) : id (id), presence (0), count (0) {}
   void add (unsigned int i) {
-    assert (i < sizeof (presence));
+    assert (i < 8*sizeof (presence));
     unsigned int x = 1 << i;
     if (presence & x == x) return;
     presence |= x;
@@ -423,7 +423,7 @@ carbonite::getrepairs (chordID start, int thresh, int count,
       vec<chordID> keys = trees[i]->get_keyrange (lastread[i], stop, 64);
       if (keys.size () < 64)
 	treedone[i] = true;
-      for (unsigned int j = 0; i < keys.size (); i++) {
+      for (unsigned int j = 0; j < keys.size (); j++) {
 	keycounter *k = keymap[keys[j]];
 	if (!k) {
 	  k = New keycounter (keys[j]);
@@ -433,7 +433,8 @@ carbonite::getrepairs (chordID start, int thresh, int count,
 	  k->add (i);
 	}
       }
-      lastread[i] = incID (keys.back ());
+      if (keys.size ())
+	lastread[i] = incID (keys.back ());
     }
     // if we've read all the keys in the responsible range
     // in all trees, it's time to quit.
