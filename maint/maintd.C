@@ -240,7 +240,8 @@ void
 do_getrepairs (svccb *sbp)
 {
   maint_getrepairsarg *arg = sbp->Xtmpl getarg<maint_getrepairsarg> ();
-  maint_getrepairsres *res = sbp->Xtmpl getarg<maint_getrepairsres> ();
+  maint_getrepairsres *res = sbp->Xtmpl getres<maint_getrepairsres> ();
+  res->status = MAINTPROC_OK;
 
   chord_node host = arg->host;
   dhash_ctype ctype = arg->ctype;
