@@ -359,23 +359,24 @@ struct keycounter {
   unsigned int presence;
   unsigned int count;
   itree_entry<keycounter> ik;
+  static const unsigned int psz = 8*sizeof (unsigned int);
   keycounter (chordID id) : id (id), presence (0), count (0) {}
   void add (unsigned int i) {
-    assert (i < 8*sizeof (presence));
+    assert (i < psz);
     unsigned int x = 1 << i;
-    if (presence & x == x) return;
+    if ((presence & x) == x) return;
     presence |= x;
     count++;
   }
   int firstvoid () {
     unsigned int t = presence;
     unsigned int i = 0;
-    while (t) {
+    while (i < psz) {
       if (!(t & 1))
 	return i;
       i++; t >>= 1;
     }
-    return sizeof (unsigned int);
+    return psz;
   }
 };
 // Find the first leaf page that includes 'start'.
@@ -446,20 +447,33 @@ carbonite::getrepairs (chordID start, int thresh, int count,
       if (betweenleftincl (start, minimax, lastread[i]))
 	minimax = lastread[i];
 
-    keycounter *k = keymap.first ();
-    while (k &&
-	   between (start, minimax, k->id) &&
-	   (int) repairs.size () < count)
+    keycounter *k = NULL; 
+    for (k = keymap.first ();
+	 (k && (int) repairs.size () < count);
+	 k = keymap.next (k))
     {
+      if (!between (start, minimax, k->id)) {
+	// warn << "carbonite " << host << " rejects " << k->id << " not between\n";
+	continue;
+      }
       if (k->count < (unsigned) thresh) {
 	maint_repair_t repair;
 	repair.id = k->id;
 	unsigned int dst = k->firstvoid ();
+	if (dst >= succs.size ()) {
+	  // warn << "carbonite " << host << " rejects " << k->id
+	  //      << " no dst " << dst << " >= " << succs.size () << "\n";
+	  continue;
+	}
+	// warn << "carbonite " << host << " adds " << k->id
+	//      << " to successor " << dst << "\n";
 	succs[dst]->fill_ipportvn (repair.machine_order_ipv4_addr,
 	    repair.machine_order_port_vnnum);
 	repairs.push_back (repair);
+      } else {
+	// warn << "carbonite " << host << " rejects " << k->id
+	//      << " enough copies " << k->count << "\n";
       }
-      k = keymap.next (k);
     }
   }
   keymap.deleteall_correct ();
