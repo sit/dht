@@ -15,6 +15,7 @@ struct user_args;
 struct dhash_offer_arg;
 
 typedef callback<void, dhash_stat>::ptr cb_dhstat;
+typedef callback<void, const vec<maint_repair_t> &>::ptr cb_maintrepairs_t;
 
 // Encapsulate logic for repair jobs; when jobs complete
 // they should just lose reference count which can trigger
@@ -42,7 +43,10 @@ class dhblock_srv : virtual public refcount {
 
   // Generic cb_adbstat to cb_dhstat translator
   void adbcb (cb_dhstat cb, adb_status astat); 
+  // Maintenance callbacks
   void maintinitcb (maint_status *res, clnt_stat err);
+  void maintgetrepairscb (maint_getrepairsres *res,
+    cb_maintrepairs_t cbr, clnt_stat err);
 
  protected:
   const dhash_ctype ctype;
@@ -70,8 +74,12 @@ class dhblock_srv : virtual public refcount {
   virtual void db_store (chordID k, str d, cb_dhstat cb);
   virtual void db_store (chordID k, str d, u_int32_t aux, cb_dhstat cb);
 
+  // Maint RPC helpers and stubs 
   static ptr<aclnt> get_maint_aclnt (str msock);
   void maint_initspace (int efrags, int dfrags);
+  void maint_getrepairs (int thresh, int count, chordID start,
+    cb_maintrepairs_t cbr);
+  ptr<location> maintloc2location (u_int32_t a, u_int32_t b);
 
   cbv donecb;
 

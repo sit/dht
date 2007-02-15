@@ -3,6 +3,7 @@
 #include "dhash_common.h"
 #include "dhashcli.h"
 
+#include <locationtable.h>
 #include <location.h>
 #include <libadb.h>
 
@@ -71,6 +72,49 @@ dhblock_srv::maintinitcb (maint_status *res, clnt_stat err)
     warn << "Maintenance initialization failed for " 
       << db->name () << ": " << err << "/" << *res << "\n";
   delete res;
+}
+
+void
+dhblock_srv::maint_getrepairs (int thresh, int count, chordID start,
+    cb_maintrepairs_t cbr)
+{
+  maint_getrepairsarg arg;
+  bzero (&arg, sizeof (arg));
+  node->my_location ()->fill_node (arg.host);
+  arg.ctype = ctype;
+  arg.thresh = thresh;
+  arg.count = count;
+  arg.start = start;
+  maint_getrepairsres *res = New maint_getrepairsres ();
+  maint->call (MAINTPROC_GETREPAIRS, &arg, res,
+      wrap (this, &dhblock_srv::maintgetrepairscb, res, cbr));
+}
+
+void
+dhblock_srv::maintgetrepairscb (maint_getrepairsres *res,
+    cb_maintrepairs_t cbr, clnt_stat err)
+{
+  vec<maint_repair_t> repairs;
+  if (err || res->status) {
+    warn << "Maintenance getrepairs failed for " 
+      << db->name () << ": " << err << "/" << res->status << "\n";
+  } else {
+    for (size_t i = 0; i < res->repairs.size (); i++)
+      repairs.push_back (res->repairs[i]);
+  }
+  cbr (repairs);
+
+  delete res;
+}
+
+ptr<location>
+dhblock_srv::maintloc2location (u_int32_t a, u_int32_t b)
+{
+  chord_node_wire x;
+  bzero (&x, sizeof (x));
+  x.machine_order_ipv4_addr  = a;
+  x.machine_order_port_vnnum = b;
+  return node->locations->lookup_or_create (make_chord_node (x));
 }
 
 // These 2 functions exist just so that we can have a generic adbcb.

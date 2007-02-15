@@ -113,11 +113,31 @@ dhblock_chash_srv::store (chordID key, str d, cb_dhstat cb)
 void
 dhblock_chash_srv::generate_repair_jobs ()
 {
+  u_int32_t frags = dhblock_chash::num_efrags ();
+  maint_getrepairs (frags, REPAIR_QUEUE_MAX - repair_qlength (),
+      node->my_pred ()->id (),
+      wrap (this, &dhblock_chash_srv::maintqueue));
+#if 0
+  // Use of db's view of repairs is deprecated.
   u_int32_t frags = dhblock_chash::num_dfrags ();
   db->getblockrange (node->my_pred ()->id (), node->my_location ()->id (),
 		     frags, REPAIR_QUEUE_MAX - repair_qlength (),
 		     wrap (this, &dhblock_chash_srv::localqueue, frags));
-  return;
+#endif /* 0 */
+}
+
+void
+dhblock_chash_srv::maintqueue (const vec<maint_repair_t> &repairs)
+{
+  for (size_t i = 0; i < repairs.size (); i++) {
+    ptr<location> w = maintloc2location (
+	repairs[i].machine_order_ipv4_addr,
+	repairs[i].machine_order_port_vnnum);
+    blockID key (repairs[i].id, DHASH_CONTENTHASH);
+    ptr<repair_job> job = New refcounted<rjchash> (key, w,
+	mkref (this));
+    repair_add (job);
+  }
 }
 
 void

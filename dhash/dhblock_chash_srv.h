@@ -15,6 +15,7 @@ class dhblock_chash_srv : public dhblock_srv {
 
   pmaint *pmaint_obj;
 
+  void maintqueue (const vec<maint_repair_t> &repairs);
   void localqueue (u_int32_t frags, clnt_stat err, adb_status stat, vec<block_info> keys);
 
 public:
