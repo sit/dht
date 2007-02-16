@@ -104,6 +104,42 @@
 #ifdef SLEEPYCAT
 int dbfe_initialize_dbenv (DB_ENV **dbep, str filename, bool join, unsigned int cachesize = 1024);
 int dbfe_opendb (DB_ENV *dbe, DB **dbp, str filename, int flags, int mode = 0664, bool dups = false);
+
+inline int
+dbfe_txn_begin (DB_ENV *dbe, DB_TXN **t)
+{
+  int r;
+#if DB_VERSION_MAJOR >= 4
+  r = dbe->txn_begin (dbe, NULL, t, 0);
+#else
+  r = txn_begin (dbe, NULL, t, 0);
+#endif
+  return r;
+}
+
+inline int
+dbfe_txn_abort (DB_ENV *dbe, DB_TXN *t)
+{
+  int r;
+#if DB_VERSION_MAJOR >= 4
+  r = t->abort (t);
+#else
+  r = txn_abort (t, 0);
+#endif 
+  return r;
+}
+
+inline int
+dbfe_txn_commit (DB_ENV *dbe, DB_TXN *t)
+{
+  int r;
+#if DB_VERSION_MAJOR >= 4
+  r = t->commit (t, 0);
+#else
+  r = txn_commit (t, 0);
+#endif 
+  return r;
+}
 #endif /* SLEEPYCAT */
 
 struct dbrec {

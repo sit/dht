@@ -94,43 +94,6 @@ getnumreplicas (DB *sdb, const DBT *pkey, const DBT *pdata, DBT *skey)
   return 0;
 }
 // }}}
-// {{{ BerkeleyDB transaction API versioning wrappers
-static inline int
-dbns_txn_begin (DB_ENV *dbe, DB_TXN **t)
-{
-  int r;
-#if DB_VERSION_MAJOR >= 4
-  r = dbe->txn_begin (dbe, NULL, t, 0);
-#else
-  r = txn_begin (dbe, NULL, t, 0);
-#endif
-  return r;
-}
-
-static inline int
-dbns_txn_abort (DB_ENV *dbe, DB_TXN *t)
-{
-  int r;
-#if DB_VERSION_MAJOR >= 4
-  r = t->abort (t);
-#else
-  r = txn_abort (t, 0);
-#endif 
-  return r;
-}
-
-static inline int
-dbns_txn_commit (DB_ENV *dbe, DB_TXN *t)
-{
-  int r;
-#if DB_VERSION_MAJOR >= 4
-  r = t->commit (t, 0);
-#else
-  r = txn_commit (t, 0);
-#endif 
-  return r;
-}
-// }}}
 // {{{ dbns declarations
 class dbns {
   friend class dbmanager;
@@ -350,18 +313,18 @@ dbns::insert (const chordID &key, DBT &data, DBT &auxdata)
   if (auxdatadb) {
     // To keep auxdata in sync, use an explicit transaction
     DB_TXN *t = NULL;
-    r = dbns_txn_begin (dbe, &t);
+    r = dbfe_txn_begin (dbe, &t);
     r = datadb->put (datadb, t, &skey, &data, 0);
     if (r) {
       warner ("dbns::insert", "data put error", r);
-      r = dbns_txn_abort (dbe, t);
+      r = dbfe_txn_abort (dbe, t);
     } 
     r = auxdatadb->put (auxdatadb, t, &skey, &auxdata, 0);
     if (r) {
       warner ("dbns::insert", "auxdata put error", r);
-      r = dbns_txn_abort (dbe, t);
+      r = dbfe_txn_abort (dbe, t);
     } else {
-      r = dbns_txn_commit (dbe, t);
+      r = dbfe_txn_commit (dbe, t);
     }
     if (r)
       warner ("dbns::insert", "abort/commit error", r);
@@ -908,13 +871,13 @@ dbns::update (const chordID &key, const adb_bsinfo_t &bsinfo, bool present)
 {
   int r;
   DB_TXN *t = NULL;
-  dbns_txn_begin (dbe, &t);
+  dbfe_txn_begin (dbe, &t);
 
   r = updateone (key, bsinfo, present, t);
   if (r)
-    dbns_txn_abort (dbe, t);
+    dbfe_txn_abort (dbe, t);
   else
-    dbns_txn_commit (dbe, t);
+    dbfe_txn_commit (dbe, t);
   return r;
 }
 // }}}
@@ -924,16 +887,16 @@ dbns::updatebatch (rpc_vec<adb_updatearg, RPC_INFINITY> &uargs)
 {
   int r (0);
   DB_TXN *t = NULL;
-  dbns_txn_begin (dbe, &t);
+  dbfe_txn_begin (dbe, &t);
   for (size_t i = 0; i < uargs.size (); i++) {
     r = updateone (uargs[i].key, uargs[i].bsinfo, uargs[i].present, t);
     if (r) {
-      dbns_txn_abort (dbe, t);
+      dbfe_txn_abort (dbe, t);
       break;
     }
   }
   if (!r) {
-    dbns_txn_commit (dbe, t);
+    dbfe_txn_commit (dbe, t);
   }
   return r;
 }
