@@ -336,7 +336,8 @@ merkle_tree_disk::write_metadata ()
 
 merkle_node *merkle_tree_disk::get_root ()
 {
-  fseek (_index, 0, SEEK_SET);
+  fclose (_index);
+  _index = open_file (_index_name);
 
   // figure out where the root node is, given the index file
   // the first 32 bytes of the file tells us where it is
