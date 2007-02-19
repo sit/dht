@@ -43,10 +43,12 @@ sub spawn {
 my $help = 0;
 my $root = "dhash-$ENV{USER}";
 my $userbindir = "";
+my $maintmode = "carbonite";
 GetOptions (
     "help|?"      => \$help,
     "root|r=s"    => \$root,
     "bindir=s"      => \$userbindir,
+    "maintmode=s" => \$maintmode,
 );
 pod2usage(0) if $help;
 
@@ -102,7 +104,7 @@ $PID{adbd}  = spawn ($root, $ADBD, "adbd",
 		     "-S", "./adbd-sock");
 $PID{maintd} = spawn ($root, $MAINTD, "maintd",
 		     "-d", "./maintdata",
-		     "-m", "carbonite",
+		     "-m", $maintmode,
 		     "-C", "./maint-sock");
 my $lsd_started = 0;
 
@@ -168,6 +170,7 @@ start-dhash [start-dhash options] [lsd options]
     --help		Show brief usage message 
     --root dir		Sandbox Chord/DHash into <dir>
     --bindir dir	Directory of where to find binaries 
+    --maintmode mode	Maintenance mode used by maintd.
 
 =head1 OPTIONS
 
@@ -188,6 +191,11 @@ Search for binaries inside the specified directory.  This may be
 something like /usr, /usr/bin or a build directory; each of these
 possibilities is considered.  Otherwise, the default is to search
 the path for binaries.
+
+=item B<--maintmode> mode
+
+Use the specified maintenance mode.  This mode is passed directly
+to the -m option of maintd; validity checking is also done by maintd.
 
 =head1 LSD OPTIONS
 
