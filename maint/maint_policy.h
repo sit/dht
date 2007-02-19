@@ -14,10 +14,17 @@ class locationcc : public virtual refcount
   static vec<locationcc *> allocated;
 
   const chord_node n;
-  ptr<axprt_stream> x;
-  timecb_t *reapcaller;
 
+  tcpconnect_t *tcpc;
+  ptr<axprt_stream> x;
+
+  typedef callback<void, ptr<aclnt> >::ref aclntcb;
+  vec<cbv> aclntcbs;
+  void aclntmaker (const rpc_program *p, aclntcb cb);
+
+  timecb_t *reapcaller;
   void reaper ();
+
 protected:
   ~locationcc ();
   locationcc (const chord_node &n);
@@ -28,7 +35,7 @@ public:
   static ptr<locationcc> alloc (const chord_node &n);
   void fill_ipportvn (u_int32_t &a, u_int32_t &b);
   void get_stream_aclnt (const rpc_program &p,
-      callback<void, ptr<aclnt> >::ref cb,
+      aclntcb cb,
       CLOSURE);
 };
 // }}}

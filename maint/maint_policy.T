@@ -23,6 +23,7 @@ vec<locationcc *> locationcc::allocated;
 
 locationcc::locationcc (const chord_node &n) :
     n (n),
+    tcpc (NULL),
     x (NULL),
     reapcaller (NULL)
 {
@@ -39,6 +40,14 @@ locationcc::alloc (const chord_node &n)
   return New refcounted<locationcc> (n);
 }
 
+void
+locationcc::aclntmaker (const rpc_program *p, locationcc::aclntcb cb)
+{
+  ptr<aclnt> c (NULL);
+  if (x)
+    c = aclnt::alloc (x, *p);
+  cb (c);
+}
 
 TAMED void
 locationcc::get_stream_aclnt (const rpc_program &p,
@@ -46,34 +55,42 @@ locationcc::get_stream_aclnt (const rpc_program &p,
 {
   VARS {
     int fd (-1);
-    ptr<aclnt> c (NULL);
   }
 
   if (x) {
     assert (reapcaller);
     timecb_remove (reapcaller);
     reapcaller = NULL;
-    c = aclnt::alloc (x, p);
+    ptr<aclnt> c = aclnt::alloc (x, p);
+    cb (c);
   } else {
     assert (!reapcaller);
+    aclntcbs.push_back (wrap 
+	(this, &locationcc::aclntmaker, &p, cb));
+    if (tcpc) return; // Our cb will be called when tcpc finishes.
     BLOCK {
-      tcpconnect (n.r.hostname,
+      tcpc = tcpconnect (n.r.hostname,
 		  n.r.port-1, // LAME CONVENTION
 		  @(fd));
     }
+    tcpc = NULL;
     if (fd < 0) {
-      warn << "locationcc: connect to " << n << " failed:" <<
+      warn << "locationcc: connect to " << n << " failed: " <<
 	strerror (errno) << "\n";
-      cb (c);
-      return;
+      assert (x == NULL);
+    } else {
+      x = axprt_stream::alloc (fd);
     }
-    x = axprt_stream::alloc (fd);
-    c = aclnt::alloc (x, p);
+    while (aclntcbs.size ()) {
+      cbv cb = aclntcbs.pop_back ();
+      cb ();
+    }
   }
-  // XXX: delay should be long enough so that a round can finish
-  // and we can be here to use the cached connection next time.
-  reapcaller = delaycb (1200, wrap (this, &locationcc::reaper));
-  cb (c);
+  if (x) {
+    // XXX Should dynamically calculate delay to be just
+    // longer than the time between the start of two rounds.
+    reapcaller = delaycb (1200, wrap (this, &locationcc::reaper));
+  }
 }
 
 void
