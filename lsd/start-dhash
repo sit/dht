@@ -104,19 +104,24 @@ $PID{maintd} = spawn ($root, $MAINTD, "maintd",
 		     "-d", "./maintdata",
 		     "-m", "carbonite",
 		     "-C", "./maint-sock");
-sleep 5; # Figure out way to wait until maintd and adbd are ready
-$PID{lsd}   = spawn ($root, $LSD, "lsd",
-		     "-d", "./adbd-sock", 
-		     "-S", "./dhash-sock",
-		     "-R", "./maint-sock",
-		     "-C", "./lsd-sock",
-		     @ARGV);
+my $lsd_started = 0;
 
 # Keep this process running until kids come home.
 my $killers  = 0;
 my $abnormal = 0;
 while (keys %PID) {
     sleep 1;
+    if (!$lsd_started and
+	-e "$root/adbd-sock" and -e "$root/maint-sock")
+    {
+	$PID{lsd} = spawn ($root, $LSD, "lsd",
+	    "-d", "./adbd-sock", 
+	    "-S", "./dhash-sock",
+	    "-R", "./maint-sock",
+	    "-C", "./lsd-sock",
+	    @ARGV);
+	$lsd_started = 1;
+    }
     if ($signaled >= 0) {
 	# Pass on the signal to children.
 	for (keys %PID) { kill $signaled, $PID{$_}; }
