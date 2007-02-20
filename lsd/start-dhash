@@ -4,7 +4,7 @@
 #
 use strict;
 $ENV{'POSIXLY_CORRECT'} = 1;
-use Getopt::Long qw(:config pass_through);
+use Getopt::Long qw(:config posix_default pass_through);
 use File::Basename;
 use Pod::Usage;
 use POSIX qw/:sys_wait_h SIGINT/;
