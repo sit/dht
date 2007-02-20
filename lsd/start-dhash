@@ -146,8 +146,8 @@ while (keys %PID) {
 	} 
 	last;
     }
-    if (length keys %PID == 1) {
-	# Only one kid left, probably not worth living any more
+    if ($abnormal) {
+	# If anyone exited abnormally, it's not worth living any more.
 	for (keys %PID) {
 	    my $signal = ($killers++ > 2 ? 9 : 15);
 	    kill $signal, $PID{$_};
