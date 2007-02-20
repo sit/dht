@@ -72,7 +72,7 @@ select_mode (const char *arg, const VS *modes, int nmodes)
 static void
 halt ()
 {
-  warnx << "Exiting on command.\n";
+  warn << "Exiting on command.\n";
   while (maintainers.size ()) {
     maintainers.pop_back ();
   }
@@ -103,6 +103,7 @@ usage ()
   warnx << "Usage: " << progname 
 	<< "\t[-C maintd-ctlsock]\n"
 	<< "\t[-d localdatapath]\n"
+	<< "\t[-D]\n"
         << "\t[-L logfilename]\n"
 	<< "\t[-m maintmode]\n"
 	<< "\t[-s syncmode]\n"
@@ -344,17 +345,21 @@ main (int argc, char **argv)
   setprogname (argv[0]);
   random_init ();
 
+  bool do_daemonize = false;
   localdatapath = "./maintdata/";
   maint_mode = MAINT_CARBONITE;
   sync_mode = SYNC_MERKLE;
   
-  while ((ch = getopt (argc, argv, "C:d:L:m:s:t"))!=-1)
+  while ((ch = getopt (argc, argv, "C:d:DL:m:s:t"))!=-1)
     switch (ch) {
     case 'C':
       ctlsock = optarg;
       break;
     case 'd':
       localdatapath = optarg;
+      break;
+    case 'D':
+      do_daemonize = true;
       break;
     case 'L':
       logfname = optarg;
@@ -372,6 +377,11 @@ main (int argc, char **argv)
       usage ();
       break;
     }
+
+  if (do_daemonize) {
+    daemonize ();
+    logfname = NULL;
+  }
 
   start_logs ();
 
