@@ -44,11 +44,13 @@ my $help = 0;
 my $root = "dhash-$ENV{USER}";
 my $userbindir = "";
 my $maintmode = "carbonite";
+my $daemonize = 0;
 GetOptions (
     "help|?"      => \$help,
     "root|r=s"    => \$root,
     "bindir=s"      => \$userbindir,
     "maintmode=s" => \$maintmode,
+    "daemonize"   => \$daemonize,
 );
 pod2usage(0) if $help;
 
@@ -98,17 +100,19 @@ $SIG{INT} = sub { $signaled = SIGINT; };
 # Try to allow core dump files
 eval "use BSD::Resource; setrlimit (RLIMIT_CORE, -1, -1);";
 
+my @daemonizearg = ();
+push @daemonizearg, "-D" if $daemonize;
 my %PID = ();
 $PID{adbd}  = spawn ($root, $ADBD, "adbd",
 		     "-d", "./db",
-		     "-S", "./adbd-sock");
+		     "-S", "./adbd-sock", @daemonizearg);
 $PID{maintd} = spawn ($root, $MAINTD, "maintd",
 		     "-d", "./maintdata",
 		     "-m", $maintmode,
-		     "-C", "./maint-sock");
+		     "-C", "./maint-sock", @daemonizearg);
 my $lsd_started = 0;
 
-# Keep this process running until kids come home.
+# Keep this process running until kids come home, unless $daemonize.
 my $killers  = 0;
 my $abnormal = 0;
 while (keys %PID) {
@@ -121,6 +125,7 @@ while (keys %PID) {
 	    "-S", "./dhash-sock",
 	    "-R", "./maint-sock",
 	    "-C", "./lsd-sock",
+	    @daemonizearg,
 	    @ARGV);
 	$lsd_started = 1;
     }
@@ -171,6 +176,7 @@ start-dhash [start-dhash options] [lsd options]
     --root dir		Sandbox Chord/DHash into <dir>
     --bindir dir	Directory of where to find binaries 
     --maintmode mode	Maintenance mode used by maintd.
+    --daemonize		Run all kids as daemons.
 
 =head1 OPTIONS
 
@@ -196,6 +202,13 @@ the path for binaries.
 
 Use the specified maintenance mode.  This mode is passed directly
 to the -m option of maintd; validity checking is also done by maintd.
+
+=item B<--daemonize>
+
+Pass -D flag to all children so that they run as daemons instead
+of in the foreground.  With this flag, start-dhash relinquishes
+responsibility for reaping the actual processes after they exit,
+abnormally or not.
 
 =head1 LSD OPTIONS
 
