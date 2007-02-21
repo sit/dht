@@ -145,7 +145,7 @@ struct adb_getinfores {
 };
 /* }}} */
 /* {{{ ADBPROC_GETSPACEINFO */
-struct adb_getspaceinfoarg {
+struct adb_dbnamearg {
   str name;
 };
 struct adb_getspaceinfores {
@@ -200,7 +200,11 @@ program ADB_PROGRAM {
 		/* Get list of nodes that have b */
 
 		adb_getspaceinfores
-		ADBPROC_GETSPACEINFO (adb_getspaceinfoarg) = 11;
+		ADBPROC_GETSPACEINFO (adb_dbnamearg) = 11;
+
+		adb_status
+		ADBPROC_SYNC (adb_dbnamearg) = 12;
+		/* Sync databases etc to disk */
 	} = 1;
 } = 344501;
 

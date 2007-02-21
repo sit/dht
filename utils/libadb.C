@@ -375,7 +375,7 @@ adb::getinfocb (chordID key, ptr<adb_getinfores> res,
 void
 adb::getspaceinfo (cb_getspace_t cb)
 {
-  adb_getspaceinfoarg arg;
+  adb_dbnamearg arg;
   arg.name = name_space;
   ptr<adb_getspaceinfores> res = New refcounted<adb_getspaceinfores> ();
   c->call (ADBPROC_GETSPACEINFO, &arg, res,
@@ -391,4 +391,13 @@ adb::getspaceinfocb (ptr<adb_getspaceinfores> res, cb_getspace_t cb,
   } else {
     cb (res->status, res->fullpath, res->hasaux);
   }
+}
+
+void
+adb::sync ()
+{
+  adb_dbnamearg arg;
+  arg.name = name_space;
+  // Throw away the return value here.
+  c->call (ADBPROC_SYNC, &arg, NULL, aclnt_cb_null);
 }

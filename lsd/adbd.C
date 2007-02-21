@@ -1305,7 +1305,7 @@ do_getinfo (dbmanager *dbm, svccb *sbp)
 void
 do_getspaceinfo (dbmanager *dbm, svccb *sbp)
 {
-  adb_getspaceinfoarg *arg = sbp->Xtmpl getarg<adb_getspaceinfoarg> ();
+  adb_dbnamearg *arg = sbp->Xtmpl getarg<adb_dbnamearg> ();
   adb_getspaceinfores *res = sbp->Xtmpl getres<adb_getspaceinfores> ();
   res->status = ADB_OK;
   dbns *db = dbm->get (arg->name);
@@ -1317,6 +1317,21 @@ do_getspaceinfo (dbmanager *dbm, svccb *sbp)
   res->fullpath = strbuf () << dbm->getdbpath () << arg->name;
   res->hasaux = db->hasaux ();
   sbp->reply (res);
+}
+// }}}
+// {{{ do_sync
+void
+do_sync (dbmanager *dbm, svccb *sbp)
+{
+  adb_dbnamearg *arg = sbp->Xtmpl getarg<adb_dbnamearg> ();
+  adb_status res (ADB_OK);
+  dbns *db = dbm->get (arg->name);
+  if (!db) {
+    res = ADB_ERR;
+  } else {
+    db->sync ();
+  }
+  sbp->replyref (res);
 }
 // }}}
 // }}}
@@ -1364,6 +1379,9 @@ dispatch (ref<axprt_stream> s, ptr<asrv> a, dbmanager *dbm, svccb *sbp)
     break;
   case ADBPROC_GETSPACEINFO:
     do_getspaceinfo (dbm, sbp);
+    break;
+  case ADBPROC_SYNC:
+    do_sync (dbm, sbp);
     break;
   default:
     fatal << "unknown procedure: " << sbp->proc () << "\n";
