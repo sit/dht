@@ -716,10 +716,7 @@ merkle_tree_disk::database_get_keys (u_int depth, const merkle_hash &prefix)
   vec<merkle_hash> keys;
 
   // find all the keys matching this prefix
-  merkle_node *r = _fixed_root;
-  if (r == NULL) {
-    r = get_root ();
-  }
+  merkle_node *r = get_root ();
   merkle_node *n = r;
   for (u_int i = 0; i < depth && !n->isleaf (); i++) {
     u_int32_t branch = prefix.read_slot (i);
@@ -729,9 +726,7 @@ merkle_tree_disk::database_get_keys (u_int depth, const merkle_hash &prefix)
   // now we have the node and the right depth that matches the prefix.
   // Read all the keys under this node that match the prefix
   keys = get_all_keys (depth, prefix, (merkle_node_disk *) n);
-  if (_fixed_root == NULL) {
-    delete r;
-  }
+  delete r;
   return keys;
 }
 
