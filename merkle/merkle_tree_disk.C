@@ -183,7 +183,6 @@ merkle_node_disk::write_out ()
     int seekval = fseek (_leaf, _block_no*sizeof(merkle_leaf_node), SEEK_SET);
     assert (seekval == 0);
     fwrite (&leaf, sizeof(merkle_leaf_node), 1, _leaf);
-    fflush (_leaf);
   } else {
     merkle_internal_node internal;
     internal.key_count = htonl(count);
@@ -198,7 +197,6 @@ merkle_node_disk::write_out ()
 			 SEEK_SET);
     assert (seekval == 0);
     fwrite (&internal, sizeof(merkle_internal_node), 1, _internal);
-    fflush (_internal);
   }
 }
 
@@ -418,8 +416,6 @@ merkle_tree_disk::write_metadata ()
   fwrite (&freelist, sizeof (u_int32_t), nfree, _index);
   _future_free_leafs.clear ();
   _future_free_internals.clear ();
-
-  fflush (_index);
 }
 
 merkle_node *merkle_tree_disk::get_root ()
@@ -507,7 +503,7 @@ merkle_tree_disk::alloc_free_block (MERKLE_DISK_TYPE type)
   u_int32_t ret;
   // if there are any free
   if (type == MERKLE_DISK_LEAF) {
-    if (_md.num_leaf_free > 0 && _md.next_leaf > 1000) {
+    if (_md.num_leaf_free > 0) {
       ret = _free_leafs.pop_front ();
       _md.num_leaf_free--;
     } else {
@@ -515,7 +511,7 @@ merkle_tree_disk::alloc_free_block (MERKLE_DISK_TYPE type)
       _md.next_leaf++; 
     }
   } else {
-    if (_md.num_internal_free > 0 && _md.next_internal > 1000) {
+    if (_md.num_internal_free > 0) {
       ret = _free_internals.pop_front ();
       _md.num_internal_free--;
     } else {
