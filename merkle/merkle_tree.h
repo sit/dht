@@ -48,6 +48,7 @@ protected:
   virtual int insert (u_int depth, merkle_hash &key, merkle_node *n);
   merkle_node *lookup (u_int *depth, u_int max_depth, 
 		       const merkle_hash &key, merkle_node *n);
+  void stats_helper (uint depth, merkle_node *n);
 
 public:
   enum { max_depth = merkle_hash::NUM_SLOTS }; // XXX off by one? or two?
@@ -67,7 +68,6 @@ public:
 			       const merkle_hash &key);
   merkle_node *lookup (const merkle_hash &key);
   virtual void lookup_release( merkle_node *n ) {} // do nothing
-  void clear ();
 
   virtual merkle_node *get_root() { return root; }
 
@@ -87,8 +87,6 @@ public:
   void dump ();
   void check_invariants ();
   void compute_stats ();
-  void stats_helper (uint depth, merkle_node *n);
-
 };
 
 
