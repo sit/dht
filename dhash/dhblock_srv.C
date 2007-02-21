@@ -231,6 +231,8 @@ dhblock_srv::repair_qlength ()
 void
 dhblock_srv::repair_timer ()
 {
+  db->sync ();
+
   if (repairs_queued.size () < REPAIR_QUEUE_MAX)
     generate_repair_jobs ();
   // Generation will finish asynchronously

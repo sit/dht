@@ -33,6 +33,13 @@ str server_leaf = "/tmp/server.leaf.mrk";
 str syncer_index = "/tmp/syncer.index.mrk";
 str syncer_internal = "/tmp/syncer.internal.mrk";
 str syncer_leaf = "/tmp/syncer.leaf.mrk";
+
+str server_index_ro = "/tmp/server.index.mrk.ro";
+str server_internal_ro = "/tmp/server.internal.mrk.ro";
+str server_leaf_ro = "/tmp/server.leaf.mrk.ro";
+str syncer_index_ro = "/tmp/syncer.index.mrk.ro";
+str syncer_internal_ro = "/tmp/syncer.internal.mrk.ro";
+str syncer_leaf_ro = "/tmp/syncer.leaf.mrk.ro";
 // }}}
 
 // {{{ RPC Magic
@@ -208,10 +215,16 @@ finish ()
     unlink (server_index);
     unlink (server_internal);
     unlink (server_leaf);
+    unlink (server_index_ro);
+    unlink (server_internal_ro);
+    unlink (server_leaf_ro);
 
     unlink (syncer_index);
     unlink (syncer_internal);
     unlink (syncer_leaf);
+    unlink (syncer_index_ro);
+    unlink (syncer_internal_ro);
+    unlink (syncer_leaf_ro);
   }
 }
 

@@ -4,8 +4,6 @@
 #include "merkle_tree_disk.h"
 #include "dhash_common.h"
 
-//////////////// merkle_node_disk /////////////////
-
 static FILE *
 open_file (str name) {
   // make all the parent directories if applicable
@@ -35,6 +33,54 @@ open_file (str name) {
   }
   return f;
 }
+
+static int
+copy_file (str src, str dst)
+{
+  int sfd = open (src, O_RDONLY);
+  if (sfd < 0) {
+    perror ("copy_file: src");
+    return sfd;
+  }
+
+  str tmpfile = dst << "~";
+  unlink (tmpfile);
+  int dfd = open (tmpfile, O_CREAT|O_WRONLY, 0644);
+  if (dfd < 0) {
+    perror ("copy_file: dst");
+    close (sfd);
+    return dfd;
+  }
+#define COPY_ERROR(msg) \
+  do {						  \
+    int oerrno = errno;				  \
+    warn ("copy_file: " msg ": %m");		  \
+    close (sfd); close (dfd); unlink (tmpfile);	  \
+    errno = oerrno;				  \
+    return -1;					  \
+  } while (0)
+
+  char buf[8192];
+  ssize_t nread;
+  while ((nread = read (sfd, buf, sizeof (buf))) > 0) {
+    ssize_t nwrote = write (dfd, buf, nread);
+    if (nwrote < 0) {
+      COPY_ERROR ("bad write");
+    }
+    if (nwrote != nread) {
+      COPY_ERROR ("short write");
+    }
+  }
+  if (nread < 0) {
+    COPY_ERROR ("read error");
+  }
+  close (sfd); close (dfd);
+  rename (tmpfile, dst);
+#undef COPY_ERROR
+  return 0;
+}
+
+//////////////// merkle_node_disk /////////////////
 
 merkle_node_disk::merkle_node_disk (FILE *internal, FILE *leaf, 
 				    MERKLE_DISK_TYPE type, u_int32_t block_no) :
@@ -247,19 +293,61 @@ void merkle_node_disk::leaf2internal () {
 
 //////////////// merkle_tree_disk /////////////////
 
+static inline str
+safe_fname (str rwname)
+{
+  strbuf roname ("%s.ro", rwname.cstr ());
+  return roname;
+}
+
 void
 merkle_tree_disk::init ()
 {
-  _internal = open_file (_internal_name);
-  _leaf = open_file (_leaf_name);
-  _index = open_file (_index_name);
-
-  // make sure the root is created correctly:
-  merkle_node *n = get_root ();
-  delete n;
+  strbuf safe_index_name ("%s.ro", _index_name.cstr ());
+  strbuf safe_leaf_name ("%s.ro", _leaf_name.cstr ());
+  strbuf safe_internal_name ("%s.ro", _internal_name.cstr ());
   if (_writer) {
+    _internal = open_file (_internal_name);
+    _leaf = open_file (_leaf_name);
+    _index = open_file (_index_name);
+    // make sure the root is created correctly:
+    merkle_node *n = get_root ();
+    delete n;
     write_metadata ();
+  } else {
+    _internal = open_file (safe_fname (_internal_name));
+    _leaf = open_file (safe_fname (_leaf_name));
+    _index = open_file (safe_fname (_index_name));
   }
+}
+
+void
+merkle_tree_disk::close ()
+{
+  if (_internal) { fclose (_internal); _internal = NULL; }
+  if (_leaf) { fclose (_leaf); _leaf = NULL; }
+  if (_index) { fclose (_index); _index = NULL; }
+}
+
+void
+merkle_tree_disk::sync ()
+{
+  // Use lock to ensure that all copies are completed safely.
+  strbuf lfname ("%s.lock", _index_name.cstr ());
+  ptr<lockfile> lf = lockfile::alloc (lfname, true);
+
+  close ();
+  if (_writer) {
+    // Block, copy current files to safe images.
+    int r = 0;
+    r = copy_file (_index_name, safe_fname (_index_name));
+    r = copy_file (_leaf_name, safe_fname (_leaf_name));
+    r = copy_file (_internal_name, safe_fname (_internal_name));
+    // XXX Check the exit code; roll-back on failure.
+  }
+  init ();
+
+  lf = NULL;
 }
 
 merkle_tree_disk::merkle_tree_disk (str path, bool writer) :
@@ -285,9 +373,9 @@ merkle_tree_disk::merkle_tree_disk (str index, str internal, str leaf,
 
 merkle_tree_disk::~merkle_tree_disk ()
 {
-  fclose (_internal);
-  fclose (_leaf);
-  fclose (_index);
+  if (_writer)
+    sync (); // There's an unnecessary extra open/close here.
+  close ();
 }
 
 void
@@ -336,8 +424,7 @@ merkle_tree_disk::write_metadata ()
 
 merkle_node *merkle_tree_disk::get_root ()
 {
-  fclose (_index);
-  _index = open_file (_index_name);
+  fseek (_index, 0, SEEK_SET);
 
   // figure out where the root node is, given the index file
   // the first 32 bytes of the file tells us where it is

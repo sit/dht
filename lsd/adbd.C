@@ -279,6 +279,7 @@ dbns::sync ()
    dbe->txn_checkpoint (dbe, 0, 0, 0);
 #endif
    kdb->sync ();
+   mtree->sync ();
 }
 // }}}
 // {{{ dbns::kinsert (chordID, u_int32_t)
