@@ -34,7 +34,9 @@ struct merkle_key {
 
 class merkle_tree {
 protected:
+  merkle_node *root;
   bool do_rehash;
+
   void _hash_tree (u_int depth, const merkle_hash &key, merkle_node *n, bool check);
   void rehash (u_int depth, const merkle_hash &key, merkle_node *n);
   void count_blocks (u_int depth, const merkle_hash &key,
@@ -49,7 +51,6 @@ protected:
 
 public:
   enum { max_depth = merkle_hash::NUM_SLOTS }; // XXX off by one? or two?
-  merkle_node *root; // public for testing only
   merkle_tree_stats stats;
 
   merkle_tree ();
