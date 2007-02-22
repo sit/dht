@@ -346,18 +346,6 @@ carbonite::process_neighbors (
     const vec<ptr<locationcc> > &succs,
     cbv cb)
 {
-  VARS {
-    chordID rngmin, rngmax;
-  }
-
-  // Our range starts before our efrag-th predecessor.
-  // Unless there are so few nodes that all objects are fully replicated.
-  if (preds.size() > efrags) 
-    rngmin = preds[efrags]->id ();
-  else
-    rngmin = incID (host.x);
-  rngmax = host.x;
-
   BLOCK {
     // Merkle data structures for remote nodes are private to maintd.
     for (unsigned int i=0; i < succs.size(); i++) {
@@ -366,7 +354,7 @@ carbonite::process_neighbors (
 	<< succs[i]->id () << "." << ctype2ext (ctype);
       ptr<merkle_tree> t = New refcounted<merkle_tree_disk> 
 	(succtreepath, /* rw = */ true);
-      sync->sync_with (succs[i], rngmin, rngmax,
+      sync->sync_with (succs[i], preds[0]->id (), host.x,
 	  t, 
 	  wrap (this, &carbonite::handle_missing, succs[i], t),
 	  @());
@@ -423,6 +411,11 @@ carbonite::getrepairs (chordID start, int thresh, int count,
   vec<bool> treedone;
   chordID stop = host.x;
   itree<chordID, keycounter, &keycounter::id, &keycounter::ik> keymap;
+
+  // 0 is self, 1 and on are actual successors.
+  trees.push_back (ltree);
+  lastread.push_back (start);
+  treedone.push_back (false);
 
   for (unsigned int i = 0; i < succs.size (); i++) {
     strbuf succtreepath; succtreepath << private_path << "/" 
@@ -481,15 +474,21 @@ carbonite::getrepairs (chordID start, int thresh, int count,
 	maint_repair_t repair;
 	repair.id = k->id;
 	unsigned int dst = k->firstvoid ();
-	if (dst >= succs.size ()) {
+	if (dst > succs.size ()) {
 	  // warn << "carbonite " << host << " rejects " << k->id
 	  //      << " no dst " << dst << " >= " << succs.size () << "\n";
 	  continue;
 	}
 	// warn << "carbonite " << host << " adds " << k->id
 	//      << " to successor " << dst << "\n";
-	succs[dst]->fill_ipportvn (repair.machine_order_ipv4_addr,
-	    repair.machine_order_port_vnnum);
+	if (dst == 0) {
+	  ptr<locationcc> hostcc = locationcc::alloc (host);
+	  hostcc->fill_ipportvn (repair.machine_order_ipv4_addr,
+	      repair.machine_order_port_vnnum);
+	} else {
+	  succs[dst-1]->fill_ipportvn (repair.machine_order_ipv4_addr,
+	      repair.machine_order_port_vnnum);
+	}
 	repairs.push_back (repair);
       } else {
 	// warn << "carbonite " << host << " rejects " << k->id
