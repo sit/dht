@@ -34,11 +34,9 @@ struct merkle_key {
 
 class merkle_tree {
 protected:
+  merkle_node *root;
   bool do_rehash;
-  // the fixed root is a hack that ensures that a _hash_tree call will see
-  // the same root as any subsequent calls to database_get_keys in 
-  // merkle_tree_disk
-  merkle_node *_fixed_root;
+
   void _hash_tree (u_int depth, const merkle_hash &key, merkle_node *n, bool check);
   void rehash (u_int depth, const merkle_hash &key, merkle_node *n);
   void count_blocks (u_int depth, const merkle_hash &key,
@@ -50,10 +48,10 @@ protected:
   virtual int insert (u_int depth, merkle_hash &key, merkle_node *n);
   merkle_node *lookup (u_int *depth, u_int max_depth, 
 		       const merkle_hash &key, merkle_node *n);
+  void stats_helper (uint depth, merkle_node *n);
 
 public:
   enum { max_depth = merkle_hash::NUM_SLOTS }; // XXX off by one? or two?
-  merkle_node *root; // public for testing only
   merkle_tree_stats stats;
 
   merkle_tree ();
@@ -70,9 +68,10 @@ public:
 			       const merkle_hash &key);
   merkle_node *lookup (const merkle_hash &key);
   virtual void lookup_release( merkle_node *n ) {} // do nothing
-  void clear ();
 
   virtual merkle_node *get_root() { return root; }
+
+  virtual void sync () {}
 
   // If bulk-modifying the tree, it is undesirable to rehash tree after each
   // mod.  In that case, users should disable rehashing on modifications
@@ -90,8 +89,6 @@ public:
   void dump ();
   void check_invariants ();
   void compute_stats ();
-  void stats_helper (uint depth, merkle_node *n);
-
 };
 
 

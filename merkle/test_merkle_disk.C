@@ -5,6 +5,9 @@
 static char *indexpath = "/tmp/index.mrk";
 static char *internalpath = "/tmp/internal.mrk";
 static char *leafpath  = "/tmp/leaf.mrk";
+static char *indexpathro = "/tmp/index.mrk.ro";
+static char *internalpathro = "/tmp/internal.mrk.ro";
+static char *leafpathro  = "/tmp/leaf.mrk.ro";
 
 void
 cleanup ()
@@ -12,6 +15,9 @@ cleanup ()
   unlink (indexpath);
   unlink (internalpath);
   unlink (leafpath);
+  unlink (indexpathro);
+  unlink (internalpathro);
+  unlink (leafpathro);
 }
 
 int main (int argc, char **argv)

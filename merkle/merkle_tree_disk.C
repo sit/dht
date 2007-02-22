@@ -4,8 +4,6 @@
 #include "merkle_tree_disk.h"
 #include "dhash_common.h"
 
-//////////////// merkle_node_disk /////////////////
-
 static FILE *
 open_file (str name) {
   // make all the parent directories if applicable
@@ -35,6 +33,54 @@ open_file (str name) {
   }
   return f;
 }
+
+static int
+copy_file (str src, str dst)
+{
+  int sfd = open (src, O_RDONLY);
+  if (sfd < 0) {
+    perror ("copy_file: src");
+    return sfd;
+  }
+
+  str tmpfile = dst << "~";
+  unlink (tmpfile);
+  int dfd = open (tmpfile, O_CREAT|O_WRONLY, 0644);
+  if (dfd < 0) {
+    perror ("copy_file: dst");
+    close (sfd);
+    return dfd;
+  }
+#define COPY_ERROR(msg) \
+  do {						  \
+    int oerrno = errno;				  \
+    warn ("copy_file: " msg ": %m");		  \
+    close (sfd); close (dfd); unlink (tmpfile);	  \
+    errno = oerrno;				  \
+    return -1;					  \
+  } while (0)
+
+  char buf[8192];
+  ssize_t nread;
+  while ((nread = read (sfd, buf, sizeof (buf))) > 0) {
+    ssize_t nwrote = write (dfd, buf, nread);
+    if (nwrote < 0) {
+      COPY_ERROR ("bad write");
+    }
+    if (nwrote != nread) {
+      COPY_ERROR ("short write");
+    }
+  }
+  if (nread < 0) {
+    COPY_ERROR ("read error");
+  }
+  close (sfd); close (dfd);
+  rename (tmpfile, dst);
+#undef COPY_ERROR
+  return 0;
+}
+
+//////////////// merkle_node_disk /////////////////
 
 merkle_node_disk::merkle_node_disk (FILE *internal, FILE *leaf, 
 				    MERKLE_DISK_TYPE type, u_int32_t block_no) :
@@ -137,7 +183,6 @@ merkle_node_disk::write_out ()
     int seekval = fseek (_leaf, _block_no*sizeof(merkle_leaf_node), SEEK_SET);
     assert (seekval == 0);
     fwrite (&leaf, sizeof(merkle_leaf_node), 1, _leaf);
-    fflush (_leaf);
   } else {
     merkle_internal_node internal;
     internal.key_count = htonl(count);
@@ -152,7 +197,6 @@ merkle_node_disk::write_out ()
 			 SEEK_SET);
     assert (seekval == 0);
     fwrite (&internal, sizeof(merkle_internal_node), 1, _internal);
-    fflush (_internal);
   }
 }
 
@@ -247,19 +291,61 @@ void merkle_node_disk::leaf2internal () {
 
 //////////////// merkle_tree_disk /////////////////
 
+static inline str
+safe_fname (str rwname)
+{
+  strbuf roname ("%s.ro", rwname.cstr ());
+  return roname;
+}
+
 void
 merkle_tree_disk::init ()
 {
-  _internal = open_file (_internal_name);
-  _leaf = open_file (_leaf_name);
-  _index = open_file (_index_name);
-
-  // make sure the root is created correctly:
-  merkle_node *n = get_root ();
-  delete n;
+  strbuf safe_index_name ("%s.ro", _index_name.cstr ());
+  strbuf safe_leaf_name ("%s.ro", _leaf_name.cstr ());
+  strbuf safe_internal_name ("%s.ro", _internal_name.cstr ());
   if (_writer) {
+    _internal = open_file (_internal_name);
+    _leaf = open_file (_leaf_name);
+    _index = open_file (_index_name);
+    // make sure the root is created correctly:
+    merkle_node *n = get_root ();
+    delete n;
     write_metadata ();
+  } else {
+    _internal = open_file (safe_fname (_internal_name));
+    _leaf = open_file (safe_fname (_leaf_name));
+    _index = open_file (safe_fname (_index_name));
   }
+}
+
+void
+merkle_tree_disk::close ()
+{
+  if (_internal) { fclose (_internal); _internal = NULL; }
+  if (_leaf) { fclose (_leaf); _leaf = NULL; }
+  if (_index) { fclose (_index); _index = NULL; }
+}
+
+void
+merkle_tree_disk::sync ()
+{
+  // Use lock to ensure that all copies are completed safely.
+  strbuf lfname ("%s.lock", _index_name.cstr ());
+  ptr<lockfile> lf = lockfile::alloc (lfname, true);
+
+  close ();
+  if (_writer) {
+    // Block, copy current files to safe images.
+    int r = 0;
+    r = copy_file (_index_name, safe_fname (_index_name));
+    r = copy_file (_leaf_name, safe_fname (_leaf_name));
+    r = copy_file (_internal_name, safe_fname (_internal_name));
+    // XXX Check the exit code; roll-back on failure.
+  }
+  init ();
+
+  lf = NULL;
 }
 
 merkle_tree_disk::merkle_tree_disk (str path, bool writer) :
@@ -285,9 +371,9 @@ merkle_tree_disk::merkle_tree_disk (str index, str internal, str leaf,
 
 merkle_tree_disk::~merkle_tree_disk ()
 {
-  fclose (_internal);
-  fclose (_leaf);
-  fclose (_index);
+  if (_writer)
+    sync (); // There's an unnecessary extra open/close here.
+  close ();
 }
 
 void
@@ -330,14 +416,11 @@ merkle_tree_disk::write_metadata ()
   fwrite (&freelist, sizeof (u_int32_t), nfree, _index);
   _future_free_leafs.clear ();
   _future_free_internals.clear ();
-
-  fflush (_index);
 }
 
 merkle_node *merkle_tree_disk::get_root ()
 {
-  fclose (_index);
-  _index = open_file (_index_name);
+  fseek (_index, 0, SEEK_SET);
 
   // figure out where the root node is, given the index file
   // the first 32 bytes of the file tells us where it is
@@ -420,7 +503,7 @@ merkle_tree_disk::alloc_free_block (MERKLE_DISK_TYPE type)
   u_int32_t ret;
   // if there are any free
   if (type == MERKLE_DISK_LEAF) {
-    if (_md.num_leaf_free > 0 && _md.next_leaf > 1000) {
+    if (_md.num_leaf_free > 0) {
       ret = _free_leafs.pop_front ();
       _md.num_leaf_free--;
     } else {
@@ -428,7 +511,7 @@ merkle_tree_disk::alloc_free_block (MERKLE_DISK_TYPE type)
       _md.next_leaf++; 
     }
   } else {
-    if (_md.num_internal_free > 0 && _md.next_internal > 1000) {
+    if (_md.num_internal_free > 0) {
       ret = _free_internals.pop_front ();
       _md.num_internal_free--;
     } else {
@@ -716,10 +799,7 @@ merkle_tree_disk::database_get_keys (u_int depth, const merkle_hash &prefix)
   vec<merkle_hash> keys;
 
   // find all the keys matching this prefix
-  merkle_node *r = _fixed_root;
-  if (r == NULL) {
-    r = get_root ();
-  }
+  merkle_node *r = get_root ();
   merkle_node *n = r;
   for (u_int i = 0; i < depth && !n->isleaf (); i++) {
     u_int32_t branch = prefix.read_slot (i);
@@ -729,9 +809,7 @@ merkle_tree_disk::database_get_keys (u_int depth, const merkle_hash &prefix)
   // now we have the node and the right depth that matches the prefix.
   // Read all the keys under this node that match the prefix
   keys = get_all_keys (depth, prefix, (merkle_node_disk *) n);
-  if (_fixed_root == NULL) {
-    delete r;
-  }
+  delete r;
   return keys;
 }
 

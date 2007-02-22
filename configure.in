@@ -61,6 +61,16 @@ AC_EGREP_HEADER(sfspriv,
 		AC_MSG_ERROR(new style sfscrypt not found. Install the latest build of SFSlite.)
 )
 
+new_LDFLAGS=
+for flag in $LDFLAGS; do
+    if test x"$flag" = x-static; then
+        new_LDFLAGS="$new_LDFLAGS -all-static"
+    else
+        new_LDFLAGS="$new_LDFLAGS $flag"
+    fi
+done
+LDFLAGS="$new_LDFLAGS"
+
 dnl let directories share header files
 for lib in utils merkle chord dhash svc lsd; do
     CPPFLAGS="-I"'$(top_srcdir)'"/$lib $CPPFLAGS"

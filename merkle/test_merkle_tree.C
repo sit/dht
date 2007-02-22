@@ -12,6 +12,9 @@ typedef bhash<chordID, hashID> keys_t;
 static char *indexpath = "/tmp/index.mrk";
 static char *internalpath = "/tmp/internal.mrk";
 static char *leafpath  = "/tmp/leaf.mrk";
+static char *indexpathro = "/tmp/index.mrk.ro";
+static char *internalpathro = "/tmp/internal.mrk.ro";
+static char *leafpathro  = "/tmp/leaf.mrk.ro";
 
 void
 cleanup ()
@@ -19,6 +22,9 @@ cleanup ()
   unlink (indexpath);
   unlink (internalpath);
   unlink (leafpath);
+  unlink (indexpathro);
+  unlink (internalpathro);
+  unlink (leafpathro);
 }
 
 bool
@@ -248,6 +254,7 @@ test_merkle_disk_specific ()
       }
       if (!reaped)
 	reaped = reap (pid, false);
+      mtree->sync ();
       sleep (1);
     }
     if (!reaped)
@@ -264,6 +271,7 @@ test_merkle_disk_specific ()
       for (uint j = 0; j < rangekeys.size (); j++)
 	assert (betweenbothincl (min, max, rangekeys[j]));
       mtree->check_invariants ();
+      mtree->sync ();
       sleep (1);
     }
     exit (0);

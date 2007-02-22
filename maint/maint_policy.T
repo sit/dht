@@ -207,6 +207,10 @@ TAMED void
 maintainer::run_cycle (cbv cb)
 {
   in_progress = true;
+
+  // Now seems a good time to pick up any local changes.
+  ltree->sync ();
+
   BLOCK {
     update_neighbors (@());
   }
