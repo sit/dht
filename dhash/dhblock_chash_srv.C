@@ -114,14 +114,8 @@ void
 dhblock_chash_srv::generate_repair_jobs ()
 {
   u_int32_t frags = dhblock_chash::num_efrags ();
-  vec<ptr<location> > preds = node->preds ();
-  chordID rngmin;
-  if (preds.size () >= frags)
-    rngmin = preds[frags - 1]->id ();
-  else
-    rngmin = incID (node->my_location ()->id ());
   maint_getrepairs (frags, REPAIR_QUEUE_MAX - repair_qlength (),
-      rngmin,
+      node->my_pred ()->id (),
       wrap (this, &dhblock_chash_srv::maintqueue));
 #if 0
   // Use of db's view of repairs is deprecated.
