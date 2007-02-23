@@ -569,8 +569,10 @@ passingtone::process_neighbors (
   }
 
   // If there are repairs queued, don't bother re-syncing.
-  if (repairqueue.size ())
+  if (repairqueue.size ()) {
+    cb ();
     return;
+  }
 
   // Our range starts before our efrag-th predecessor.
   // Unless there are so few nodes that all objects are fully replicated.
