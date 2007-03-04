@@ -31,7 +31,7 @@ void
 dhblock_keyhash_srv::real_store (chordID key, str od, str nd, cb_dhstat cb)
 {
   u_int32_t v1 = dhblock_keyhash::version (nd.cstr (), nd.len ());
-  if (od) {
+  if (od.len ()) {
     u_int32_t v0 = dhblock_keyhash::version (od.cstr (), od.len ());
     if (v0 > v1) {
       chordID p = node->my_pred ()->id ();
