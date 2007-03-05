@@ -57,7 +57,6 @@ rm -rf $RPM_BUILD_ROOT
 %doc  README
 %{_bindir}/dbdump
 %{_bindir}/dbm
-%{_bindir}/dbm_noauth
 %{_bindir}/dbm.py
 %{_bindir}/filestore
 %{_bindir}/findroute
@@ -114,6 +113,10 @@ rm -rf $RPM_BUILD_ROOT
 %{_includedir}/chord-%{version}/skiplist.h
 
 %changelog
+* Sun Mar  4 2007 Emil Sit <sit@mit.edu>
+
+- Nuke dbm_noauth.
+
 * Tue Aug 30 2005 Emil Sit <sit@mit.edu>
 - adbmigrate 
 
