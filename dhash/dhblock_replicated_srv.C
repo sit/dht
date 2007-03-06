@@ -49,7 +49,7 @@ dhblock_replicated_srv::dhblock_replicated_srv (ptr<vnode> node,
 {
   maint_initspace (dhblock_replicated::num_replica (),
                    dhblock_replicated::num_replica ());
-  (*donecb)();
+  delaycb (0, donecb);
 }
 
 void

@@ -58,8 +58,7 @@ dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
   maint_initspace (dhblock_chash::num_efrags (),
 		   dhblock_chash::num_dfrags ());
 
-  (*donecb)();
-
+  delaycb (0, donecb);
 }
 
 dhblock_chash_srv::~dhblock_chash_srv ()
