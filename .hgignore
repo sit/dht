@@ -1,0 +1,14 @@
+\..*\.swp
+Makefile\.in
+autom4te\.cache/
+^aclocal.m4
+^config\.h\.in
+^configure
+^svc/Makefile\.am
+
+syntax: glob
+*.o
+*.a
+*.la
+*.lo
+.deps
