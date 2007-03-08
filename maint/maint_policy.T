@@ -121,7 +121,8 @@ locationcc::~locationcc () {
   }
   for (size_t i = 0; i < allocated.size (); i++) {
     if (allocated[i] == this) {
-      allocated[i] = allocated.pop_back ();
+      allocated[i] = allocated.back ();
+      allocated.pop_back ();
       break;
     }
   }
