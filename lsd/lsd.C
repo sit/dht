@@ -738,12 +738,13 @@ void start_maint ()
   make_async (fd);
   ptr<aclnt> c = aclnt::alloc (axprt_unix::alloc (fd, 1024*1025),
       maint_program_1);
-  c->call (MAINTPROC_LISTEN, &parameters.addr, NULL, aclnt_cb_null);
+  c->scall (MAINTPROC_LISTEN, &parameters.addr, NULL);
 
   maint_setmaintarg arg;
   arg.enable = true;
-  arg.delay = 15;
-  c->call (MAINTPROC_SETMAINT, &arg, NULL, aclnt_cb_null);
+  arg.delay = 300;
+  bool res;
+  c->scall (MAINTPROC_SETMAINT, &arg, &res);
 }
 
 int dhashes_finished = 0;
