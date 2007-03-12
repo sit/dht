@@ -243,6 +243,27 @@ addrand (ptr<merkle_tree> tr, int count)
 }
 
 void
+removesome (ptr<merkle_tree> tr, int count, bool rand = false)
+{
+  static bigint idmax = (bigint (1) << 160) - 1;
+  int maxtries = 2*count;
+  int nremoved = 0;
+  while (nremoved < count && maxtries > 0) {
+    maxtries--;
+    merkle_hash key (0);
+    if (rand)
+      key.randomize ();
+    vec<chordID> keys = tr->get_keyrange (tobigint (key), idmax, count);
+    while (keys.size () && (nremoved < count)) {
+      nremoved++;
+      tr->remove (keys.back ());
+      keys.pop_back ();
+    }
+  }
+  warnx << "Removed " << nremoved << " keys\n";
+}
+
+void
 check_invariants ()
 {
   warn << "Checking server invariants... ";
@@ -270,12 +291,20 @@ void check_equal_roots ()
 // }}}
  
 void
-runsync (chordID rngmin, chordID rngmax)
+runsync (chordID rngmin, chordID rngmax, bool perturb = false)
 {
   nkeyspushed = 0;
   nkeyspulled = 0;
   SYNCER.syncer->sync (rngmin, rngmax);
   while (!SYNCER.syncer->done ()) {
+    if (perturb) {
+      long int bits = random ();
+      ptr<merkle_tree> t = ((bits>>1)&0x1) ? SYNCER.tree : SERVER.tree;
+      if (bits & 0x1)
+	addrand (t, 64);
+      else
+	removesome (t, 64);
+    }
     acheck ();
 
     while (keys_for_server.size ()) {
@@ -385,6 +414,15 @@ main (int argc, char *argv[])
   assert (nkeyspushed == 5);
 
   dump_stats ();
+  finish ();
+
+  setup ();
+  addrand (SYNCER.tree, 4097);
+  addrand (SERVER.tree, 4097);
+  runsync (idzero, idmax, true);
+  runsync (idzero, idmax, false);
+  check_invariants ();
+  check_equal_roots ();
   finish ();
 
   // XXX Should we test various degrees of commonality in A/B?
