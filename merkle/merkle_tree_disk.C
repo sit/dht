@@ -328,7 +328,7 @@ merkle_tree_disk::close ()
 }
 
 void
-merkle_tree_disk::sync ()
+merkle_tree_disk::sync (bool reopen = true)
 {
   // Use lock to ensure that all copies are completed safely.
   strbuf lfname ("%s.lock", _index_name.cstr ());
@@ -343,7 +343,8 @@ merkle_tree_disk::sync ()
     r = copy_file (_internal_name, safe_fname (_internal_name));
     // XXX Check the exit code; roll-back on failure.
   }
-  init ();
+  if (reopen)
+    init ();
 
   lf = NULL;
 }
@@ -372,7 +373,7 @@ merkle_tree_disk::merkle_tree_disk (str index, str internal, str leaf,
 merkle_tree_disk::~merkle_tree_disk ()
 {
   if (_writer)
-    sync (); // There's an unnecessary extra open/close here.
+    sync (false);
   close ();
 }
 

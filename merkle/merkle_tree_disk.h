@@ -118,7 +118,7 @@ public:
   merkle_node *lookup (u_int *depth, u_int max_depth, const merkle_hash &key);
   void lookup_release (merkle_node *n);
   void remove (merkle_hash &key);
-  void sync ();
+  void sync (bool reopen);
 };
 
 #endif /* _MERKLE_TREE_DISK_H_ */
