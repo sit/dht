@@ -56,18 +56,21 @@ merkle_server::handle_send_node (ptr<merkle_tree> ltree,
     warn << "local depth ( " << lnode_depth 
 	 << ") is not equal to remote depth (" << rnode->depth << ")\n";
     warn << "prefix is " << rnode->prefix << "\n";
-    //a remote node will only ask us for children if we previously returned
-    // an index node at depth - 1. If local depth < remote depth, that
-    // implies that we don't have an index node at depth - 1: assert!
-    assert (lnode_depth == rnode->depth);
+    // Normally, a remote node will only ask us for children if we
+    // previously returned an index node at depth - 1.
+    // If local depth < remote depth, that implies that we
+    // don't have an index node at depth - 1.  This suggests
+    // that the tree here has changed.  
+    res->set_status (MERKLE_ERR);
+  } else {
+    lnode_prefix = rnode->prefix;
+    // XXX isn't this a NOP, given the previous note about equal depths 
+    lnode_prefix.clear_suffix (lnode_depth);
+    format_rpcnode (ltree, lnode_depth, lnode_prefix, 
+		    lnode, &res->resok->node);
   }
-  lnode_prefix = rnode->prefix;
-  // XXX isn't this a NOP, given the previous assertion about equal depths 
-  lnode_prefix.clear_suffix (lnode_depth);
-  format_rpcnode (ltree, lnode_depth, lnode_prefix, 
-		  lnode, &res->resok->node);
   // and reply
-  ltree->lookup_release(lnode);
+  ltree->lookup_release (lnode);
 }
 
 void

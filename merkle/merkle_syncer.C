@@ -327,20 +327,22 @@ merkle_syncer::sendnode_cb (ptr<bool> deleted,
     error (strbuf () << "SENDNODE: rpc error " << err);
     return;
   } else if (res->status != MERKLE_OK) {
-    error (strbuf () << "SENDNODE: protocol error " << err2str (res->status));
-    return;
+    warn << "SENDNODE: protocol error " << err2str (res->status) << "\n";
+  } else {
+    merkle_rpc_node *rnode = &res->resok->node;
+    merkle_node *lnode = ltree->lookup_exact (rnode->depth,
+	rnode->prefix);
+    if (lnode) {
+      compare_nodes (local_rngmin, local_rngmax, lnode, rnode);
+      ltree->lookup_release (lnode);
+    } else {
+      // If we no longer have a node at this address, it must mean
+      // we used to but deletions have shrank our tree.
+      // Let's just skip this subtree and get it the next time.
+      warn << "lookup failed: " << rnode->prefix 
+	   << " at " << rnode->depth << "\n";
+    }
   }
-
-  merkle_rpc_node *rnode = &res->resok->node;
-
-  merkle_node *lnode = ltree->lookup_exact (rnode->depth, rnode->prefix);
-  if (!lnode) {
-    fatal << "lookup failed: " << rnode->prefix << " at " << rnode->depth << "\n";
-  }
-
-  compare_nodes (local_rngmin, local_rngmax, lnode, rnode);
-
-  ltree->lookup_release (lnode);
 
   next ();
 }
@@ -360,10 +362,14 @@ merkle_syncer::next (void)
 
     merkle_node *lnode = ltree->lookup_exact (rnode->depth, rnode->prefix);
 
-    if (!lnode) {
-      fatal << "lookup_exact didn't match for " << rnode->prefix << " at depth " << rnode->depth << "\n";
+    if (!lnode || lnode->isleaf ()) {
+      // Inconsistencies are to be expected; skip this subtree for now.
+      warnx << "lookup_exact didn't match for " << rnode->prefix << " at depth " << rnode->depth << "\n";
+      if (lnode)
+	ltree->lookup_release (lnode);
+      st.pop_back ();
+      continue;
     }
-
 
     trace << "starting from slot " << p.second << "\n";
 
