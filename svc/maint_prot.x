@@ -37,9 +37,10 @@ struct maint_getrepairsarg {
 struct maint_repair_t {
   /* Object to repair */
   chordID id;
+  /* Below, port_vnnum = (port << 16) | vnnum */
   /* IP+port+vnnum to send new frag or replica to. */
-  u_int32_t machine_order_ipv4_addr;
-  u_int32_t machine_order_port_vnnum; /* (port << 16) | vnnum */
+  u_int32_t dst_ipv4_addr;
+  u_int32_t dst_port_vnnum;
 };
 
 struct maint_getrepairsres {

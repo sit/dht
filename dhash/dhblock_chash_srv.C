@@ -130,8 +130,8 @@ dhblock_chash_srv::maintqueue (const vec<maint_repair_t> &repairs)
 {
   for (size_t i = 0; i < repairs.size (); i++) {
     ptr<location> w = maintloc2location (
-	repairs[i].machine_order_ipv4_addr,
-	repairs[i].machine_order_port_vnnum);
+	repairs[i].dst_ipv4_addr,
+	repairs[i].dst_port_vnnum);
     blockID key (repairs[i].id, DHASH_CONTENTHASH);
     ptr<repair_job> job = New refcounted<rjchash> (key, w,
 	mkref (this));

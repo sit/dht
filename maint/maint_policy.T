@@ -484,11 +484,11 @@ carbonite::getrepairs (chordID start, int thresh, int count,
 	//      << " to successor " << dst << "\n";
 	if (dst == 0) {
 	  ptr<locationcc> hostcc = locationcc::alloc (host);
-	  hostcc->fill_ipportvn (repair.machine_order_ipv4_addr,
-	      repair.machine_order_port_vnnum);
+	  hostcc->fill_ipportvn (repair.dst_ipv4_addr,
+	      repair.dst_port_vnnum);
 	} else {
-	  succs[dst-1]->fill_ipportvn (repair.machine_order_ipv4_addr,
-	      repair.machine_order_port_vnnum);
+	  succs[dst-1]->fill_ipportvn (repair.dst_ipv4_addr,
+	      repair.dst_port_vnnum);
 	}
 	repairs.push_back (repair);
       } else {
@@ -617,8 +617,8 @@ passingtone::getrepairs (chordID start, int thresh, int count,
     chordID k = repairqueue.pop_front ();
     maint_repair_t r;
     r.id = k;
-    r.machine_order_ipv4_addr = a;
-    r.machine_order_port_vnnum = b;
+    r.dst_ipv4_addr = a;
+    r.dst_port_vnnum = b;
     repairs.push_back (r);
     count--;
   }
