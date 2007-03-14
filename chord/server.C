@@ -707,16 +707,17 @@ void
 vnode_impl::update_coords (Coord uc, float ud)
 {
   //  warn << myID << " --- starting update -----\n";
-  Coord coords = me_->coords ();
   Coord v = uc;
   float rmt_err = uc.err ();
 
   float actual = ud;
-  float expect = coords.distance_f (uc);
+  float expect = me_->coords ().distance_f (uc);
 
   if (actual >= 0 && actual < 1000000) { //ignore timeouts
     //track our prediction error
     update_error (actual, expect, rmt_err);
+    // Work on a copy (including the updated error).
+    Coord coords = me_->coords ();
 
     // force magnitude: > 0 --> stretched
     float grad = expect - actual;
@@ -739,7 +740,7 @@ vnode_impl::update_coords (Coord uc, float ud)
 
     //timestep is the scaled ratio of our prediction error
     // and the remote node's prediction error
-    float pred_err = me_->coords ().err ();
+    float pred_err = coords.err ();
     float timestep;
     if (pred_err > 0 && rmt_err > 0)
       timestep = 0.1 * (pred_err)/(pred_err + rmt_err);
