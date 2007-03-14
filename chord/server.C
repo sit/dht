@@ -613,9 +613,9 @@ vnode_impl::tmo (cbtmo_t cb_tmo, int progno,
 }
 
 void
-vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc, 
-		      void *out, aclnt_cb cb, 
-		      ref<dorpc_res> res, clnt_stat err) 
+vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc,
+		      void *out, aclnt_cb cb,
+		      ref<dorpc_res> res, clnt_stat err)
 {
   if (err) {
     ptr<location> reall = locations->lookup (l->id ());
@@ -650,24 +650,23 @@ vnode_impl::doRPC_cb (ptr<location> l, xdrproc_t proc,
 
     l->set_coords (n);
     Coord u_coords (n);
-    update_coords (u_coords,
-		   distance);
+    update_coords (u_coords, distance);
 
     // This should reset the age of the node to zero because
     // remote side always provides an age of zero for self
     // and locationtable will pull in updates that are younger.
-    if (me_->id () != n.x) 
-      locations->insert (n); 
+    if (me_->id () != n.x)
+      locations->insert (n);
 
     //unmarshall the result and copy to out
-    xdrmem x ((char *)res->resok->results.base (), 
+    xdrmem x ((char *)res->resok->results.base (),
 	      res->resok->results.size (), XDR_DECODE);
 
     assert (proc);
     if (!proc (x.xdrp (), out)) {
       fatal << "failed to unmarshall result\n";
       cb (RPC_CANTSEND);
-    } else 
+    } else
       cb (err);
   }
 }
@@ -678,7 +677,6 @@ vnode_impl::update_error (float actual, float expect, float rmt_err)
   if (actual < 0) return;
   float rel_error = fabs (expect - actual)/actual;
 
-  
   float pred_err = me_->coords ().err ();
   float npe = -1.0;
 
@@ -700,7 +698,6 @@ vnode_impl::update_error (float actual, float expect, float rmt_err)
 
     //cap it at 1.0
     if (npe > 1.0) npe = 1.0;
-
   }
   me_->set_coords_err (npe);
 }
@@ -709,27 +706,22 @@ vnode_impl::update_error (float actual, float expect, float rmt_err)
 void
 vnode_impl::update_coords (Coord uc, float ud)
 {
-
-
   //  warn << myID << " --- starting update -----\n";
   Coord coords = me_->coords ();
   Coord v = uc;
   float rmt_err = uc.err ();
-  
 
   float actual = ud;
   float expect = coords.distance_f (uc);
 
-
   if (actual >= 0 && actual < 1000000) { //ignore timeouts
-
     //track our prediction error
     update_error (actual, expect, rmt_err);
 
     // force magnitude: > 0 --> stretched
     float grad = expect - actual;
     v.vector_sub (coords);
-    
+
     float len = v.plane_norm ();
     while (len < 0.0001) {
       for (unsigned int i = 0; i < Coord::NCOORD; i++)
@@ -739,12 +731,11 @@ vnode_impl::update_coords (Coord uc, float ud)
     }
     len = v.norm ();
 
-    float unit = 1.0/sqrtf(len);
+    float unit = 1.0 / sqrtf (len);
 
     // scalar_mult(v, unit) is unit force vector
     // times grad gives the scaled force vector
     v.scalar_mult (unit*grad);
-
 
     //timestep is the scaled ratio of our prediction error
     // and the remote node's prediction error
@@ -757,22 +748,22 @@ vnode_impl::update_coords (Coord uc, float ud)
     else
       timestep = 1.0;
 
-    v.scalar_mult(timestep);
+    v.scalar_mult (timestep);
     //flip sign on height
     v.ht = -v.ht;
 
     coords.vector_add (v);
 
 #ifdef VIVALDI_DEBUG
-    char b[1024];			       
-    snprintf (b, 1024, "coord hop: %f - %f = %f ; len=%f ts=%f (%f %f)\n", 
+    char b[1024];
+    snprintf (b, 1024, "coord hop: %f - %f = %f ; len=%f ts=%f (%f %f)\n",
 	      expect, actual, grad, len, timestep, pred_err, rmt_err);
     warn << b;
     coords.print ("coords ");
     uc.print ("uc ");
     warn << "----------------\n";
-#endif 
-    
+#endif
+
     if (coords.ht <= 100) coords.ht = 100;
     me_->set_coords (coords);
   } else {
