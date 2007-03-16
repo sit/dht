@@ -71,7 +71,7 @@ public:
 
   virtual merkle_node *get_root() { return root; }
 
-  virtual void sync () {}
+  virtual void sync (bool reopen = true) {}
 
   // If bulk-modifying the tree, it is undesirable to rehash tree after each
   // mod.  In that case, users should disable rehashing on modifications
