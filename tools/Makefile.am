@@ -7,7 +7,7 @@ if GTK_AVAILABLE
 VIS = vis
 endif
 
-bin_PROGRAMS = dbm walk findroute filestore nodeq dbdump lsdping $(VIS) 
+bin_PROGRAMS = dbm walk findroute filestore nodeq dbdump merkledump lsdping $(VIS) 
 bin_SCRIPTS = dbm.py nodeq-filter
 chorddata_DATA =  RPC.py RPCProto.py vischat.py
 
@@ -35,6 +35,9 @@ dbm_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDAD
 
 dbdump_SOURCES = dbdump.C
 dbdump_LDADD = $(DBLIB) ../utils/dbfe_sleepycat.o $(LDADD)
+
+merkledump_SOURCES = merkledump.C
+merkledump_LDADD = ../merkle/libmerkle.a ../utils/libutil.a $(LDADD)
 
 findroute_SOURCES = findroute.C
 findroute_LDADD = ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)

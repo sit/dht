@@ -64,6 +64,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/lsdctl
 %{_bindir}/lsdping
 %{_bindir}/maintd
+${_bindir}/merkledump
 %{_bindir}/nodeq
 %{_bindir}/nodeq-filter
 %{_bindir}/start-dhash
@@ -113,8 +114,10 @@ rm -rf $RPM_BUILD_ROOT
 %{_includedir}/chord-%{version}/skiplist.h
 
 %changelog
-* Sun Mar  4 2007 Emil Sit <sit@mit.edu>
+* Thu Mar 15 2007 Emil Sit <sit@mit.edu>
+- merkledump
 
+* Sun Mar  4 2007 Emil Sit <sit@mit.edu>
 - Nuke dbm_noauth.
 
 * Tue Aug 30 2005 Emil Sit <sit@mit.edu>
