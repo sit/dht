@@ -111,15 +111,30 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
   
   ptr<dhblock> block = allocate_dhblock (blockID.ctype);
 
-  // We would like to obtain enough successors to provide maximal
-  // choice to the client when doing the expensive fetch phase.
-  // Unfortunately, we are currently hurt by the fact that there
-  // are holes in our successor list: nodes without the block
-  // that Chord can't tell us about.  Maybe we need up-calls.
-  clntnode->find_succlist (blockID.ID,
-			   block->num_fetch (),
-			   wrap (this, &dhashcli::retrieve_lookup_cb,rs,block),
-			   guess);
+  if (guess &&
+      (options & (DHASHCLIENT_GUESS_SUPPLIED|DHASHCLIENT_SKIP_LOOKUP)) ==
+       (DHASHCLIENT_GUESS_SUPPLIED|DHASHCLIENT_SKIP_LOOKUP)) 
+  {
+    ptr<location> l = clntnode->locations->lookup (*guess);
+    chord_node guessnode;
+    l->fill_node (guessnode);
+    vec<chord_node> fakesuccs;
+    fakesuccs.push_back (guessnode);
+    route fakeroute;
+    fakeroute.push_back (l);
+    delaycb (0, wrap (this,
+      &dhashcli::retrieve_lookup_cb, rs, block, fakesuccs, fakeroute, CHORD_OK));
+  } else {
+    // We would like to obtain enough successors to provide maximal
+    // choice to the client when doing the expensive fetch phase.
+    // Unfortunately, we are currently hurt by the fact that there
+    // are holes in our successor list: nodes without the block
+    // that Chord can't tell us about.  Maybe we need up-calls.
+    clntnode->find_succlist (blockID.ID,
+      block->num_fetch (),
+      wrap (this, &dhashcli::retrieve_lookup_cb,rs,block),
+      guess);
+  }
 }
 
 
