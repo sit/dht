@@ -91,7 +91,7 @@ dhblock_noauth_srv::real_store (chordID dbkey,
       after_delete (dbkey, dprep, cb, ADB_OK);
   } else {
     // Don't need to do anything.
-    cb (DHASH_OK);
+    cb (DHASH_STALE);
   }
 }
 
