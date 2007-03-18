@@ -388,6 +388,16 @@ struct keycounter {
     }
     return psz;
   }
+  int firstpresent () {
+    unsigned int t = presence;
+    unsigned int i = 0;
+    while (i < psz) {
+      if (t & 1)
+	return i;
+      i++; t >>= 1;
+    }
+    return psz;
+  }
 };
 // Find the first leaf page that includes 'start'.
 // For each tree, read in the next leaf page and place the keys
@@ -474,6 +484,23 @@ carbonite::getrepairs (chordID start, int thresh, int count,
       if (k->count < (unsigned) thresh) {
 	maint_repair_t repair;
 	repair.id = k->id;
+
+	repair.src_ipv4_addr = 0;
+	repair.src_port_vnnum = 0;
+	// aux is an indicator of mutability
+	if (db->hasaux ()) {
+	  unsigned int src = k->firstpresent ();
+	  assert (src <= succs.size ());
+	  if (src == 0) {
+	    ptr<locationcc> hostcc = locationcc::alloc (host);
+	    hostcc->fill_ipportvn (repair.src_ipv4_addr,
+		repair.src_port_vnnum);
+	  } else {
+	    succs[src-1]->fill_ipportvn (repair.src_ipv4_addr,
+		repair.src_port_vnnum);
+	  }
+	}
+
 	unsigned int dst = k->firstvoid ();
 	if (dst > succs.size ()) {
 	  // warn << "carbonite " << host << " rejects " << k->id
@@ -557,6 +584,7 @@ passingtone::handle_missing (ptr<locationcc> from,
   }
   warn << "passingtone " << host << " needs " << key << "\n";
   repairqueue.push_back (key);
+  repairfrom.push_back (from);
 }
 
 TAMED void
@@ -615,12 +643,15 @@ passingtone::getrepairs (chordID start, int thresh, int count,
   u_int32_t b = (ntohs (saddr.sin_port) << 16) | host.vnode_num;
   while (repairqueue.size () && count > 0) {
     chordID k = repairqueue.pop_front ();
+    ptr<locationcc> from = repairfrom.pop_front ();
     maint_repair_t r;
     r.id = k;
+    from->fill_ipportvn (r.src_ipv4_addr, r.src_port_vnnum);
     r.dst_ipv4_addr = a;
     r.dst_port_vnnum = b;
     repairs.push_back (r);
     count--;
   }
+  assert (repairqueue.size () == repairfrom.size ());
 }
 // }}}

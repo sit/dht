@@ -154,6 +154,7 @@ public:
 
 class passingtone: public maintainer {
   vec<chordID> repairqueue;
+  vec<ptr<locationcc> > repairfrom;
   void handle_missing (ptr<locationcc> from, ptr<merkle_tree> t, chordID key, bool missing_local);
   void process_neighbors (const vec<ptr<locationcc> > &preds,
       const vec<ptr<locationcc> > &succs, cbv cb, CLOSURE);
