@@ -10,6 +10,7 @@
 #include <dhblock_srv.h>
 
 #include <modlogger.h>
+#define info    modlogger ("dbhlock_srv", modlogger::INFO)
 #define trace   modlogger ("dhblock_srv", modlogger::TRACE)
 
 dhblock_srv::dhblock_srv (ptr<vnode> node,
@@ -191,6 +192,14 @@ dhblock_srv::offer (user_args *sbp, dhash_offer_arg *arg)
 // Repair management
 // 
 //
+repair_job::repair_job (blockID key, ptr<location> w, u_int32_t to) :
+  key (key),
+  where (w),
+  desc (strbuf () << key << " ->" << where->id ()),
+  donecb (NULL), timeout (to)
+{
+}
+
 void
 repair_job::setdonecb (cbv cb, u_int32_t to)
 {
@@ -211,11 +220,11 @@ dhblock_srv::repair_add (ptr<repair_job> job)
 {
   if (!job)
     return false;
-  trace << "dhblock_srv::repair_add for " << job->key << "\n";
-  if (repairs_queued[job->key] || repairs_inprogress[job->key]) 
+  if (repairs_queued[job->desc] || repairs_inprogress[job->desc]) 
     return false;
+  info << node->my_ID () << ": repair_add for " << job->desc << "\n"; 
   repair_q.push_back (job);
-  repairs_queued.insert (job->key);
+  repairs_queued.insert (job->desc);
 
   repair_flush_q ();
 
@@ -248,10 +257,10 @@ dhblock_srv::repair_timer ()
 }
 
 void
-dhblock_srv::repair_done (blockID key)
+dhblock_srv::repair_done (str desc)
 {
-  repairs_inprogress.remove (key);
-  trace << "completed repair of " << key << "; "
+  repairs_inprogress.remove (desc);
+  info << "completed repair of " << desc << "; "
 	<< repairs_inprogress.size () << " in progress, "
 	<< repairs_queued.size () << " in queue.\n";
   repair_flush_q ();
@@ -263,12 +272,12 @@ dhblock_srv::repair_flush_q ()
   while ((repairs_inprogress.size () < REPAIR_OUTSTANDING_MAX)
          && (repair_q.size () > 0)) {
     ptr<repair_job> job = repair_q.pop_front ();
-    repairs_queued.remove (job->key);
-    assert (!repairs_inprogress[job->key]);
-    repairs_inprogress.insert (job->key);
-    job->setdonecb (wrap (this, &dhblock_srv::repair_done, job->key));
+    repairs_queued.remove (job->desc);
+    assert (!repairs_inprogress[job->desc]);
+    repairs_inprogress.insert (job->desc);
+    job->setdonecb (wrap (this, &dhblock_srv::repair_done, job->desc));
     job->start ();
-    trace << "dhblock_srv::repair_flush_q: started repair of " << job->key 
+    trace << "dhblock_srv::repair_flush_q: started repair of " << job->desc 
 	  << "\n";
   }
   assert (repair_q.size () == repairs_queued.size ());

@@ -23,10 +23,10 @@ typedef callback<void, const vec<maint_repair_t> &>::ptr cb_maintrepairs_t;
 struct repair_job : virtual public refcount {
   const blockID key;
   const ptr<location> where;
+  str desc;
   cbv::ptr donecb;
   u_int32_t timeout;
-  repair_job (blockID key, ptr<location> w, u_int32_t to = 0) :
-    key (key), where (w), donecb (NULL), timeout (to) {};
+  repair_job (blockID key, ptr<location> w, u_int32_t to = 0);
   virtual ~repair_job () { if (donecb) (*donecb) (); };
   void setdonecb (cbv cb, u_int32_t to = 0);
   void start ();
@@ -38,7 +38,7 @@ class dhblock_srv : virtual public refcount {
   timecb_t *repair_tcb;
   void repair_timer ();
   vec<ptr<repair_job> > repair_q;
-  void repair_done (blockID key);
+  void repair_done (str desc);
   void repair_flush_q ();
 
   // Generic cb_adbstat to cb_dhstat translator
@@ -62,8 +62,8 @@ class dhblock_srv : virtual public refcount {
     REPAIR_QUEUE_MAX = 64
   };
 
-  bhash<blockID, bhashID> repairs_queued;
-  bhash<blockID, bhashID> repairs_inprogress;
+  bhash<str> repairs_queued;
+  bhash<str> repairs_inprogress;
   // RepInv:
   //   for i in repair_q: repairs_queued[i.key]
   //   and there are no other repairs queued.
