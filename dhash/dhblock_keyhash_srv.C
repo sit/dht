@@ -72,22 +72,23 @@ void
 dhblock_keyhash_srv::real_repair (blockID key, ptr<location> me, u_int32_t *myaux, ptr<location> them, u_int32_t *theiraux)
 {
   // keyhash aux is the version number of the block.
+  ptr<location> s = NULL; // We calculate our own source?
   ptr<repair_job> job;
   if (!myaux) {
     // We're missing, so fetch it.
-    job = New refcounted<rjrep> (key, me, mkref (this));
+    job = New refcounted<rjrep> (key, s, me, mkref (this));
     repair_add (job);
   } else {
     // They're missing so push it.
     // Otherwise, move towards the newer one.
     if (!theiraux) {
-      job = New refcounted<rjrep> (key, them, mkref (this));
+      job = New refcounted<rjrep> (key, s, them, mkref (this));
       repair_add (job);
     } else if (*theiraux < *myaux) {
-      job = New refcounted<rjrep> (key, them, mkref (this));
+      job = New refcounted<rjrep> (key, s, them, mkref (this));
       repair_add (job);
     } else if (*theiraux > *myaux) {
-      job = New refcounted<rjrep> (key, me, mkref (this));
+      job = New refcounted<rjrep> (key, s, me, mkref (this));
       repair_add (job);
     }
   }

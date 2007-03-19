@@ -114,20 +114,21 @@ dhblock_noauth_srv::after_delete (chordID key, str data, cb_dhstat cb,
 void
 dhblock_noauth_srv::real_repair (blockID key, ptr<location> me, u_int32_t *myaux, ptr<location> them, u_int32_t *theiraux)
 {
+  ptr<location> s = NULL; // We calculate our own source?
   ptr<repair_job> job;
   if (!myaux) {
     // We're missing, so fetch it.
-    job = New refcounted<rjrep> (key, me, mkref (this));
+    job = New refcounted<rjrep> (key, s, me, mkref (this));
     repair_add (job);
   } else {
     if (!theiraux) {
-      job = New refcounted<rjrep> (key, them, mkref (this));
+      job = New refcounted<rjrep> (key, s, them, mkref (this));
       repair_add (job);
     } else if (*theiraux != *myaux) {
       // No way of knowing who is newer, so let's swap.
-      job = New refcounted<rjrep> (key, me, mkref (this));
+      job = New refcounted<rjrep> (key, s, me, mkref (this));
       repair_add (job);
-      job = New refcounted<rjrep> (key, them, mkref (this));
+      job = New refcounted<rjrep> (key, s, them, mkref (this));
       repair_add (job);
     }
   }

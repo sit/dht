@@ -10,8 +10,11 @@ struct adb_keyaux_t;
 enum adb_status;
 
 struct rjrep : public repair_job {
-  rjrep (blockID key, ptr<location> w, ptr<dhblock_replicated_srv> bsrv);
+  rjrep (blockID key, ptr<location> s, ptr<location> w,
+      ptr<dhblock_replicated_srv> bsrv, bool rev = false);
+  ptr<location> src;
   const ptr<dhblock_replicated_srv> bsrv;
+  const bool reversed; // should this repair _not_ be reversed again?
 
   void execute ();
 
@@ -19,8 +22,8 @@ struct rjrep : public repair_job {
   void repair_retrieve_cb (dhash_stat err, 
 			   ptr<dhash_block> b, 
 			   route r);
+  void storecb (dhash_stat err);
   void repair_send_cb (dhash_stat err, bool something);
-  bool repair (blockID k, ptr<location> to);
 };
 
 class dhblock_replicated_srv : public dhblock_srv
@@ -35,6 +38,7 @@ class dhblock_replicated_srv : public dhblock_srv
   void finish_store (chordID key);
 
   void localqueue (clnt_stat err, adb_status stat, vec<block_info> blocks);
+  void maintqueue (const vec<maint_repair_t> &repairs);
 
 protected:
   qhash<chordID, vec<cbv> *, hashID> _paused_stores;

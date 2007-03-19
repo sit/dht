@@ -127,12 +127,38 @@ dhblock_replicated_srv::finish_store (chordID key)
 void
 dhblock_replicated_srv::generate_repair_jobs ()
 {
+#if 1
+  // Get anything that isn't replicated efrags times (if Carbonite).
+  // Expect that we'll be told who to fetch from.
+  u_int32_t reps = dhblock_replicated::num_replica ();
+  maint_getrepairs (reps, REPAIR_QUEUE_MAX - repair_qlength (),
+      node->my_pred ()->id (),
+      wrap (this, &dhblock_replicated_srv::maintqueue));
+#else
   // iterate over all known blocks in bsm, if we aren't in the list,
   // must fetch.  then, for the ones where we are in the list, compare
   // with everyone else and update them.
   db->getblockrange (node->my_pred ()->id (), node->my_location ()->id (),
 		     -1, REPAIR_QUEUE_MAX - repair_qlength (),
 		     wrap (this, &dhblock_replicated_srv::localqueue));
+#endif
+}
+
+void
+dhblock_replicated_srv::maintqueue (const vec<maint_repair_t> &repairs)
+{
+  for (size_t i = 0; i < repairs.size (); i++) {
+    ptr<location> f = maintloc2location (
+	repairs[i].src_ipv4_addr,
+	repairs[i].src_port_vnnum);
+    ptr<location> w = maintloc2location (
+	repairs[i].dst_ipv4_addr,
+	repairs[i].dst_port_vnnum);
+    blockID key (repairs[i].id, ctype);
+    ptr<repair_job> job = New refcounted<rjrep> (key, f, w,
+	mkref (this));
+    repair_add (job);
+  }
 }
 
 void
@@ -188,20 +214,74 @@ dhblock_replicated_srv::localqueue (clnt_stat err, adb_status stat, vec<block_in
 // Repair Logic Implementation
 //
 //
-rjrep::rjrep (blockID key, ptr<location> w, 
-    ptr<dhblock_replicated_srv> bsrv) :
+rjrep::rjrep (blockID key, ptr<location> s, ptr<location> w,
+    ptr<dhblock_replicated_srv> bsrv, bool rev) :
   repair_job (key, w),
-  bsrv (bsrv)
+  src (s),
+  bsrv (bsrv),
+  reversed (rev)
 {
+  if (src) 
+    desc = strbuf () << key << " " << src->id () << "->" << where->id ();
 }
 
 void
 rjrep::execute ()
 {
-  if (where == bsrv->node->my_location ()) {
-    bsrv->cli->retrieve (key, 
-        wrap (mkref (this), &rjrep::repair_retrieve_cb));
+  // Update the local copy of this object first (may be unnecessary).
+  if (src) {
+    if (src == bsrv->node->my_location ()) {
+      // We have the object; go straight to sendblock.
+      delaycb (0, wrap (mkref (this), &rjrep::storecb, DHASH_OK));
+    } else {
+      ptr<chordID> id (NULL);
+      id = New refcounted<chordID> (src->id ());
+      bsrv->cli->retrieve (key,
+	  wrap (mkref (this), &rjrep::repair_retrieve_cb),
+	  DHASHCLIENT_GUESS_SUPPLIED|DHASHCLIENT_SKIP_LOOKUP,
+	  id);
+    }
   } else {
+    bsrv->cli->retrieve (key,
+	wrap (mkref (this), &rjrep::repair_retrieve_cb));
+  }
+}
+
+void
+rjrep::repair_retrieve_cb (dhash_stat err, ptr<dhash_block> b, route r)
+{
+  if (err) {
+    info << "rjrep (" << key<< "): retrieve during repair failed: " << err << "\n";
+    return;
+  }
+  
+  bsrv->store (key.ID, b->data, wrap (mkref (this), &rjrep::storecb));
+}
+
+void
+rjrep::storecb (dhash_stat err)
+{
+  if (err) {
+    if (src && !reversed && err == DHASH_STALE) {
+      // Wait, it appears that I have newer data locally!
+      // Better inform the original guy, in addition to what
+      // else I was planning to do anyway.
+      trace << bsrv->node->my_ID () << ": repair fetch from " <<
+	src->id () << " was stale.\n";
+      ptr<repair_job> job = New refcounted<rjrep> (key,
+	  bsrv->node->my_location (), src, bsrv, true);
+      bsrv->repair_add (job);
+    } else {
+      info << "rjrep (" << key << ") storecb err: " << err << "\n";
+    }
+  }
+
+  if (where == bsrv->node->my_location ()) {
+    return;
+  } else {
+    trace << bsrv->node->my_ID () << ": repair sending " << key 
+          << " to " << where->id () << "\n";
+    // Send a copy of the updated local copy to its destination
     bsrv->cli->sendblock (where, key, bsrv,
         wrap (mkref (this), &rjrep::repair_send_cb));
   }
@@ -210,23 +290,19 @@ rjrep::execute ()
 void
 rjrep::repair_send_cb (dhash_stat err, bool something)
 {
-  if (err) 
-    warn << "rjrep (" << key << "): error sending block " << err << "\n";
-}
-
-static void
-storecb (blockID key, dhash_stat err)
-{
-  if (err) warn << "rjrep (" << key << ") err: " << err << "\n";
-}
-
-void
-rjrep::repair_retrieve_cb (dhash_stat err, ptr<dhash_block> b, route r)
-{
-  if (err) {
-    warn << "rjrep (" << key<< "): retrieve during repair failed: " << err << "\n";
-    return;
+  if (err && err != DHASH_STALE) { 
+    info << "rjrep (" << key << ") error sending block: " << err << "\n";
+  } else if (!reversed && err == DHASH_STALE) {
+    // Whoops, newer stuff on the remote.  Better update
+    // myself and the guy I got it from.
+    trace << bsrv->node->my_ID () << ": repair store to " <<
+      where->id () << " was stale.\n";
+    ptr<repair_job> job = NULL;
+    if (!src)
+      job = New refcounted<rjrep> (key,
+	where, bsrv->node->my_location (), bsrv, true);
+    else
+      job = New refcounted<rjrep> (key, where, src, bsrv, true);
+    bsrv->repair_add (job);
   }
-  
-  bsrv->store (key.ID, b->data, wrap (storecb, key));
 }
