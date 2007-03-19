@@ -127,18 +127,20 @@ dhblock_replicated_srv::finish_store (chordID key)
 void
 dhblock_replicated_srv::generate_repair_jobs ()
 {
+  chordID rngmin = id_to_dbkey (node->my_pred ()->id ()) | 0xFFFFFFFF;
 #if 1
   // Get anything that isn't replicated efrags times (if Carbonite).
   // Expect that we'll be told who to fetch from.
   u_int32_t reps = dhblock_replicated::num_replica ();
   maint_getrepairs (reps, REPAIR_QUEUE_MAX - repair_qlength (),
-      node->my_pred ()->id (),
+      rngmin, 
       wrap (this, &dhblock_replicated_srv::maintqueue));
 #else
+  chordID rngmax = id_to_dbkey (node->my_location ()-> id ()) | 0xFFFFFFFF;
   // iterate over all known blocks in bsm, if we aren't in the list,
   // must fetch.  then, for the ones where we are in the list, compare
   // with everyone else and update them.
-  db->getblockrange (node->my_pred ()->id (), node->my_location ()->id (),
+  db->getblockrange (rngmin, rngmax,
 		     -1, REPAIR_QUEUE_MAX - repair_qlength (),
 		     wrap (this, &dhblock_replicated_srv::localqueue));
 #endif

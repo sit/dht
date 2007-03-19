@@ -347,6 +347,15 @@ carbonite::process_neighbors (
     const vec<ptr<locationcc> > &succs,
     cbv cb)
 {
+  VARS {
+    chordID rngmin, rngmax;
+  }
+  rngmin = preds[0]->id ();
+  rngmax = host.x;
+  if (db->hasaux ()) {
+    rngmin = ((rngmin >> 32) << 32) | 0xFFFFFFFF;
+    rngmax = ((rngmax >> 32) << 32) | 0xFFFFFFFF;
+  }
   BLOCK {
     // Merkle data structures for remote nodes are private to maintd.
     for (unsigned int i=0; i < succs.size(); i++) {
@@ -355,7 +364,7 @@ carbonite::process_neighbors (
 	<< succs[i]->id () << "." << ctype2ext (ctype);
       ptr<merkle_tree> t = New refcounted<merkle_tree_disk> 
 	(succtreepath, /* rw = */ true);
-      sync->sync_with (succs[i], preds[0]->id (), host.x,
+      sync->sync_with (succs[i], rngmin, rngmax,
 	  t, 
 	  wrap (this, &carbonite::handle_missing, succs[i], t),
 	  @());
@@ -421,6 +430,8 @@ carbonite::getrepairs (chordID start, int thresh, int count,
   vec<chordID> lastread;
   vec<bool> treedone;
   chordID stop = host.x;
+  if (db->hasaux ())
+    stop = ((stop << 32) >> 32) | 0xFFFFFFFF;
   itree<chordID, keycounter, &keycounter::id, &keycounter::ik> keymap;
 
   // 0 is self, 1 and on are actual successors.
@@ -610,6 +621,10 @@ passingtone::process_neighbors (
   else
     rngmin = incID (host.x);
   rngmax = host.x;
+  if (db->hasaux ()) {
+    rngmin = ((rngmin >> 32) << 32) | 0xFFFFFFFF;
+    rngmax = ((rngmax >> 32) << 32) | 0xFFFFFFFF;
+  }
 
   // merkle_sync with succ and pred.  If any keys missing
   // locally, fetch them.
