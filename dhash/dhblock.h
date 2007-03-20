@@ -9,6 +9,8 @@ struct dhblock {
 
   virtual ~dhblock () = 0;
 
+  virtual chordID id_to_dbkey (const chordID &k) = 0;
+
   virtual str generate_fragment (ptr<dhash_block> b, int i) = 0;
   
   virtual int process_download (blockID k, str frag) = 0;

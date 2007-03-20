@@ -3,6 +3,13 @@
 
 #include <configurator.h>
 
+chordID
+dhblock_replicated::id_to_dbkey (const chordID &key)
+{
+  // get a key with the low bits cleared out
+  return (key >> 32) << 32;
+}
+
 u_int
 dhblock_replicated::num_replica ()
 {

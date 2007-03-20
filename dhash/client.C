@@ -130,7 +130,7 @@ dhashcli::retrieve (blockID blockID, cb_ret cb, int options,
     // Unfortunately, we are currently hurt by the fact that there
     // are holes in our successor list: nodes without the block
     // that Chord can't tell us about.  Maybe we need up-calls.
-    clntnode->find_succlist (blockID.ID,
+    clntnode->find_succlist (block->id_to_dbkey (blockID.ID),
       block->num_fetch (),
       wrap (this, &dhashcli::retrieve_lookup_cb,rs,block),
       guess);

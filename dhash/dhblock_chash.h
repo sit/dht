@@ -11,6 +11,8 @@ struct dhblock_chash : public dhblock {
 
   dhblock_chash () : done_flag (false) {};
 
+  chordID id_to_dbkey (const chordID &k) { return k; }
+
   int process_download (blockID k, str frag);
   str produce_block_data ();
   bool done () { return done_flag; };

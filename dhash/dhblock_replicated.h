@@ -11,6 +11,8 @@ struct dhblock_replicated : public dhblock {
 
   dhblock_replicated () : done_flag (false) {};
 
+  chordID id_to_dbkey (const chordID &k);
+
   int process_download (blockID k, str frag);
   str produce_block_data ();
   bool done () { return done_flag; };
