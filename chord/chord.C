@@ -124,7 +124,7 @@ vnode_impl::dispatch (user_args *a)
   switch (a->procno) {
   case CHORDPROC_NULL: 
     {
-      assert (0);
+      a->reply (NULL);
     }
     break;
   case CHORDPROC_GETSUCCESSOR:

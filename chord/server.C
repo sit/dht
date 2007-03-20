@@ -413,16 +413,21 @@ user_args::reply (void *res)
 void
 vnode_impl::ping (ptr<location> x, cbping_t cb)
 {
+  ptr<chordID> v = New refcounted<chordID> (x->id ());
+  ptr<dorpc_arg> arg = marshal_doRPC (x, chord_program_1,
+      CHORDPROC_NULL, v);
+  ref<dorpc_res> res = New refcounted<dorpc_res> (DORPC_OK);
   //talk directly to the RPC manger to get the dead behaviour
-  rpcm->doRPC_dead (x, transport_program_1, TRANSPORTPROC_NULL, 
-		    NULL, NULL, 
-		    wrap (this, &vnode_impl::ping_cb, x, cb));
+  rpcm->doRPC_dead (x, transport_program_1, TRANSPORTPROC_DORPC, 
+		    arg, res, 
+		    wrap (this, &vnode_impl::ping_cb, x, res, cb));
 }
 
 void
-vnode_impl::ping_cb (ptr<location> x, cbping_t cb, clnt_stat status) 
+vnode_impl::ping_cb (ptr<location> x, ptr<dorpc_res> res,
+    cbping_t cb, clnt_stat status) 
 {
-  if (status) {
+  if (status || res->status) {
     x->set_alive (false);
     cb (CHORD_RPCFAILURE);
   } else {
@@ -518,6 +523,36 @@ printreply (aclnt_cb cb, str name, void *res,
   (*cb) (err);
 }
 
+ptr<dorpc_arg> vnode_impl::marshal_doRPC (ref<location> l,
+    const rpc_program &prog, int procno, ptr<void> in)
+{
+  //form the transport RPC
+  ptr<dorpc_arg> arg = New refcounted<dorpc_arg> ();
+
+  //header
+
+  l->fill_node (arg->dest);
+  me_->fill_node (arg->src);
+  
+  arg->progno = prog.progno;
+  arg->procno = procno;
+
+  //marshall the args ourself
+  xdrproc_t inproc = prog.tbl[procno].xdr_arg;
+  xdrsuio x (XDR_ENCODE);
+  if ((!inproc) || (!inproc (x.xdrp (), in))) {
+    fatal << "failed to marshall args\n";
+    return NULL;
+  } else {
+    int args_len = x.uio ()->resid ();
+    arg->args.setsize (args_len);
+    void *marshalled_args = suio_flatten (x.uio ());
+    memcpy (arg->args.base (), marshalled_args, args_len);
+    xfree (marshalled_args);
+  }
+  return arg;
+}
+
 void
 err_cb (aclnt_cb cb)
 {
@@ -537,33 +572,13 @@ vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno,
     return -1;
   }
 
-  //form the transport RPC
-  ptr<dorpc_arg> arg = New refcounted<dorpc_arg> ();
-
-  //header
-
-  l->fill_node (arg->dest);
-  me_->fill_node (arg->src);
-  
-  arg->progno = prog.progno;
-  arg->procno = procno;
-
-  //marshall the args ourself
-  xdrproc_t inproc = prog.tbl[procno].xdr_arg;
-  xdrsuio x (XDR_ENCODE);
-  if ((!inproc) || (!inproc (x.xdrp (), in))) {
-    fatal << "failed to marshall args\n";
+  ptr<dorpc_arg> arg = marshal_doRPC (l, prog, procno, in);
+  if (!arg) {
     cb (RPC_CANTSEND);
     return 0;
   } else {
-    int args_len = x.uio ()->resid ();
-    arg->args.setsize (args_len);
-    void *marshalled_args = suio_flatten (x.uio ());
-    memcpy (arg->args.base (), marshalled_args, args_len);
-    xfree (marshalled_args);
-
     // This is the real call; cf transport tracking in stp_manager.
-    track_call (prog, procno, args_len);
+    track_call (prog, procno, arg->args.size ());
 
     ref<dorpc_res> res = New refcounted<dorpc_res> (DORPC_OK);
     xdrproc_t outproc = prog.tbl[procno].xdr_res;
@@ -591,7 +606,7 @@ vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno,
       return rpcm->doRPC (me_, l, transport_program_1, TRANSPORTPROC_DORPC, 
 			  arg, res, cbw, 
 			  wrap(this, &vnode_impl::tmo, cb_tmo, 
-			       prog.progno, procno, args_len));
+			       prog.progno, procno, arg->args.size ()));
     else
       return rpcm->doRPC_stream (me_, l, 
 				 transport_program_1, TRANSPORTPROC_DORPC, 

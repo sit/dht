@@ -128,13 +128,15 @@ class vnode_impl : public vnode {
   
   void notify_cb (chordID n, chordstat *res, clnt_stat err);
   void alert_cb (chordstat *res, clnt_stat err);
-  void ping_cb (ptr<location> n, cbping_t cb, clnt_stat status);
+  void ping_cb (ptr<location> n, ptr<dorpc_res> res, cbping_t cb, clnt_stat status);
   
   void doalert_cb (chord_noderes *res, chordID x, clnt_stat err);
 
   void do_upcall_cb (char *a, int upcall_prog, int upcall_proc,
 		     cbupcalldone_t, bool v);
 
+  ptr<dorpc_arg> marshal_doRPC (ref<location> l,
+    const rpc_program &prog, int procno, ptr<void> in);
   void doRPC_cb (ptr<location> l, xdrproc_t proc,
 		 void *out, aclnt_cb cb,
 		 ref<dorpc_res> res, clnt_stat err);
