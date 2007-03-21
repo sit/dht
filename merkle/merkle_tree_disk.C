@@ -301,9 +301,6 @@ safe_fname (str rwname)
 void
 merkle_tree_disk::init ()
 {
-  strbuf safe_index_name ("%s.ro", _index_name.cstr ());
-  strbuf safe_leaf_name ("%s.ro", _leaf_name.cstr ());
-  strbuf safe_internal_name ("%s.ro", _internal_name.cstr ());
   if (_writer) {
     _internal = open_file (_internal_name);
     _leaf = open_file (_leaf_name);
