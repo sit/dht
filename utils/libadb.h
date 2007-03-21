@@ -78,7 +78,7 @@ public:
   void remove (chordID key, cb_adbstat cb);
   void remove (chordID key, u_int32_t auxdata, cb_adbstat cb);
   void getkeys (u_int32_t id, cb_getkeys cb, bool ordered = false, u_int32_t batchsize = 16384, bool getaux = false);
-  void sync ();
+  void sync (cb_adbstat cb);
 
   void getblockrange (const chordID &start, const chordID &stop,
       int extant, int count, cbvblock_info_t cb);

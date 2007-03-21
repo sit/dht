@@ -240,7 +240,7 @@ dhblock_srv::repair_qlength ()
 void
 dhblock_srv::repair_timer ()
 {
-  db->sync ();
+  db->sync (wrap (this, &dhblock_srv::repair_timer_1));
 
   if (repairs_queued.size () < REPAIR_QUEUE_MAX)
     generate_repair_jobs ();
@@ -254,6 +254,13 @@ dhblock_srv::repair_timer ()
 
   repair_tcb = delaycb (dhash::reptm (),
       wrap (this, &dhblock_srv::repair_timer));
+}
+
+void
+dhblock_srv::repair_timer_1 (adb_status stat)
+{
+  if (stat)
+    warn << node->my_ID () << ": sync failed: " << stat << ".\n";
 }
 
 void

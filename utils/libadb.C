@@ -394,10 +394,12 @@ adb::getspaceinfocb (ptr<adb_getspaceinfores> res, cb_getspace_t cb,
 }
 
 void
-adb::sync ()
+adb::sync (cb_adbstat cb)
 {
   adb_dbnamearg arg;
   arg.name = name_space;
+  adb_status *res = New adb_status ();
   // Throw away the return value here.
-  c->call (ADBPROC_SYNC, &arg, NULL, aclnt_cb_null);
+  c->call (ADBPROC_SYNC, &arg, res,
+      wrap (this, &adb::generic_cb, res, cb));
 }
