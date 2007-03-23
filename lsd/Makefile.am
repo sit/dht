@@ -6,8 +6,9 @@ SUFFIXES = .T .C .h
 .T.C:
 	-$(TAME) -o $@ $< || rm -f $@
 
-bin_PROGRAMS = lsdctl adbd lsd syncd sampled
+bin_PROGRAMS = lsdctl adbd lsd
 bin_SCRIPTS = start-dhash
+noinst_PROGRAMS = syncd sampled
 
 lsd_SOURCES = lsd.C
 

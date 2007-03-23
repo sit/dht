@@ -68,8 +68,6 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/nodeq
 %{_bindir}/nodeq-filter
 %{_bindir}/start-dhash
-%{_bindir}/sampled
-%{_bindir}/syncd
 %{_bindir}/walk
 %{_bindir}/adbd
 %{_includedir}/chord-%{version}/chord_types.x
