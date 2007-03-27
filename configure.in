@@ -14,11 +14,16 @@ AC_PROG_CPP
 AC_PROG_CXX
 AC_PATH_PROGS(M4, gm4 gnum4 m4, '$(top_srcdir)/missing')
 
-dnl Check for GTK and allow conditional Makefile.am statements
-PKG_CHECK_MODULES(GSTUFF, gtk+-2.0 >= 2.0, AC_MSG_WARN([Found GTK...]), AC_MSG_WARN([You don't have GTK. Vis won't be built]))
+AC_ARG_ENABLE(vis,dnl
+  [--disable-vis           do not build Chord visualizer],,
+  [test -z "${enable_vis}" && enable_vis=yes])
+if test "${enable_vis}" = yes ; then
+    dnl Check for GTK and allow conditional Makefile.am statements
+    PKG_CHECK_MODULES(GSTUFF, gtk+-2.0 >= 2.0,, AC_MSG_WARN([You don't have GTK. Vis won't be built]))
+    AC_SUBST(GSTUFF_CFLAGS)
+    AC_SUBST(GSTUFF_LIBS)
+fi
 AM_CONDITIONAL(GTK_AVAILABLE, test "$GSTUFF_CFLAGS")
-AC_SUBST(GSTUFF_CFLAGS)
-AC_SUBST(GSTUFF_LIBS)
 
 SFS_WFLAGS
 AC_PROG_INSTALL
