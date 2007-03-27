@@ -7,7 +7,7 @@ $ENV{'POSIXLY_CORRECT'} = 1;
 use Getopt::Long qw(:config posix_default pass_through);
 use File::Basename;
 use Pod::Usage;
-use POSIX qw/:sys_wait_h SIGINT/;
+use POSIX qw/:sys_wait_h :signal_h/;
 
 sub spawn {
     my $rundir = shift;
@@ -96,6 +96,8 @@ pod2usage("Unable to find lsd/adbd/maintd executables; use --bindir.\n")
 # Be ready to pass on signals
 my $signaled = -1;
 $SIG{INT} = sub { $signaled = SIGINT; };
+$SIG{HUP} = sub { $signaled = SIGHUP; };
+$SIG{TERM} = sub { $signaled = SIGTERM; };
 
 # Try to allow core dump files
 eval "use BSD::Resource; setrlimit (RLIMIT_CORE, -1, -1);";
