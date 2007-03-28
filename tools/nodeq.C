@@ -17,6 +17,7 @@
 char *usage = "Usage: nodeq [-l] [-r] host port vnode\n";
 
 int outstanding = 0;
+int errors = 0;
 bool do_reverse_lookup = false;
 bool do_listkeys = false;
 bool do_accordion = false;
@@ -72,7 +73,7 @@ finish ()
   printlist ("predecessors", predecessors);
   printlist ("successors", successors);
   printlist ("fingers", fingers);
-  exit (0);
+  exit (errors > 0);
 }
 
 void
@@ -92,6 +93,7 @@ processreslist_cb (str desc, vec<ptr<node> > *list,
 {
   outstanding--;
   if (status) {
+    errors++;
     warnx << "no " << desc << ": " << status << "\n";
     if (outstanding == 0)
       finish ();
