@@ -18,6 +18,40 @@
 #include <maint_prot.h>
 #include "maint_policy.h"
 
+// {{{ Bandwidth tracker
+// See comm.[Ch]
+static inline rpcstats *
+getstats (int progno, int procno)
+{
+  str key = strbuf ("%d:%d", progno, procno);
+  rpcstats *stats = rpc_stats_tab[key];
+  if (!stats) {
+    stats = New rpcstats (key);
+    rpc_stats_tab.insert (stats);
+  }
+  return stats;
+}
+
+static void
+track_aclnt (aclnt_acct_t a)
+{
+  rpcstats *stats = getstats (a.progno, a.procno);
+  switch (a.dir) {
+    case ACCT_SEND:
+      stats->ncall++;
+      stats->call_bytes += a.len;
+      break;
+    case ACCT_RECV:
+      stats->nreply++;
+      stats->reply_bytes += a.len;
+      break;
+    default:
+      fatal ("Unknown RPC direction: %d", a.dir);
+      break;
+  }
+}
+// }}}
+
 // {{{ locationcc - TCP connection management
 vec<locationcc *> locationcc::allocated;
 
@@ -44,8 +78,10 @@ void
 locationcc::aclntmaker (const rpc_program *p, locationcc::aclntcb cb)
 {
   ptr<aclnt> c (NULL);
-  if (x)
+  if (x && !x->ateof ()) {
     c = aclnt::alloc (x, *p);
+    c->set_acct_hook (wrap (&track_aclnt));
+  }
   cb (c);
 }
 
@@ -57,11 +93,21 @@ locationcc::get_stream_aclnt (const rpc_program &p,
     int fd (-1);
   }
 
+  if (x && x->ateof ()) {
+    if (reapcaller)
+      timecb_remove (reapcaller);
+    reapcaller = NULL;
+    x = NULL;
+  }
+
   if (x) {
+    assert (!x->ateof ());
     assert (reapcaller);
     timecb_remove (reapcaller);
     reapcaller = NULL;
     ptr<aclnt> c = aclnt::alloc (x, p);
+    if (c)
+      c->set_acct_hook (wrap (&track_aclnt));
     cb (c);
   } else {
     assert (!reapcaller);

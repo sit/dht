@@ -1,5 +1,6 @@
 #include <arpc.h>
 
+#include <comm.h>
 #include <modlogger.h>
 #include <misc_utils.h>
 
@@ -8,7 +9,7 @@
 #include <merkle_sync_prot.h>
 
 #include <merkle.h>
-
+#include <lsdctl_prot.h>
 #include <maint_prot.h>
 #include "maint_policy.h"
 
@@ -269,7 +270,8 @@ do_getrepairs (svccb *sbp)
 // }}}
 // {{{ Control-side RPC accept and dispatch
 static void accept_cb (int lfd);
-void dispatch (ref<axprt_stream> s, ptr<asrv> a, svccb *sbp);
+void dispatch_maint (ref<axprt_stream> s, ptr<asrv> a, svccb *sbp);
+void dispatch_lsdctl (ref<axprt_stream> s, ptr<asrv> a, svccb *sbp);
 static void
 listen_unix (str sock_name)
 {
@@ -299,15 +301,76 @@ accept_cb (int lfd)
   ref<axprt_stream> x = axprt_stream::alloc (fd, 1024*1025);
 
   ptr<asrv> a = asrv::alloc (x, maint_program_1);
-  a->setcb (wrap (dispatch, x, a));
+  a->setcb (wrap (&dispatch_maint, x, a));
+  // Handle lsdctl just for the stats functionality.
+  ptr<asrv> b = asrv::alloc (x, lsdctl_prog_1);
+  b->setcb (wrap (&dispatch_lsdctl, x, b));
 }
 
 void
-dispatch (ref<axprt_stream> s, ptr<asrv> a, svccb *sbp)
+dispatch_lsdctl (ref<axprt_stream> x, ptr<asrv> a, svccb *sbp)
+{
+  if (sbp == NULL) {
+    a->setcb (NULL);
+    return;
+  }
+
+  switch (sbp->proc ()) {
+  case LSDCTL_NULL:
+    sbp->reply (NULL);
+    break;
+  case LSDCTL_GETRPCSTATS:
+    {
+      // Code copied from lsd/lsd.C
+      bool *clear = sbp->Xtmpl getarg<bool> ();
+      
+      ptr<lsdctl_rpcstatlist> sl = New refcounted<lsdctl_rpcstatlist> ();
+      
+      sl->stats.setsize (rpc_stats_tab.size ());
+      rpcstats *s = rpc_stats_tab.first ();
+      int i = 0;
+      while (s) {
+	sl->stats[i].key          = s->key;
+	sl->stats[i].ncall        = s->ncall;
+	sl->stats[i].nrexmit      = s->nrexmit;
+	sl->stats[i].nreply       = s->nreply;
+	sl->stats[i].call_bytes   = s->call_bytes;
+	sl->stats[i].rexmit_bytes = s->rexmit_bytes;
+	sl->stats[i].reply_bytes  = s->reply_bytes;
+	sl->stats[i].latency_ewma = s->latency_ewma;
+	s = rpc_stats_tab.next (s);
+	i++;
+      }
+      
+      u_int64_t now = getusec ();
+      sl->interval = now - rpc_stats_lastclear;
+      if (*clear) {
+	s = rpc_stats_tab.first ();
+	while (s) {
+	  rpcstats *t = rpc_stats_tab.next (s);
+	  rpc_stats_tab.remove (s);
+	  delete s;
+	  s = t;
+	}
+	rpc_stats_tab.clear ();
+	rpc_stats_lastclear = now;
+      }
+	
+      sbp->reply (sl);
+    }
+    break;
+  default:
+    sbp->reject (PROC_UNAVAIL);
+    break;
+  }
+}
+
+void
+dispatch_maint (ref<axprt_stream> s, ptr<asrv> a, svccb *sbp)
 {
   if (sbp == NULL) {
     warn << "EOF from client\n";
-    a = NULL;
+    a->setcb (NULL);
     return;
   }
 

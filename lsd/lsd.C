@@ -77,6 +77,8 @@ static str heartbeatfn;
 ptr<chord> chordnode;
 vec<ref<dhash> > dh;
 int myport;
+
+str maintsock = "/tmp/maint-sock";
  
 enum routing_mode_t {
   MODE_SUCC,
@@ -212,23 +214,30 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
   case LSDCTL_GETRPCSTATS:
     {
       bool *clear = sbp->Xtmpl getarg<bool> ();
-      
+
       ptr<lsdctl_rpcstatlist> sl = New refcounted<lsdctl_rpcstatlist> ();
+
+      // Grab any stats from maintd, if available.
+      int fd = unixsocket_connect (maintsock);
+      if (fd >= 0) {
+	ptr<aclnt> c = aclnt::alloc (axprt_unix::alloc (fd, 32*1024),
+	    lsdctl_prog_1);
+	c->scall (LSDCTL_GETRPCSTATS, clear, sl);
+      }
       
-      sl->stats.setsize (rpc_stats_tab.size ());
       rpcstats *s = rpc_stats_tab.first ();
-      int i = 0;
       while (s) {
-	sl->stats[i].key          = s->key;
-	sl->stats[i].ncall        = s->ncall;
-	sl->stats[i].nrexmit      = s->nrexmit;
-	sl->stats[i].nreply       = s->nreply;
-	sl->stats[i].call_bytes   = s->call_bytes;
-	sl->stats[i].rexmit_bytes = s->rexmit_bytes;
-	sl->stats[i].reply_bytes  = s->reply_bytes;
-	sl->stats[i].latency_ewma = s->latency_ewma;
+	lsdctl_rpcstat si;
+	si.key          = s->key;
+	si.ncall        = s->ncall;
+	si.nrexmit      = s->nrexmit;
+	si.nreply       = s->nreply;
+	si.call_bytes   = s->call_bytes;
+	si.rexmit_bytes = s->rexmit_bytes;
+	si.reply_bytes  = s->reply_bytes;
+	si.latency_ewma = s->latency_ewma;
+	sl->stats.push_back (si);
 	s = rpc_stats_tab.next (s);
-	i++;
       }
       
       u_int64_t now = getusec ();
@@ -244,7 +253,7 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
 	rpc_stats_tab.clear ();
 	rpc_stats_lastclear = now;
       }
-	
+
       sbp->reply (sl);
     }
     break;
@@ -504,7 +513,6 @@ int nreplica = 0;
 bool replicate = true;
 bool do_daemonize = false;
 str dbsock = "/tmp/db-sock";
-str maintsock = "/tmp/maint-sock";
 str my_name;
 
 char *cffile = NULL;
