@@ -5,6 +5,7 @@
 
 u_int64_t starttime;
 unsigned trials = 1;
+bool verbose = true;
 chord_node dst;
 
 void findroute(chordID key);
@@ -20,22 +21,21 @@ findroute_cb (chord_node n,
     fatal << "findroute RPC returned no route!\n";
   } else {
     strbuf s;
-    s << " key " << (fa->x>>144) << " rsz " << route->resok->nlist.size ();
-    /*
-    warnx << "Searching for " << fa->x << " from "
-	 << n.x << "@" << n.r.hostname << ":" << n.r.port << "\n";
-    for (size_t i = 0; i < route->resok->nlist.size (); i++) {
-      chord_node z = make_chord_node (route->resok->nlist[i]);
-      chordID n    = z.x;
-      //str host     = z.r.hostname;
-      //u_short port = z.r.port;
-      //int index    = z.vnode_num;
-      //assert (index >= 0);
-      s << " " << (n>>144);
-      warnx << i << ": "
-	    << n << " " << host << " " << port << " " << index << "\n";
+    if (!verbose) {
+      s << " key " << (fa->x>>144) << " rsz " << route->resok->nlist.size ();
+    } else {
+      warnx << "Found " << fa->x << " via:\n";
+      for (size_t i = 0; i < route->resok->nlist.size (); i++) {
+	chord_node z = make_chord_node (route->resok->nlist[i]);
+	chordID n    = z.x;
+	str host     = z.r.hostname;
+	u_short port = z.r.port;
+	int index    = z.vnode_num;
+	assert (index >= 0);
+	s << i << ": "
+	  << n << " " << host << " " << port << " " << index << "\n";
+      }
     }
-	    */
     warnx << s << " done " << (getusec () -starttime)/1000 << " msec\n";
   }      
   delete route;
@@ -86,6 +86,7 @@ main (int argc, char *argv[])
     ok = str2chordID (argv[3], x);
   }
   if (!ok) {
+    verbose = false;
     trials = 100;
     x = make_randomID ();
   }
