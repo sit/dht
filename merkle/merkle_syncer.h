@@ -12,7 +12,7 @@ struct RPC_delay_args;
 typedef callback<void, RPC_delay_args *>::ref rpcfnc_t;
 typedef callback<void, bigint, bool>::ref missingfnc_t;
 
-class merkle_syncer {
+class merkle_syncer : public virtual refcount {
  private:
   ptr<bool> deleted;
 
@@ -46,7 +46,7 @@ class merkle_syncer {
 
   unsigned int outstanding_sendnodes;
   unsigned int outstanding_keyranges;
-  void collect_keyranges ();
+  void collect_keyranges (ptr<bool> deleted);
 
  public:
   merkle_syncer (uint vnode, dhash_ctype ctype,

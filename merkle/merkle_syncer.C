@@ -244,6 +244,10 @@ merkle_syncer::doRPC (int procno, ptr<void> in, void *out, aclnt_cb cb)
 void
 merkle_syncer::setdone ()
 {
+  if (sync_done) {
+    warning << "duplicate setdone for " << (u_int) this << "\n";
+    return;
+  }
   if (completecb != cbi_null) {
     // Return 0 if everything was ok, 1 otherwise.
     completecb (fatal_err.cstr () != NULL);
@@ -312,7 +316,7 @@ merkle_syncer::sendnode (u_int depth, const merkle_hash &prefix)
   ltree->lookup_release (lnode);
   outstanding_sendnodes++;
   doRPC (MERKLESYNC_SENDNODE, arg, res,
-	 wrap (this, &merkle_syncer::sendnode_cb, deleted, arg, res));
+	 wrap (mkref (this), &merkle_syncer::sendnode_cb, deleted, arg, res));
 }
 
 void
@@ -320,7 +324,7 @@ merkle_syncer::sendnode_cb (ptr<bool> deleted,
 			    ref<sendnode_arg> arg, ref<sendnode_res> res,
 			    clnt_stat err)
 {
-  if (*deleted)
+  if (*deleted || sync_done)
     return;
   outstanding_sendnodes--;
   if (err) {
@@ -464,13 +468,15 @@ merkle_syncer::compare_nodes (bigint rngmin, bigint rngmax,
     outstanding_keyranges++;
     vNew merkle_getkeyrange (vnode, ctype, tmpmin, tmpmax, lkeys,
 	missingfnc, rpcfnc,
-	wrap (this, &merkle_syncer::collect_keyranges));
+	wrap (mkref (this), &merkle_syncer::collect_keyranges, deleted));
   }
 }
 
 void
-merkle_syncer::collect_keyranges ()
+merkle_syncer::collect_keyranges (ptr<bool> deleted)
 {
+  if (*deleted || sync_done)
+    return;
   assert (outstanding_keyranges > 0);
   outstanding_keyranges--;
   if (!outstanding_keyranges)
