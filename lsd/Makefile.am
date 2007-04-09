@@ -8,7 +8,6 @@ SUFFIXES = .T .C .h
 
 bin_PROGRAMS = lsdctl adbd lsd
 bin_SCRIPTS = start-dhash
-noinst_PROGRAMS = syncd sampled
 
 lsd_SOURCES = lsd.C
 
@@ -18,18 +17,6 @@ lsd_LDADD = ../dhash/libdhash.a ../merkle/libmerkle.a \
 
 adbd_SOURCES = adbd.C 
 adbd_LDADD =  ../utils/libutil.a ../svc/libsvc.la ../merkle/libmerkle.a $(LIBARPC)  $(LIBSFSCRYPT) $(LIBGMP) $(DBLIB) $(LIBASYNC) 
-
-syncd_SOURCES = syncd.C syncer.C syncer.h
-syncd_LDADD =  ../dhash/libdhash.a  ../merkle/libmerkle.a \
-	     ../chord/libchord.a ../utils/libutil.a \
-		../svc/libsvc.la  \
-	    $(DBLIB) ${LDADD} 
-
-sampled_SOURCES = sampled.C sampler.T sampler.h sample_server.T sample_server.h
-sampled_LDADD =  ../dhash/libdhash.a \
-		 ../chord/libchord.a ../utils/libutil.a \
-		 ../svc/libsvc.la  \
-	         $(DBLIB) ${LDADD} 
 
 lsdctl_SOURCES = lsdctl.C
 lsdctl_LDADD = ../svc/libsvc.la $(LDADD)
