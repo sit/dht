@@ -1,5 +1,6 @@
 #include <async.h>
 #include <aios.h>
+#include <id_utils.h>
 #include <merkle_tree_disk.h>
 
 int
@@ -19,7 +20,7 @@ main (int argc, char *argv[])
     lastread = keys.back ();
     if (keys.size () < 64)
       break;
-    keys = tree->get_keyrange (lastread, maxid, 64);
+    keys = tree->get_keyrange (incID (lastread), maxid, 64);
   }
 }
 
