@@ -74,9 +74,12 @@ static str ctype2ext (dhash_ctype c) {
 }
 
 void
-timedout (int t)
+fail (str msg)
 {
-  fatal << "timed out after " << t << " seconds.\n";
+  aout << "Total time elapsed: " << (getusec () - starttime)/1000 << "ms\n";
+  aout << "Total bytes sent:   " << totalbytes << "\n";
+  if (msg)
+    fatal << msg;
   exit (1);
 }
 
@@ -293,7 +296,11 @@ main (int argc, char *argv[])
   starttime = getusec ();
 
   if (maxtime > 0)
-    delaycb (maxtime, wrap (&timedout, maxtime));
+    delaycb (maxtime, wrap (&fail,
+	  strbuf ("timed out after %d seconds\n", maxtime)));
+  sigcb (SIGINT, wrap (&fail, "Received SIGINT\n"));
+  sigcb (SIGHUP, wrap (&fail, "Received SIGHUP\n"));
+  sigcb (SIGTERM, wrap (&fail, "Received SIGTERM\n"));
 
   amain ();
 }
