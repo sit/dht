@@ -64,6 +64,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/lsdctl
 %{_bindir}/lsdping
 %{_bindir}/maintd
+%{_bindir}/maintwalk
 %{_bindir}/merkledump
 %{_bindir}/nodeq
 %{_bindir}/nodeq-filter
@@ -112,6 +113,9 @@ rm -rf $RPM_BUILD_ROOT
 %{_includedir}/chord-%{version}/skiplist.h
 
 %changelog
+* Tue Apr 10 2007 Emil Sit <sit@mit.edu>
+- maintwalk
+
 * Thu Mar 15 2007 Emil Sit <sit@mit.edu>
 - merkledump
 
