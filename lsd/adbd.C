@@ -971,7 +971,7 @@ dbmanager::dbmanager (str p) :
   }
 
   // Convert path to full path
-  char realpath[256];
+  char realpath[MAXPATHLEN];
   int fd = -1;
   if (((fd = open (".", O_RDONLY)) >= 0)
      && chdir (dbpath) >= 0)
