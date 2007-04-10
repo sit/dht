@@ -67,7 +67,7 @@ add_node (const chord_node &n)
     nodes.insert (nu);
 
     char nodess[1024];
-    sprintf (nodess, "%d nodes", nodes.size ());
+    sprintf (nodess, "%zd nodes", nodes.size ());
     gtk_label_set_text (GTK_LABEL (total_nodes), nodess);
   }
   get_queue.push_back (n.x);

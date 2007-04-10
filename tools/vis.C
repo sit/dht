@@ -159,7 +159,7 @@ doRPCcb (chordID ID, xdrproc_t outproc, dorpc_res *res, void *out, aclnt_cb cb, 
     warn << "deleting " << ID << ":" << nu->host << "\n";
     nodes.remove (nu);
     char nodess[1024];
-    sprintf (nodess, "%d nodes", nodes.size ());
+    sprintf (nodess, "%zd nodes", nodes.size ());
     gtk_label_set_text (GTK_LABEL (total_nodes), nodess);
     delete nu;
     delete res;
