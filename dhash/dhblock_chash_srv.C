@@ -3,12 +3,11 @@
 #include <dhash_common.h>
 #include <dhashcli.h>
 
+#include <location.h>
 #include <libadb.h>
 
 #include <dhblock_chash.h>
 #include <dhblock_chash_srv.h>
-
-#include "pmaint.h"
 
 #include <configurator.h>
 #include <locationtable.h>
@@ -50,41 +49,13 @@ dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
 				      cbv donecb) :
   dhblock_srv (node, cli, DHASH_CONTENTHASH, msock,
       dbsock, dbname, false, donecb),
-  cache_db (NULL),
-  pmaint_obj (NULL)
+  cache_db (NULL)
 {
-  pmaint_obj = New pmaint (cli, node, mkref (this)); 
   cache_db = New refcounted<adb> (dbsock, "ccache");
   maint_initspace (dhblock_chash::num_efrags (),
 		   dhblock_chash::num_dfrags ());
 
   delaycb (0, donecb);
-}
-
-dhblock_chash_srv::~dhblock_chash_srv ()
-{
-  stop ();
-  if (pmaint_obj) {
-    delete pmaint_obj;
-    pmaint_obj = NULL;
-  }
-}
-
-void
-dhblock_chash_srv::start (bool randomize)
-{
-  dhblock_srv::start (randomize);
-  // XXX disable pmaint until DHASHPROC_OFFER is fixed.
-  if (0 && pmaint_obj)
-    pmaint_obj->start ();
-}
-
-void
-dhblock_chash_srv::stop ()
-{
-  dhblock_srv::stop ();
-  if (pmaint_obj)
-    pmaint_obj->stop ();
 }
 
 void
