@@ -53,6 +53,7 @@ findroute(chordID key)
 {
   ptr<chord_findarg> fa = New refcounted<chord_findarg> ();
   fa->x = key;
+  fa->return_succs = false;
   chord_nodelistres *route = New chord_nodelistres ();
   starttime = getusec ();
   doRPC (dst, chord_program_1,
