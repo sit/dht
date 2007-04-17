@@ -32,6 +32,8 @@
 #include "id_utils.h"
 #include "misc_utils.h"
 
+const chordID maxID ((chordID (1) << NBIT) - 1);
+
 chordID
 incID (const chordID &n)
 {

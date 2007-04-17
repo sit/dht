@@ -37,6 +37,8 @@ struct hashID {
   }
 };
 
+extern const chordID maxID;
+
 chordID incID (const chordID &n);
 chordID decID (const chordID &n);
 chordID successorID (const chordID &n, int p);
