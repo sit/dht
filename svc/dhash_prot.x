@@ -15,12 +15,6 @@ struct dhash_valueattr {
   unsigned size;
 };
 
-enum dhash_offer_status {
-  DHASH_HOLD = 1,
-  DHASH_DELETE = 2,
-  DHASH_SENDTO = 3
-};
-
 struct s_dhash_insertarg {
   chordID key;
   dhash_ctype ctype;
@@ -87,22 +81,6 @@ struct s_dhash_block_arg {
 };
 
 
-struct dhash_offer_arg {
-  chordID keys<64>;
-};
-
-struct dhash_offer_resok {
-  chord_node_wire dest<64>;
-  dhash_offer_status accepted<64>;
-};
-
-union dhash_offer_res switch (dhash_stat status) {
- case DHASH_OK:
-   dhash_offer_resok resok;
-default:
-   void; 
-};
-
 struct dhash_fetchrec_arg {
   chordID key;			/* key to route towards */
   dhash_ctype ctype;
@@ -144,10 +122,6 @@ program DHASH_PROGRAM {
     /* Downloads over UDP */
     dhash_fetchiter_res
     DHASHPROC_FETCHITER (s_dhash_fetch_arg) = 3;
-
-    /* "Put that block back where it came from, or so help me..." */
-    dhash_offer_res
-    DHASHPROC_OFFER (dhash_offer_arg) = 4;
 
     /* RPC back to fetch initiator with data */
     void

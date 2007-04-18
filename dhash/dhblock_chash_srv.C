@@ -177,50 +177,6 @@ dhblock_chash_srv::localqueue (u_int32_t frags,
   }
 }
 
-// XXX Ugh
-// This code is called in response to an RPC.  Unfortunately, now
-// we need to go out to disk to figure out the best way to respond.
-void
-dhblock_chash_srv::offer (user_args *sbp, dhash_offer_arg *arg)
-{
-  dhash_offer_res res (DHASH_OK);
-  res.resok->accepted.setsize (arg->keys.size ());
-  res.resok->dest.setsize (arg->keys.size ());
-
-  //XXX copied code
-  vec<ptr<location> > nmsuccs = node->succs ();
-  //don't assume we are holding the block
-  // i.e. -> put ourselves on this of nodes to check for the block
-  vec<ptr<location> > succs;
-  succs.push_back (node->my_location ());
-  for (unsigned int j = 0; j < nmsuccs.size (); j++)
-    succs.push_back(nmsuccs[j]);
-  //XXX end copied
-#if 0
-  for (u_int i = 0; i < arg->keys.size (); i++) {
-    chordID key = arg->keys[i];
-    u_int count = bsm->pcount (key, succs);
-    chordID pred = node->my_pred ()->id ();
-    bool mine = between (pred, node->my_ID (), key);
-
-    // belongs to me and isn't replicated well
-    if (mine && count < dhblock_chash::num_efrags ()) {
-      res.resok->accepted[i] = DHASH_SENDTO;
-      ptr<location> l = bsm->best_missing (key, node->succs ());
-      trace << "server: sending " << key << ": count=" << count 
-	    << " to=" << l->id () << "\n";
-      l->fill_node (res.resok->dest[i]);
-      bsm->unmissing (l, key);
-    } else {
-      trace << "server: holding " << key << ": count=" << count << "\n";
-      res.resok->accepted[i] = DHASH_HOLD;
-    } 
-  }
-#endif /* 0 */
-
-  sbp->reply (&res);
-}
-
 void
 dhblock_chash_srv::stats (vec<dstat> &s)
 {

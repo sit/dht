@@ -272,20 +272,6 @@ dhash_impl::dispatch (user_args *sbp)
 	     wrap (this, &dhash_impl::storesvc_cb, sbp, sarg));
     }
     break;
-  case DHASHPROC_OFFER:
-    {
-      dhash_offer_arg *arg = sbp->Xtmpl getarg<dhash_offer_arg> ();
-      dhash_ctype ctype = DHASH_CONTENTHASH; // XXX
-
-      ptr<dhblock_srv> srv = blocksrv[ctype];
-      if (!srv) {
-	dhash_offer_res res (DHASH_ERR);
-	sbp->reply (&res);
-      } else {
-	srv->offer (sbp, arg);
-      }
-    }
-    break;
   default:
     sbp->replyref (PROC_UNAVAIL);
     break;

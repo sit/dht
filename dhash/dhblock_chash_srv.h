@@ -20,7 +20,6 @@ public:
       str msock, str dbsock, str dbname, cbv donecb);
 
   void store (chordID k, str d, cb_dhstat cb);
-  void offer (user_args *sbp, dhash_offer_arg *arg);
   void stats (vec<dstat> &s);
   void generate_repair_jobs ();
 };

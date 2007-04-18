@@ -182,12 +182,6 @@ dhblock_srv::stats (vec<dstat> &s)
   return;
 }
 
-void
-dhblock_srv::offer (user_args *sbp, dhash_offer_arg *arg)
-{
-  sbp->replyref (NULL);
-}
-
 //
 // Repair management
 // 
