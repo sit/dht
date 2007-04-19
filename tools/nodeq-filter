@@ -1,16 +1,26 @@
-#!/usr/bin/perl -an
+#!/usr/bin/perl -wan
+# Parse the output of nodeq and make it pretty.
+# Depends on fact that zero-th successor and finger is self.
 
-# depends on fact that zero-th successor and finger is self.
+BEGIN {
+    $X = 11;
+    $Y = 12;
+    $H = 13;
+}
 
 if (/^===/) {
     print;
     undef @me;
 } else {
-    @me = @F[8,9,10] if !defined(@me);
-    $dist = ($F[8] - $me[0])**2 + ($F[9] - $me[1])**2;
+    if (!defined(@me)) {
+	push @me, $F[$X];
+	push @me, $F[$Y];
+	push @me, $F[$H];
+    }
+    $dist = ($F[$X] - $me[0])**2 + ($F[$Y] - $me[1])**2;
     $dist = sqrt($dist);
-    $dist += $F[10] + $me[2];
+    $dist += $F[$H] + $me[2];
 
-    printf "%3s %40s %-30s %5d %2d | %6d %6d | %5d | [%8d, %8d, %5d] (%4d) => %10.2f\n",
+    printf "%3s %40s %-30s %5d %2d | %6d %2d %2d | %6d %6d %6d | [%6d, %6d, %5d] (%4d) => %8.2f\n",
     	@F, $dist;
 }
