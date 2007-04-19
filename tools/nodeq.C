@@ -7,19 +7,16 @@
 #include <chord_prot.h>
 #include <accordion_prot.h>
 #include <fingers_prot.h>
-#include <merkle_sync_prot.h>
 #include <misc_utils.h>
 #include <id_utils.h>
-#include <merkle_misc.h>
 
 #include "rpclib.h"
 
-char *usage = "Usage: nodeq [-l] [-r] host port vnode\n";
+char *usage = "Usage: nodeq [-m] [-r] host port vnode\n";
 
 int outstanding = 0;
 int errors = 0;
 bool do_reverse_lookup = false;
-bool do_listkeys = false;
 bool do_accordion = false;
 
 struct node {
@@ -157,64 +154,14 @@ print_predecessors (const chord_node &dst)
   outstanding++;
 }
 
-void
-getkeys_cb (const chord_node dst, ref<getkeys_arg> arg, ref<getkeys_res> res,
-	    clnt_stat err)
-{
-  outstanding--;
-  if (err) {
-    warnx << "no keys: " << err << "\n";
-    if (outstanding == 0)
-      finish ();
-    return;
-  } else if (res->status != MERKLE_OK) {
-    warnx << "protocol error " << res->status << "\n";
-    if (outstanding == 0)
-      finish ();
-    return;
-  }
-
-  for (u_int i = 0; i < res->resok->keys.size (); i++) {
-    const chordID &key2 = res->resok->keys[i];
-    aout << key2 << "\n";
-    arg->rngmin = incID (key2);
-  }
-  
-  if (res->resok->morekeys) {
-    doRPC (dst, merklesync_program_1, MERKLESYNC_GETKEYS,
-	   arg, res,
-	   wrap (getkeys_cb, dst, arg, res));
-    outstanding++;
-  } else {
-    finish ();
-  }
-}
-
-void
-print_keys (const chord_node &dst)
-{
-  ref<getkeys_arg> arg = New refcounted<getkeys_arg> ();
-  arg->ctype  = DHASH_CONTENTHASH;
-  arg->rngmin = 0;
-  arg->rngmax = decID (arg->rngmin);
-  ref<getkeys_res> res = New refcounted<getkeys_res> ();
-  doRPC (dst, merklesync_program_1, MERKLESYNC_GETKEYS,
-	 arg, res,
-	 wrap (getkeys_cb, dst, arg, res));
-  outstanding++;
-}
-
 int
 main (int argc, char *argv[])
 {
   int ch;
-  while ((ch = getopt (argc, argv, "rlm")) != -1)
+  while ((ch = getopt (argc, argv, "rm")) != -1)
     switch (ch) {
     case 'r':
       do_reverse_lookup = true;
-      break;
-    case 'l':
-      do_listkeys = true;
       break;
     case 'm':
       do_accordion = true;
@@ -247,13 +194,10 @@ main (int argc, char *argv[])
   dst.vnode_num = atoi (argv[2]);
   dst.x = make_chordID (dst.r.hostname, dst.r.port, dst.vnode_num);
 
-  if (do_listkeys) {
-    print_keys (dst);
-  } else {
-    print_predecessors (dst);
-    print_successors (dst);
-    print_fingers (dst);
-  }
+  print_predecessors (dst);
+  print_successors (dst);
+  print_fingers (dst);
+ 
   amain ();
 }
   

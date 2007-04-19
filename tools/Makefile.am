@@ -45,7 +45,7 @@ findroute_SOURCES = findroute.C
 findroute_LDADD = ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)
 
 nodeq_SOURCES = nodeq.C
-nodeq_LDADD = ../utils/libutil.a ../svc/libsvc.la ../merkle/libmerkle.a $(LDADD)
+nodeq_LDADD = ../utils/libutil.a ../svc/libsvc.la $(LDADD)
 
 kdb_stats_SOURCES = kdb_stats.C
 kdb_stats_LDADD = ../utils/libutil.a ../svc/libsvc.la $(LIBARPC)  $(LIBSFSCRYPT) $(LIBGMP) $(DBLIB) $(LIBASYNC) 
