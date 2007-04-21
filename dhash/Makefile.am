@@ -47,7 +47,6 @@ noinst_HEADERS = \
 		 dhash_impl.h \
 		 dhash_store.h \
 		 download.h \
-		 pmaint.h \
 		 dhblock.h \
 		 dhblock_chash.h \
 		 dhblock_keyhash.h \
@@ -65,7 +64,6 @@ libdhash_a_SOURCES = \
 		     gateway.C \
 		     download.C \
 		     dhash_store.C \
-		     pmaint.C \
 		     server.C \
 		     dhblock.C \
 		     dhblock_storage.C \

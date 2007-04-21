@@ -13,7 +13,6 @@ class dhashcli;
 class chord_trigger_t;
 
 struct user_args;
-struct dhash_offer_arg;
 
 typedef callback<void, dhash_stat>::ptr cb_dhstat;
 typedef callback<void, const vec<maint_repair_t> &>::ptr cb_maintrepairs_t;
@@ -97,7 +96,6 @@ class dhblock_srv : virtual public refcount {
   virtual void store (chordID k, str d, cb_dhstat cb) = 0;
   virtual void fetch (chordID k, cb_fetch cb);
   virtual ptr<adb> get_db () { return db; };
-  virtual void offer (user_args *sbp, dhash_offer_arg *arg);
 };
 
 #endif /* _DHBLOCK_SRV_H_ */
