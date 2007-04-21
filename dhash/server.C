@@ -35,6 +35,7 @@
 
 #include <dhash_prot.h>
 #include <chord_types.h>
+#include <misc_utils.h>
 #include <id_utils.h>
 #include <location.h>
 #include <locationtable.h>
@@ -101,16 +102,17 @@ DECL_CONFIG_METHOD(dhash_disable_db_env, "dhash.disable_db_env")
 dhash::~dhash () {}
 
 ref<dhash>
-dhash::produce_dhash (ptr<vnode> v, str dbsock, str msock, cbv donecb)
+dhash::produce_dhash (ptr<vnode> v, str dbsock, str msock, ptr<chord_trigger_t> t)
 {
-  return New refcounted<dhash_impl> (v, dbsock, msock, donecb);
+  return New refcounted<dhash_impl> (v, dbsock, msock, t);
 }
 
 dhash_impl::~dhash_impl ()
 {
 }
 
-dhash_impl::dhash_impl (ptr<vnode> node, str dbsock, str msock, cbv dcb) :
+dhash_impl::dhash_impl (ptr<vnode> node, str dbsock, str msock,
+    ptr<chord_trigger_t> t) :
   host_node (node),
   cli (NULL),
   bytes_stored (0),
@@ -120,47 +122,41 @@ dhash_impl::dhash_impl (ptr<vnode> node, str dbsock, str msock, cbv dcb) :
   keys_others (0),
   bytes_served (0),
   keys_served (0),
-  rpc_answered (0),
-  donecb (dcb)
+  rpc_answered (0)
 {
   ptr<dhblock_srv> srv;
 
   cli = New refcounted<dhashcli> (host_node, mkref(this));
 
-  ptr<uint> num_to_go = New refcounted<uint>;
-  (*num_to_go) = 3;
+  ptr<chord_trigger_t> dhashtrigger = chord_trigger_t::alloc (
+      wrap (this, &dhash_impl::srv_ready, t));
+
   str dbname = strbuf () << host_node->my_ID () << ".c";
   srv = New refcounted<dhblock_chash_srv> (node, cli, msock,
-      dbsock, dbname, 
-      wrap (this, &dhash_impl::srv_ready, num_to_go));
+      dbsock, dbname, dhashtrigger);
   blocksrv.insert (DHASH_CONTENTHASH, srv);
 
   dbname = strbuf () << host_node->my_ID () << ".k";
   srv = New refcounted<dhblock_keyhash_srv> (node, cli, msock,
       dbsock, dbname,
-      wrap (this, &dhash_impl::srv_ready, num_to_go));
+      dhashtrigger);
   blocksrv.insert (DHASH_KEYHASH, srv);
 
   dbname = strbuf () << host_node->my_ID () << ".n";
   srv = New refcounted<dhblock_noauth_srv> (node, cli, msock,
       dbsock, dbname,
-      wrap (this, &dhash_impl::srv_ready, num_to_go));
+      dhashtrigger);
   blocksrv.insert (DHASH_NOAUTH, srv);
 }
 
 void
-dhash_impl::srv_ready (ptr<uint> num_to_go) 
+dhash_impl::srv_ready (ptr<chord_trigger_t> t) 
 {
-  (*num_to_go)--;
+  // RPC demux
+  trace << host_node->my_ID () << " registered dhash_program_1\n";
+  host_node->addHandler (dhash_program_1, wrap(this, &dhash_impl::dispatch));
 
-  if (*num_to_go == 0) {
-    // RPC demux
-    trace << host_node->my_ID () << " registered dhash_program_1\n";
-    host_node->addHandler (dhash_program_1, wrap(this, &dhash_impl::dispatch));
-
-    start_maint ();
-    (*donecb)();
-  }
+  start_maint ();
 }
 
 void

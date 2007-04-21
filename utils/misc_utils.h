@@ -1,6 +1,7 @@
 #ifndef _MISC_UTILS_H_
 #define _MISC_UTILS_H_
 
+#include <refcnt.h>
 #include <chord_types.h>
 #include <str.h>
 #include <vec.h>
@@ -40,5 +41,15 @@ strbuf_cat (const strbuf &sb, const chord_node_wire &n)
   sb << make_chord_node (n); // XXX gross
   return sb;
 }
+
+class chord_trigger_t : public virtual refcount {
+  callback<void>::ref cb;
+protected:
+  chord_trigger_t (callback<void>::ref cb) : cb (cb) {}
+public:
+  ~chord_trigger_t ();
+  static ptr<chord_trigger_t> alloc (callback<void>::ref cb);
+};
+
 
 #endif /* _MISC_UTILS_H_ */

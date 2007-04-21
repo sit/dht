@@ -29,9 +29,9 @@ struct maint_mode_desc {
   maintainer_producer_t producer;
 } maint_modes[] = {
   { MAINT_CARBONITE, "carbonite", 
-    wrap (carbonite::produce_maintainer) },
+    &carbonite::produce_maintainer },
   { MAINT_PASSINGTONE, "passingtone",
-    wrap (passingtone::produce_maintainer) }
+    &passingtone::produce_maintainer }
 };
 
 enum sync_mode_t {
@@ -43,8 +43,7 @@ struct sync_mode_desc {
   char *cmdline;
   syncer_producer_t producer;
 } sync_modes[] = {
-  { SYNC_MERKLE, "merkle",
-    wrap (merkle_sync::produce_syncer) }
+  { SYNC_MERKLE, "merkle", &merkle_sync::produce_syncer }
 };
 // }}}
 
@@ -194,6 +193,7 @@ do_setmaint (svccb *sbp)
   sbp->replyref (arg->enable);
 }
 
+void do_initspace_cb (svccb *sbp);
 void
 do_initspace (svccb *sbp)
 {
@@ -217,9 +217,15 @@ do_initspace (svccb *sbp)
   }
 
   ptr<syncer> s = sync_modes[sync_mode].producer (ctype);
-  ptr<maintainer> m = maint_modes[maint_mode].producer (localdatapath, arg, s);
+  ptr<maintainer> m = maint_modes[maint_mode].producer (localdatapath, arg, s,
+      wrap (&do_initspace_cb, sbp));
   maintainers.push_back (m);
+}
 
+void
+do_initspace_cb (svccb *sbp)
+{
+  maint_status res (MAINTPROC_OK);
   sbp->replyref (res);
 }
 

@@ -7,6 +7,7 @@
 
 // Forward declarations.
 class RPC_delay_args;
+class chord_trigger_t;
 
 class dhashcli;
 struct dbrec;
@@ -106,7 +107,7 @@ class dhash_impl : public dhash, public virtual refcount {
   void fetchcomplete_done (int nonce, chord_node sender,
 			   dhash_stat status, bool present);
 
-  void srv_ready (ptr<uint> num_to_go);
+  void srv_ready (ptr<chord_trigger_t> t);
   void start_maint ();
 
   /* statistics */
@@ -119,10 +120,8 @@ class dhash_impl : public dhash, public virtual refcount {
   long keys_served;
   long rpc_answered;
 
-  cbv donecb;
-
  public:
-  dhash_impl (ptr<vnode> v, str dbsock, str msock, cbv donecb);
+  dhash_impl (ptr<vnode> v, str dbsock, str msock, ptr<chord_trigger_t> t);
   ~dhash_impl ();
 
   vec<dstat> stats ();

@@ -8,6 +8,7 @@
 
 class aclnt;
 class location;
+class chord_trigger_t;
 struct block_info;
 
 typedef callback<void, adb_status, chordID, str>::ptr cb_fetch;
@@ -53,7 +54,7 @@ class adb {
     UPDATE_BATCH_MAX_SIZE = 128
   };
 
-  void initspace_cb (adb_status *astat, clnt_stat stat);
+  void initspace_cb (ptr<chord_trigger_t> t, adb_status *astat, clnt_stat stat);
   void generic_cb (adb_status *res, cb_adbstat cb, clnt_stat err);
   void fetch_cb (adb_fetchres *res, chordID key, cb_fetch cb, clnt_stat err);
   void getkeys_cb (bool getaux, adb_getkeysres *res, cb_getkeys cb, clnt_stat err);
@@ -65,7 +66,8 @@ class adb {
   void batch_update ();
 
 public:
-  adb (str sock_name, str name = "default", bool hasaux = false);
+  adb (str sock_name, str name = "default", bool hasaux = false,
+      ptr<chord_trigger_t> t = NULL);
 
   str name () const { return name_space; }
   str dbsock () const { return dbsock_; } 

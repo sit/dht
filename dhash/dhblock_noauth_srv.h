@@ -15,7 +15,7 @@ public:
   dhblock_noauth_srv (ptr<vnode> node, 
 		      ptr<dhashcli> cli,
 		      str msock, str dbsock, str dbname,
-		      cbv donecb);
+		      ptr<chord_trigger_t> t);
 };
 
 #endif

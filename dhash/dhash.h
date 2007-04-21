@@ -36,6 +36,7 @@
 #include <chord_types.h>
 #include <dhash_prot.h>
 
+class chord_trigger_t;
 class location;
 class vnode;
 class dhash_block;
@@ -65,7 +66,8 @@ class dhash {
   
   static u_long dhash_disable_db_env ();
 
-  static ref<dhash> produce_dhash (ptr<vnode> v, str dbsock, str msock, cbv donecb);
+  static ref<dhash> produce_dhash (ptr<vnode> v, str dbsock, str msock,
+      ptr<chord_trigger_t> trigger);
 
   virtual ~dhash () = 0;
 

@@ -730,7 +730,7 @@ main (int argc, char **argv)
     ptr<vnode> v = chordnode->get_vnode (i);
     dh.push_back (
       dhash::produce_dhash (v, dbsock, maintsock,
-	wrap (&finish_start)));
+	chord_trigger_t::alloc (wrap (&finish_start))));
   }
 
   info << "starting amain.\n";

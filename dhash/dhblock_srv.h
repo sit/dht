@@ -10,6 +10,7 @@
 
 class vnode;
 class dhashcli;
+class chord_trigger_t;
 
 struct user_args;
 struct dhash_offer_arg;
@@ -45,7 +46,7 @@ class dhblock_srv : virtual public refcount {
   // Generic cb_adbstat to cb_dhstat translator
   void adbcb (cb_dhstat cb, adb_status astat); 
   // Maintenance callbacks
-  void maintinitcb (maint_status *res, clnt_stat err);
+  void maintinitcb (ptr<chord_trigger_t> t, maint_status *res, clnt_stat err);
   void maintgetrepairscb (maint_getrepairsres *res,
     cb_maintrepairs_t cbr, clnt_stat err);
 
@@ -77,17 +78,15 @@ class dhblock_srv : virtual public refcount {
 
   // Maint RPC helpers and stubs 
   static ptr<aclnt> get_maint_aclnt (str msock);
-  void maint_initspace (int efrags, int dfrags);
+  void maint_initspace (int efrags, int dfrags, ptr<chord_trigger_t> t);
   void maint_getrepairs (int thresh, int count, chordID start,
     cb_maintrepairs_t cbr);
   ptr<location> maintloc2location (u_int32_t a, u_int32_t b);
 
-  cbv donecb;
-
  public:
   dhblock_srv (ptr<vnode> node, ptr<dhashcli> cli,
     dhash_ctype c, str msock, str dbsock, str dbname, bool hasaux,
-    cbv donecb);
+    ptr<chord_trigger_t> donecb);
   virtual ~dhblock_srv ();
 
   virtual void start (bool randomize);

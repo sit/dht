@@ -137,16 +137,16 @@ public:
 };
 
 class carbonite: public maintainer {
-  void init_ltree (adb_status err, str path, bool hasaux);
+  void init_ltree (cbv cb, adb_status err, str path, bool hasaux);
   void handle_missing (ptr<locationcc> from, ptr<merkle_tree> t, chordID key, bool missing_local);
   void process_neighbors (const vec<ptr<locationcc> > &preds,
       const vec<ptr<locationcc> > &succs, cbv cb, CLOSURE);
 
   carbonite (const carbonite &m);
 protected:
-  carbonite (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s);
+  carbonite (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s, cbv cb);
 public:
-  static ref<maintainer> produce_maintainer (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s);
+  static ref<maintainer> produce_maintainer (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s, cbv cb);
   void getrepairs (chordID start, int thresh, int count,
       rpc_vec<maint_repair_t, RPC_INFINITY> &repairs);
   ~carbonite ();
@@ -159,12 +159,12 @@ class passingtone: public maintainer {
   void process_neighbors (const vec<ptr<locationcc> > &preds,
       const vec<ptr<locationcc> > &succs, cbv cb, CLOSURE);
 
-  void init_ltree (adb_status err, str path, bool hasaux);
+  void init_ltree (cbv cb, adb_status err, str path, bool hasaux);
   passingtone (const passingtone &m);
 protected:
-  passingtone (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s);
+  passingtone (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s, cbv cb);
 public:
-  static ref<maintainer> produce_maintainer (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s);
+  static ref<maintainer> produce_maintainer (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s, cbv cb);
   ~passingtone ();
 
   void getrepairs (chordID start, int thresh, int count,
@@ -172,7 +172,7 @@ public:
 };
 // }}}
 
-typedef callback<ref<maintainer>, str, maint_dhashinfo_t *, ptr<syncer> >::ref maintainer_producer_t;
-typedef callback<ref<syncer>, dhash_ctype>::ref syncer_producer_t;
+typedef ref<maintainer> (*maintainer_producer_t) (str, maint_dhashinfo_t *, ptr<syncer>, cbv);
+typedef ref<syncer> (*syncer_producer_t) (dhash_ctype);
 
 // vim: foldmethod=marker

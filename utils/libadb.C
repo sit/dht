@@ -18,7 +18,7 @@ make_chord_node (const adb_vnodeid &n)
   return make_chord_node (x);
 }
 
-adb::adb (str sock_name, str name, bool hasaux) :
+adb::adb (str sock_name, str name, bool hasaux, ptr<chord_trigger_t> t) :
   dbsock_ (sock_name),
   name_space (name),
   hasaux_ (hasaux),
@@ -40,11 +40,11 @@ adb::adb (str sock_name, str name, bool hasaux) :
   adb_status *res = New adb_status ();
 
   c->call (ADBPROC_INITSPACE, &arg, res,
-	   wrap (this, &adb::initspace_cb, res));
+	   wrap (this, &adb::initspace_cb, t, res));
 }
 
 void
-adb::initspace_cb (adb_status *astat, clnt_stat stat)
+adb::initspace_cb (ptr<chord_trigger_t> t, adb_status *astat, clnt_stat stat)
 {
   if (stat)
     fatal << "adb_initspace_cb: RPC error for " << name_space << ": " << stat << "\n";

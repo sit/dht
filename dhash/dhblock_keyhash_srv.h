@@ -9,5 +9,5 @@ class dhblock_keyhash_srv : public dhblock_replicated_srv
 public:
   dhblock_keyhash_srv (ptr<vnode> node, ptr<dhashcli> cli,
 		       str msock, str dbsock, str dbname,
-		       cbv donecb);
+		       ptr<chord_trigger_t> t);
 };

@@ -47,18 +47,16 @@ dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
 				      str msock,
 				      str dbsock,
 				      str dbname,
-				      cbv donecb) :
+				      ptr<chord_trigger_t> t) :
   dhblock_srv (node, cli, DHASH_CONTENTHASH, msock,
-      dbsock, dbname, false, donecb),
+      dbsock, dbname, false, t),
   cache_db (NULL),
   pmaint_obj (NULL)
 {
   pmaint_obj = New pmaint (cli, node, mkref (this)); 
-  cache_db = New refcounted<adb> (dbsock, "ccache");
+  cache_db = New refcounted<adb> (dbsock, "ccache", false, t);
   maint_initspace (dhblock_chash::num_efrags (),
-		   dhblock_chash::num_dfrags ());
-
-  delaycb (0, donecb);
+		   dhblock_chash::num_dfrags (), t);
 }
 
 dhblock_chash_srv::~dhblock_chash_srv ()

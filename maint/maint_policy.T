@@ -335,25 +335,26 @@ maintainer::process_neighbors (
 // }}}
 // {{{ Carbonite
 ref<maintainer> 
-carbonite::produce_maintainer (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s)
+carbonite::produce_maintainer (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s, cbv cb)
 {
-  return New refcounted<carbonite> (path, hostinfo, s);
+  return New refcounted<carbonite> (path, hostinfo, s, cb);
 }
 
-carbonite::carbonite (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s) :
+carbonite::carbonite (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s, cbv cb) :
     maintainer (path, hostinfo, s)
 {
-  db->getspaceinfo (wrap (this, &carbonite::init_ltree));
+  db->getspaceinfo (wrap (this, &carbonite::init_ltree, cb));
 }
 
 void 
-carbonite::init_ltree (adb_status err, str path, bool hasaux)
+carbonite::init_ltree (cbv cb, adb_status err, str path, bool hasaux)
 {
   if (err) {
     warn << "carbonite::init_ltree: Unexpected adbd error: " << err << "\n";
     return;
   }
   ltree = New refcounted<merkle_tree_disk> (path, /* rw = */ false);
+  cb ();
 }
 
 carbonite::~carbonite ()
@@ -589,25 +590,26 @@ carbonite::getrepairs (chordID start, int thresh, int count,
 // }}}
 // {{{ Passing Tone
 ref<maintainer> 
-passingtone::produce_maintainer (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s)
+passingtone::produce_maintainer (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s, cbv cb)
 {
-  return New refcounted<passingtone> (path, hostinfo, s);
+  return New refcounted<passingtone> (path, hostinfo, s, cb);
 }
 
-passingtone::passingtone (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s) :
+passingtone::passingtone (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s, cbv cb) :
   maintainer (path, hostinfo, s)
 {
-  db->getspaceinfo (wrap (this, &passingtone::init_ltree));
+  db->getspaceinfo (wrap (this, &passingtone::init_ltree, cb));
 }
 
 void 
-passingtone::init_ltree (adb_status err, str path, bool hasaux)
+passingtone::init_ltree (cbv cb, adb_status err, str path, bool hasaux)
 {
   if (err) {
     warn << "passingtone::init_ltree: Unexpected adbd error: " << err << "\n";
     return;
   }
   ltree = New refcounted<merkle_tree_disk> (path, /* rw = */ false);
+  cb ();
 }
 
 passingtone::~passingtone ()

@@ -67,9 +67,9 @@ dhblock_noauth_srv::dhblock_noauth_srv (ptr<vnode> node,
 					ptr<dhashcli> cli,
 					str msock,
 					str dbsock, str dbname,
-					cbv donecb) :
+					ptr<chord_trigger_t> t) :
   dhblock_replicated_srv (node, cli, DHASH_NOAUTH, msock,
-      dbsock, dbname, donecb)
+      dbsock, dbname, t)
 {
 }
 

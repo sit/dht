@@ -44,12 +44,11 @@ dhblock_replicated_srv::dhblock_replicated_srv (ptr<vnode> node,
 						str msock,
 						str dbsock,
 						str dbname,
-						cbv donecb) :
-  dhblock_srv (node, cli, ctype, msock, dbsock, dbname, true, donecb)
+						ptr<chord_trigger_t> t) :
+  dhblock_srv (node, cli, ctype, msock, dbsock, dbname, true, t)
 {
   maint_initspace (dhblock_replicated::num_replica (),
-                   dhblock_replicated::num_replica ());
-  delaycb (0, donecb);
+                   dhblock_replicated::num_replica (), t);
 }
 
 void

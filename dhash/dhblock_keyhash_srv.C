@@ -21,9 +21,9 @@ dhblock_keyhash_srv::dhblock_keyhash_srv (ptr<vnode> node,
 					  str msock,
 					  str dbsock,
 					  str dbname,
-					  cbv donecb) :
+					  ptr<chord_trigger_t> t) :
   dhblock_replicated_srv (node, cli, DHASH_KEYHASH, msock,
-      dbsock, dbname, donecb)
+      dbsock, dbname, t)
 {
 }
 

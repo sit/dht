@@ -20,14 +20,13 @@ dhblock_srv::dhblock_srv (ptr<vnode> node,
 			  str dbsock,
 			  str dbname,
 			  bool hasaux,
-			  cbv dcb) :
+			  ptr<chord_trigger_t> t) :
   repair_tcb (NULL),
   ctype (c),
-  db (New refcounted<adb> (dbsock, dbname, hasaux)),
+  db (New refcounted<adb> (dbsock, dbname, hasaux, t)),
   maint (get_maint_aclnt (msock)),
   node (node),
-  cli (cli),
-  donecb (dcb)
+  cli (cli)
 {
   warn << "opened " << dbsock << " with space " << dbname 
        << (hasaux ? " (hasaux)\n" : "\n");
@@ -51,7 +50,7 @@ dhblock_srv::get_maint_aclnt (str msock)
 }
 
 void
-dhblock_srv::maint_initspace (int efrags, int dfrags)
+dhblock_srv::maint_initspace (int efrags, int dfrags, ptr<chord_trigger_t> t)
 {
   maint_dhashinfo_t dhi;
   node->my_location ()->fill_node (dhi.host);
@@ -63,11 +62,11 @@ dhblock_srv::maint_initspace (int efrags, int dfrags)
   dhi.dfrags = dfrags;
   maint_status *res = New maint_status (MAINTPROC_OK);
   maint->call (MAINTPROC_INITSPACE, &dhi, res,
-      wrap (this, &dhblock_srv::maintinitcb, res));
+      wrap (this, &dhblock_srv::maintinitcb, t, res));
 }
 
 void
-dhblock_srv::maintinitcb (maint_status *res, clnt_stat err)
+dhblock_srv::maintinitcb (ptr<chord_trigger_t> t, maint_status *res, clnt_stat err)
 {
   if (err || *res)
     warn << "Maintenance initialization failed for " 

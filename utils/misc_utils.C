@@ -2,7 +2,7 @@
 #include "id_utils.h"
 #include "location.h"
 
-#include <amisc.h>
+#include <async.h>
 
 #define MAX_INT 0x7fffffff
 const int modelnet_on (getenv("MODELNET") ? 1 : 0 );
@@ -111,3 +111,12 @@ make_chord_node (const chord_node_wire &nl)
 }
 
 
+chord_trigger_t::~chord_trigger_t ()
+{
+  delaycb (0, cb);
+}
+
+ptr<chord_trigger_t> chord_trigger_t::alloc (cbv::ref cb)
+{
+  return New refcounted<chord_trigger_t> (cb);
+}

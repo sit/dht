@@ -4,6 +4,7 @@
 #include <dhblock_srv.h>
 
 class location;
+class chord_trigger_t;
 class dhblock_replicated_srv;
 
 struct adb_keyaux_t;
@@ -53,7 +54,7 @@ protected:
 
 public:
   dhblock_replicated_srv (ptr<vnode> node, ptr<dhashcli> cli,
-    dhash_ctype c, str msock, str dbsock, str dbname, cbv donecb);
+    dhash_ctype c, str msock, str dbsock, str dbname, ptr<chord_trigger_t> t);
 
   virtual void store (chordID key, str d, cb_dhstat cb);
   virtual void fetch (chordID key, cb_fetch cb);
