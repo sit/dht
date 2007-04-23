@@ -7,9 +7,11 @@ enum adb_status;
 
 // Internal implementation of content hash repair_job logic.
 class rjchash;
+class rjchashsend;
 
 class dhblock_chash_srv : public dhblock_srv {
   friend class rjchash;
+  friend class rjchashsend;
   ptr<adb> cache_db;
 
   void maintqueue (const vec<maint_repair_t> &repairs);

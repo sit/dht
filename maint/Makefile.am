@@ -11,7 +11,7 @@ noinst_HEADERS = maint_policy.h
 
 # libchord is only needed to link libmerkle code
 # that refers to user_args.
-maintd_SOURCES = maint_sync.T maint_policy.T maintd.C 
+maintd_SOURCES = maint_sync.T maint_global.T maint_policy.T maintd.C 
 maintd_LDADD = ../dhash/libdhash.a \
 	../merkle/libmerkle.a \
 	../chord/libchord.a \

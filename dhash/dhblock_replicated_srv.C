@@ -148,6 +148,9 @@ dhblock_replicated_srv::generate_repair_jobs ()
 void
 dhblock_replicated_srv::maintqueue (const vec<maint_repair_t> &repairs)
 {
+  vec<ptr<location> > preds = node->preds ();
+  chordID firstpred = preds[dhblock_replicated::num_replica () - 1]->id ();
+  chordID myID = node->my_ID ();
   for (size_t i = 0; i < repairs.size (); i++) {
     ptr<location> f = maintloc2location (
 	repairs[i].src_ipv4_addr,
@@ -156,8 +159,19 @@ dhblock_replicated_srv::maintqueue (const vec<maint_repair_t> &repairs)
 	repairs[i].dst_ipv4_addr,
 	repairs[i].dst_port_vnnum);
     blockID key (repairs[i].id, ctype);
-    ptr<repair_job> job = New refcounted<rjrep> (key, f, w,
-	mkref (this));
+    ptr<repair_job> job (NULL);
+    if (betweenleftincl (firstpred, myID, repairs[i].id)) {
+      job = New refcounted<rjrep> (key, f, w, mkref (this));
+    } else {
+      // Not responsible for this object;
+      // therefore, no need to reverse it, even if stale.
+      // XXX: Normally should pretend we are already a reversed job.
+      //      However, for now, don't do anything special and
+      //      cause our own copy to get updated since we don't
+      //      delete our stale copy after insertion.
+      // job = New refcounted<rjrep> (key, f, w, mkref (this), true);
+      job = New refcounted<rjrep> (key, f, w, mkref (this));
+    }
     repair_add (job);
   }
 }

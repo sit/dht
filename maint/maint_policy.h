@@ -83,6 +83,29 @@ public:
       cbv cb, CLOSURE);
 };
 // }}}
+// {{{ global maintenance
+class maintainer;
+class maint_global : public virtual refcount {
+  friend class maintainer;
+  maint_global (const maint_global &m);
+
+protected:
+  maintainer * const m;
+  chordID rngmin;
+  chordID rngmax;
+
+  vec<chordID> maintqueue;
+  vec<ptr<locationcc> > maintdest;
+
+  void handle_missing (ptr<locationcc> d, chordID key, bool missing_local);
+
+public:
+  maint_global (maintainer *m);
+  ~maint_global ();
+
+  void next (cbv donecb, CLOSURE);
+};
+// }}}
 // {{{ maintainers
 class maintainer : public virtual refcount {
   maintainer (const maintainer &m);
@@ -101,6 +124,8 @@ protected:
   ptr<adb> db;
   const str private_path;
 
+  const ref<maint_global> gm;
+
   bool running;     // Is maintenance in general active?
   bool in_progress; // Is an active synchronization cycle in progress?
   // RepInv: if (in_progress) then running.
@@ -117,10 +142,16 @@ protected:
 
   virtual void run_cycle (cbv cb, CLOSURE);
   void start_helper ();
+  virtual void restart (u_int32_t delay = default_delay);
+
+  void local_maint_cycle (cbv cb, CLOSURE);
   virtual void update_neighbors (cbv cb, CLOSURE);
   virtual void process_neighbors (const vec<ptr<locationcc> > &preds,
       const vec<ptr<locationcc> > &succs, cbv cb, CLOSURE);
-  virtual void restart (u_int32_t delay = default_delay);
+
+  size_t get_global_repairs (size_t max,
+      rpc_vec<maint_repair_t, RPC_INFINITY> &repairs);
+
 
   maintainer (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s);
 

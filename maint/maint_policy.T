@@ -201,6 +201,7 @@ maintainer::maintainer (str path, maint_dhashinfo_t *hostinfo, ptr<syncer> s) :
   dfrags (hostinfo->dfrags),
   db (New refcounted<adb> (hostinfo->dbsock, hostinfo->dbname, hostinfo->hasaux)),
   private_path (path),
+  gm (New refcounted<maint_global> (this)),
   running (false),
   in_progress (false),
   delay (default_delay),
@@ -257,7 +258,19 @@ maintainer::run_cycle (cbv cb)
 
   // Now seems a good time to pick up any local changes.
   ltree->sync ();
+  // Run local and global cycle in parallel
+  BLOCK {
+    local_maint_cycle (@());
+    gm->next (@());
+  }
 
+  in_progress = false;
+  delaycb (0, cb);
+}
+
+TAMED void
+maintainer::local_maint_cycle (cbv cb)
+{
   BLOCK {
     update_neighbors (@());
   }
@@ -266,8 +279,7 @@ maintainer::run_cycle (cbv cb)
       process_neighbors (preds, succs, @());
     }
   }
-  in_progress = false;
-  delaycb (0, cb);
+  (cb) ();
 }
 
 TAMED void
@@ -332,6 +344,30 @@ maintainer::process_neighbors (
   // See Carbonite, Passing Tone or other implementations.
   cb ();
 }
+
+size_t
+maintainer::get_global_repairs (size_t max,
+      rpc_vec<maint_repair_t, RPC_INFINITY> &repairs)
+{
+  size_t added = 0;
+  ptr<locationcc> hostcc = locationcc::alloc (host);
+  while (gm->maintqueue.size () && repairs.size () < max)
+  {
+    maint_repair_t repair;
+    repair.id = gm->maintqueue.pop_front ();
+    hostcc->fill_ipportvn (repair.src_ipv4_addr,
+	repair.src_port_vnnum);
+    ptr<locationcc> dst = gm->maintdest.pop_front ();
+    dst->fill_ipportvn (repair.dst_ipv4_addr,
+	repair.dst_port_vnnum);
+    repairs.push_back (repair);
+    added++;
+  }
+  if (added || gm->maintqueue.size ())
+    warn << host << " added " << added << " gm repairs; " << gm->maintqueue.size () << " remaining.\n";
+  return added;
+}
+
 // }}}
 // {{{ Carbonite
 ref<maintainer> 
@@ -468,8 +504,11 @@ void
 carbonite::getrepairs (chordID start, int thresh, int count,
       rpc_vec<maint_repair_t, RPC_INFINITY> &repairs)
 {
+  repairs.setsize (0);
+  get_global_repairs (count/2, repairs);
   if (in_progress) {
-    warn << host << ": Not returning repairs while sync is active.\n";
+    if (!get_global_repairs (count, repairs))
+      warn << host << ": Not returning repairs while sync is active.\n";
     return;
   }
 
@@ -497,7 +536,6 @@ carbonite::getrepairs (chordID start, int thresh, int count,
     treedone.push_back (false);
   }
   
-  repairs.setsize (0);
   while ((int) repairs.size () < count) {
     bool addedany = false;
     for (unsigned int i = 0; i < trees.size (); i++) {
@@ -694,6 +732,8 @@ void
 passingtone::getrepairs (chordID start, int thresh, int count,
       rpc_vec<maint_repair_t, RPC_INFINITY> &repairs)
 {
+  get_global_repairs (count/2, repairs);
+
   // ignore thresh.
   // ignore start.
   sockaddr_in saddr;
@@ -704,7 +744,7 @@ passingtone::getrepairs (chordID start, int thresh, int count,
   /* saddr fields are in network byte order */
   u_int32_t a = ntohl (saddr.sin_addr.s_addr);
   u_int32_t b = (ntohs (saddr.sin_port) << 16) | host.vnode_num;
-  while (repairqueue.size () && count > 0) {
+  while (repairqueue.size () && (int) repairs.size () < count) {
     chordID k = repairqueue.pop_front ();
     ptr<locationcc> from = repairfrom.pop_front ();
     maint_repair_t r;
@@ -713,7 +753,6 @@ passingtone::getrepairs (chordID start, int thresh, int count,
     r.dst_ipv4_addr = a;
     r.dst_port_vnnum = b;
     repairs.push_back (r);
-    count--;
   }
   assert (repairqueue.size () == repairfrom.size ());
 }

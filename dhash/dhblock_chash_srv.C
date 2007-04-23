@@ -40,6 +40,15 @@ struct rjchash : public repair_job {
   void send_frag_cb (dhash_stat err, bool present);
 };
 
+struct rjchashsend : public repair_job {
+  rjchashsend (blockID key, ptr<location> w, ptr<dhblock_chash_srv> bsrv);
+
+  const ptr<dhblock_chash_srv> bsrv;
+
+  void execute ();
+  // Async callback
+  void send_frag_cb (dhash_stat err, bool present);
+};
 
 dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
 				      ptr<dhashcli> cli,
@@ -97,13 +106,21 @@ dhblock_chash_srv::generate_repair_jobs ()
 void
 dhblock_chash_srv::maintqueue (const vec<maint_repair_t> &repairs)
 {
+  vec<ptr<location> > preds = node->preds ();
+  chordID firstpred = preds[dhblock_chash::num_efrags () - 1]->id ();
+  chordID myID = node->my_ID ();
   for (size_t i = 0; i < repairs.size (); i++) {
+    blockID key (repairs[i].id, DHASH_CONTENTHASH);
     ptr<location> w = maintloc2location (
 	repairs[i].dst_ipv4_addr,
 	repairs[i].dst_port_vnnum);
-    blockID key (repairs[i].id, DHASH_CONTENTHASH);
-    ptr<repair_job> job = New refcounted<rjchash> (key, w,
-	mkref (this));
+    ptr<repair_job> job (NULL);
+    if (betweenleftincl(firstpred, myID, repairs[i].id)) {
+      job = New refcounted<rjchash> (key, w, mkref (this));
+    } else {
+      // This is a pmaint repair job; just transfer our local object.
+      job = New refcounted<rjchashsend> (key, w, mkref (this));
+    }
     repair_add (job);
   }
 }
@@ -284,3 +301,37 @@ rjchash::send_frag_cb (dhash_stat err, bool present)
   info << x << ".\n";
 }
 
+//
+// Repair Logic Implementation
+//
+rjchashsend::rjchashsend (blockID key, ptr<location> w,
+    ptr<dhblock_chash_srv> bsrv) :
+    repair_job (key, w),
+    bsrv (bsrv)
+{
+}
+
+void
+rjchashsend::execute ()
+{
+  bsrv->cli->sendblock (where, key, bsrv,
+      wrap (mkref (this), &rjchashsend::send_frag_cb));
+}
+
+void
+rjchashsend::send_frag_cb (dhash_stat err, bool present)
+{
+  strbuf x;
+  x << "grepair: " << bsrv->node->my_ID ();
+  if (!err) {
+    // Remove this fragment/replica; it was transferred successfully.
+    // bsrv->db->remove (key.ID, wrap (XXX));
+    x << " sent ";
+  } else {
+    x << " error sending ";
+  }
+  x << key << " to " << where->id ();
+  if (err)
+    x << " (" << err << ")";
+  info << x << ".\n";
+}
