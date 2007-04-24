@@ -57,9 +57,9 @@
  *      DBFE supports both async and sync operation using function overloading. To make
  *      an async call, use the version of the function that includes a callback 
  *
- *     i.e. void insert(ref<dbrec> key, ref<dbrec> data, callback<void, int>::ref cb)
+ *     i.e. void insert(str key, str data, callback<void, int>::ref cb)
  *            v.
- *       int insert(ref<dbrec> key, ref<dbrec> data)
+ *       int insert(str key, str data)
  *
  *     Note that when using ADB you must take some precautions using async mode:
  *       -if you specify the async option you may not use any sync calls
@@ -142,24 +142,10 @@ dbfe_txn_commit (DB_ENV *dbe, DB_TXN *t)
 }
 #endif /* SLEEPYCAT */
 
-struct dbrec {
-  char *value;
-  long len;
-  
-  dbrec(const void *v, long l)
-  {
-    len = l;
-    value = New char[l];
-    memcpy(value, v, l);
-  }
-
-  ~dbrec() {  delete [] value; }
-};
-
 struct dbPair {
-  ptr<dbrec> key;
-  ptr<dbrec> data;
-  dbPair(ref<dbrec> key, ptr<dbrec> data) : key (key), data (data) {}
+  str key;
+  str data;
+  dbPair(const str &key, const str &data) : key (key), data (data) {}
 };
 
 struct optionRec {
@@ -195,14 +181,14 @@ struct dbEnumeration {
   void ne_cb(callback<void, ptr<dbPair> >::ref cb, tid_t, int, record *);
 #endif
 
-  ptr<dbPair> getElement(u_int32_t flags, ptr<dbrec> startkey);
+  ptr<dbPair> getElement(u_int32_t flags, const str &startkey);
   ptr<dbPair> nextElement();
   ptr<dbPair> prevElement();
-  ptr<dbPair> nextElement(ref<dbrec> startkey);
+  ptr<dbPair> nextElement(const str &startkey);
   ptr<dbPair> lastElement();
   ptr<dbPair> firstElement();
 
-  //ptr<dbPair> prevElement(ref<dbrec> startkey); -- not implemented
+  //ptr<dbPair> prevElement(const str &startkey); -- not implemented
   char hasMoreElements();  // broken -- don't use
 
 #ifdef SLEEPYCAT
@@ -221,20 +207,20 @@ ref<dbImplInfo> dbGetImplInfo();
 
 class dbfe {
   typedef callback<void, int>::ptr errReturn_cb;
-  typedef callback<void, ptr<dbrec> >::ptr itemReturn_cb;
+  typedef callback<void, const str &>::ptr itemReturn_cb;
   typedef callback<int, char *, dbOptions>::ptr open_cb;
   typedef callback<int>::ptr ivcb;
   
-  typedef callback<int, ref<dbrec>, ref<dbrec> >::ptr insert_cb;
-  typedef callback<ptr<dbrec>, ref<dbrec> >::ptr lookup_cb;
+  typedef callback<int, const str &, const str &>::ptr insert_cb;
+  typedef callback<str, const str &>::ptr lookup_cb;
   
-  typedef callback<int, ptr<dbrec> >::ptr  delete_cb;
-  typedef callback<void, ptr<dbrec>, errReturn_cb>::ptr delete_cb_async;
+  typedef callback<int, const str &>::ptr  delete_cb;
+  typedef callback<void, const str &, errReturn_cb>::ptr delete_cb_async;
 
-  typedef callback<void, ref<dbrec>, ref<dbrec>, errReturn_cb >::ptr insert_cb_async;
-  typedef callback<void, ref<dbrec>, itemReturn_cb >::ptr lookup_cb_async;
+  typedef callback<void, const str &, const str &, errReturn_cb >::ptr insert_cb_async;
+  typedef callback<void, const str &, itemReturn_cb >::ptr lookup_cb_async;
 
-  static void itemReturn_dummy_cb (itemReturn_cb cb, ptr<dbrec> ret);
+  static void itemReturn_dummy_cb (itemReturn_cb cb, str ret);
   static void errReturn_dummy_cb (errReturn_cb cb, int err);
 
 
@@ -259,14 +245,14 @@ class dbfe {
   int IMPL_open_sleepycat(char *filename, dbOptions opts);
   int IMPL_close_sleepycat();
   int IMPL_create_sleepycat(char *filename, dbOptions opts);
-  int IMPL_insert_sync_sleepycat(ref<dbrec> key, ref<dbrec> data);
-  ptr<dbrec> IMPL_lookup_sync_sleepycat(ref<dbrec> key);
-  void IMPL_insert_async_sleepycat(ref<dbrec> key, ref<dbrec> data, errReturn_cb cb);
+  int IMPL_insert_sync_sleepycat(const str &key, const str &data);
+  str IMPL_lookup_sync_sleepycat(const str &key);
+  void IMPL_insert_async_sleepycat(const str &key, const str &data, errReturn_cb cb);
   void IMPL_checkpoint_sleepycat ();
-  void IMPL_lookup_async_sleepycat(ref<dbrec> key, itemReturn_cb cb);
+  void IMPL_lookup_async_sleepycat(const str &key, itemReturn_cb cb);
   ptr<dbEnumeration> IMPL_make_enumeration_sleepycat();
-  void IMPL_delete_async_sleepycat(ptr<dbrec> key, errReturn_cb cb);
-  int IMPL_delete_sync_sleepycat(ptr<dbrec> key);
+  void IMPL_delete_async_sleepycat(const str &key, errReturn_cb cb);
+  int IMPL_delete_sync_sleepycat(const str &key);
   void IMPL_sync ();
 
 #else
@@ -280,11 +266,11 @@ class dbfe {
   int IMPL_close_adb();
   void IMPL_close_adb_comp(tid_t tid, int err, record *res);
   int IMPL_create_adb(char *filename, dbOptions opts);
-  int IMPL_insert_sync_adb(ref<dbrec> key, ref<dbrec> data);
-  ptr<dbrec> IMPL_lookup_sync_adb(ref<dbrec> key);
-  void IMPL_insert_async_adb(ref<dbrec> key, ref<dbrec> data, errReturn_cb cb);
+  int IMPL_insert_sync_adb(const str &key, const str &data);
+  str IMPL_lookup_sync_adb(const str &key);
+  void IMPL_insert_async_adb(const str &key, const str &data, errReturn_cb cb);
   void IMPL_insert_async_adb_comp(errReturn_cb cb, tid_t tid, int err, record *res);
-  void IMPL_lookup_async_adb(ref<dbrec> key, itemReturn_cb cb);
+  void IMPL_lookup_async_adb(const str &key, itemReturn_cb cb);
   void IMPL_lookup_async_adb_comp(itemReturn_cb cb, tid_t tid, int err, record *res);
 #endif
   
@@ -299,15 +285,15 @@ class dbfe {
   int opendb(char *filename, dbOptions opts)  { return (*open_impl)(filename, opts); };
   int closedb()  { return (*close_impl)(); };
   
-  int insert(ref<dbrec> key, ref<dbrec> data)  { return (*insert_impl)(key, data); };
-  ptr<dbrec> lookup(ref<dbrec> key) { return (*lookup_impl)(key); };
-  int del(ref<dbrec> key) { return (*delete_impl) (key); };
+  int insert(const str &key, const str &data)  { return (*insert_impl)(key, data); };
+  str lookup(const str &key) { return (*lookup_impl)(key); };
+  int del(const str &key) { return (*delete_impl) (key); };
 
-  void insert(ref<dbrec> key, ref<dbrec> data, callback<void, int>::ref cb)  
+  void insert(const str &key, const str &data, callback<void, int>::ref cb)  
     { return (*insert_impl_async)(key, data, cb); };
-  void lookup(ref<dbrec> key, callback<void, ptr<dbrec> >::ref cb)
+  void lookup(const str &key, callback<void, const str & >::ref cb)
     { return (*lookup_impl_async)(key, cb); };
-  void del(ref<dbrec> key, errReturn_cb cb) 
+  void del(const str &key, errReturn_cb cb) 
     { return (*delete_impl_async) (key, cb); };
   void sync () 
     { IMPL_sync (); };

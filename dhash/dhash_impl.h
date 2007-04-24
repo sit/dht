@@ -10,7 +10,6 @@ class RPC_delay_args;
 class chord_trigger_t;
 
 class dhashcli;
-struct dbrec;
 class dhblock_srv;
 
 class location;

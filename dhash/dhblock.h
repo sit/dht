@@ -2,7 +2,6 @@
 #define __DHBLOCK__
 
 class dhash_block;
-class dbrec;
 
 struct dhblock {
   static u_long dhash_mtu ();

@@ -157,17 +157,17 @@ dbEnumeration::hasMoreElements()
 
 #ifdef SLEEPYCAT
 ptr<dbPair>
-dbEnumeration::getElement(u_int32_t flags, ptr<dbrec> startkey)
+dbEnumeration::getElement(u_int32_t flags, const str &startkey)
 {
   // XXX hack
   // nextElement doesn't return any data, just keys.
   // use the lookup routine if you want the data. 
-  // Perhaps, change nextElement to only return a ptr<dbrec>!
+  // Perhaps, change nextElement to only return a str!
   DBT key;
   bzero(&key, sizeof(key));
   if (startkey) {
-    key.size = startkey->len;
-    key.data = startkey->value;
+    key.size = startkey.len ();
+    key.data = (void *) startkey.cstr ();
   }
 
   DBT data;
@@ -180,8 +180,8 @@ dbEnumeration::getElement(u_int32_t flags, ptr<dbrec> startkey)
     //    warn << "db3 error: " << db_strerror(err) << "\n";
     return NULL;
   }
-  ref<dbrec> keyrec = New refcounted<dbrec>(key.data, key.size);
-  ptr<dbrec> valrec = NULL;
+  str keyrec (static_cast<char *> (key.data), key.size);
+  str valrec = NULL;
   return New refcounted<dbPair>(keyrec, valrec);
 }
 
@@ -198,7 +198,7 @@ dbEnumeration::prevElement()
 }
 
 ptr<dbPair>
-dbEnumeration::nextElement(ref<dbrec> startkey)
+dbEnumeration::nextElement(const str &startkey)
 {
   return getElement(DB_SET_RANGE, startkey);
 }
@@ -227,8 +227,8 @@ ptr<dbPair> dbEnumeration::nextElement() {
   val = rec->getValue(&valLen);
   key = rec->getKey(&keyLen);
   
-  ref<dbrec> keyrec = New refcounted<dbrec>(key, keyLen);
-  ref<dbrec> valrec = New refcounted<dbrec>(val, valLen);
+  str keyrec (key, keyLen);
+  str valrec (val, valLen);
   
   return New refcounted<dbPair>(keyrec, valrec);
   
@@ -255,8 +255,8 @@ void dbEnumeration::ne_cb(callback<void, ptr<dbPair> >::ref cb,
   val = rec->getValue(&valLen);
   key = rec->getKey(&keyLen);
   
-  ref<dbrec> keyrec = New refcounted<dbrec>(key, keyLen);
-  ref<dbrec> valrec = New refcounted<dbrec>(val, valLen);
+  str keyrec (key, keyLen);
+  str valrec (val, valLen);
   
   (*cb)(New refcounted<dbPair>(keyrec, valrec));
   
@@ -361,17 +361,17 @@ dbfe::IMPL_create_sleepycat(char *filename, dbOptions opts)
   return 0;
 } 
 
-int dbfe::IMPL_insert_sync_sleepycat(ref<dbrec> key, ref<dbrec> data) { 
+int dbfe::IMPL_insert_sync_sleepycat(const str &key, const str &data) { 
   DB_TXN *t = NULL;
   int r = 0, tr = 0;
   DBT skey, content;
 
   bzero(&skey, sizeof(skey));
   bzero(&content, sizeof(content));
-  content.size = data->len;
-  content.data = data->value;
-  skey.size = key->len;
-  skey.data = key->value;
+  content.size = data.len ();
+  content.data = (void *) (data.cstr ());
+  skey.size = key.len ();
+  skey.data = (void *) (key.cstr ());
 
   if(dbe) {
 #if DB_VERSION_MAJOR >= 4
@@ -404,19 +404,19 @@ int dbfe::IMPL_insert_sync_sleepycat(ref<dbrec> key, ref<dbrec> data) {
   return r;
 } 
 
-ptr<dbrec> 
-dbfe::IMPL_lookup_sync_sleepycat(ref<dbrec> key) 
+str 
+dbfe::IMPL_lookup_sync_sleepycat(const str &key) 
 { 
   DBT skey, content;
   bzero(&skey, sizeof(skey));
-  skey.size = key->len;
-  skey.data = key->value;
+  skey.size = key.len ();
+  skey.data = (void *) (key.cstr ());
   bzero(&content, sizeof(content));
   int r=0;
 
   
   if ((r = db->get(db, NULL, &skey, &content, 0)) != 0) return NULL;
-  ptr<dbrec> ret = New refcounted<dbrec>(content.data, content.size);
+  str ret (static_cast<char *> (content.data), content.size);
 
   // warnx << "return " << content.size << "\n";
 
@@ -424,13 +424,13 @@ dbfe::IMPL_lookup_sync_sleepycat(ref<dbrec> key)
 } 
 
 int 
-dbfe::IMPL_delete_sync_sleepycat(ptr<dbrec> key) {
+dbfe::IMPL_delete_sync_sleepycat(const str &key) {
   DB_TXN *t = NULL;
   int err, terr;
   DBT dkey;
   bzero(&dkey, sizeof(dkey));
-  dkey.size = key->len;
-  dkey.data = key->value;
+  dkey.size = key.len ();
+  dkey.data = (void *) (key.cstr ());
 
   if(dbe) {
 #if DB_VERSION_MAJOR >= 4
@@ -456,7 +456,7 @@ dbfe::IMPL_delete_sync_sleepycat(ptr<dbrec> key) {
   return err;
 }
 
-void dbfe::itemReturn_dummy_cb (itemReturn_cb cb, ptr<dbrec> ret)
+void dbfe::itemReturn_dummy_cb (itemReturn_cb cb, str ret)
 { 
   cb (ret); 
 } 
@@ -467,15 +467,15 @@ void dbfe::errReturn_dummy_cb (errReturn_cb cb, int err)
 }
 
 void dbfe::IMPL_insert_async_sleepycat
-(ref<dbrec> key, ref<dbrec> data, errReturn_cb cb)
+(const str &key, const str &data, errReturn_cb cb)
 {
   int err = IMPL_insert_sync_sleepycat(key, data);
   timecb (tsnow, wrap(&dbfe::errReturn_dummy_cb, cb, err));
 }
 
-void dbfe::IMPL_lookup_async_sleepycat(ref<dbrec> key, itemReturn_cb cb)
+void dbfe::IMPL_lookup_async_sleepycat(const str &key, itemReturn_cb cb)
 { 
-  ptr<dbrec> ret = IMPL_lookup_sync_sleepycat(key);
+  str ret = IMPL_lookup_sync_sleepycat(key);
   timecb (tsnow, wrap(&dbfe::itemReturn_dummy_cb, cb, ret));
 }
 
@@ -493,7 +493,7 @@ ptr<dbEnumeration> dbfe::IMPL_make_enumeration_sleepycat()
 }
 
 void 
-dbfe::IMPL_delete_async_sleepycat(ptr<dbrec> key, errReturn_cb cb)
+dbfe::IMPL_delete_async_sleepycat(const str &key, errReturn_cb cb)
 {
   int err = IMPL_delete_sync_sleepycat(key);
   timecb (tsnow, wrap(&dbfe::errReturn_dummy_cb, cb, err));
@@ -552,39 +552,39 @@ dbfe::IMPL_open_adb(char *filename, dbOptions opts) {
 
 }
 
-int dbfe::IMPL_insert_sync_adb(ref<dbrec> key, ref<dbrec> data) { 
+int dbfe::IMPL_insert_sync_adb(const str &key, const str &data) { 
   assert(gADB_sync);
-  return  gADB_sync->insert(key->value, key->len, data->value, data->len);
+  return  gADB_sync->insert(key.cstr (), key.len (), data.cstr (), data.len ());
 } 
 
-ptr<dbrec> dbfe::IMPL_lookup_sync_adb(ref<dbrec> key) { 
+str dbfe::IMPL_lookup_sync_adb(const str &key) { 
   assert(gADB_sync);
   record *rec;
   void *retValue;
   long retLen;
 
-  int err = gADB_sync->lookup(key->value, key->len, &rec);
+  int err = gADB_sync->lookup(key.cstr (), key.len (), &rec);
   if (err) return NULL;
   
   retValue = rec->getValue(&retLen);
-  ptr<dbrec> ret = New refcounted<dbrec>(retValue, retLen);
+  str ret (retValue, retLen);
   return ret;
   
 } 
 
 void 
-dbfe::IMPL_insert_async_adb(ref<dbrec> key, ref<dbrec> data, errReturn_cb cb)  { 
+dbfe::IMPL_insert_async_adb(const str &key, const str &data, errReturn_cb cb)  { 
   assert(gADB_async);
-  gADB_async->insert(key->value, key->len, data->value, data->len, wrap(this, &dbfe::IMPL_insert_async_adb_comp, cb));
+  gADB_async->insert(key.cstr (), key.len (), data.cstr (), data.len (), wrap(this, &dbfe::IMPL_insert_async_adb_comp, cb));
 }
 void 
 dbfe::IMPL_insert_async_adb_comp(errReturn_cb cb, tid_t tid, int err, record *res) {
   (*cb)(err);
 }
 
-void dbfe::IMPL_lookup_async_adb(ref<dbrec> key, itemReturn_cb cb)  { 
+void dbfe::IMPL_lookup_async_adb(const str &key, itemReturn_cb cb)  { 
   assert(gADB_async);
-  gADB_async->lookup(key->value, key->len, wrap(this, &dbfe::IMPL_lookup_async_adb_comp, cb));
+  gADB_async->lookup(key.cstr (), key.len (), wrap(this, &dbfe::IMPL_lookup_async_adb_comp, cb));
 }
 void dbfe::IMPL_lookup_async_adb_comp(itemReturn_cb cb, tid_t tid, int err,record *res) {
   void *val;
@@ -594,7 +594,7 @@ void dbfe::IMPL_lookup_async_adb_comp(itemReturn_cb cb, tid_t tid, int err,recor
   
   val = res->getValue(&len);
 
-  ref<dbrec> ret = New refcounted<dbrec>(val, len);
+  str ret (val, len);
   (*cb)(ret);
 }
 
