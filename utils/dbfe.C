@@ -18,6 +18,7 @@
  *
  */
 
+#include <async.h>
 #include "dbfe.h"
 
 #ifdef DMALLOC
@@ -186,32 +187,15 @@ dbEnumeration::firstElement()
 }
 
 ////////////////////// dbfe //////////////////////////////
-dbfe::dbfe() {
-    db = NULL;
-    dbe = NULL;
-
-    checkpoint_impl = wrap (this, &dbfe::IMPL_checkpoint_sleepycat);
-
-    create_impl = wrap(this, &dbfe::IMPL_create_sleepycat);
-    open_impl = wrap(this, &dbfe::IMPL_open_sleepycat);
-    close_impl = wrap(this, &dbfe::IMPL_close_sleepycat);
-
-    insert_impl = wrap(this, &dbfe::IMPL_insert_sync_sleepycat);
-    lookup_impl = wrap(this, &dbfe::IMPL_lookup_sync_sleepycat);
-    
-    delete_impl = wrap(this, &dbfe::IMPL_delete_sync_sleepycat);
-    delete_impl_async = wrap(this, &dbfe::IMPL_delete_async_sleepycat);
-
-    insert_impl_async = wrap(this, &dbfe::IMPL_insert_async_sleepycat);
-    lookup_impl_async = wrap(this, &dbfe::IMPL_lookup_async_sleepycat);
-    make_enumeration = wrap(this, &dbfe::IMPL_make_enumeration_sleepycat);
+dbfe::dbfe () : dbe (NULL), db (NULL)
+{
 }
 
 dbfe::~dbfe() {
   closedb ();
 }
 
-int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) { 
+int dbfe::opendb (char *filename, dbOptions opts) { 
   int r = -1;
   bool do_dbenv = false;
 
@@ -247,7 +231,7 @@ int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) {
 
 
 void
-dbfe::IMPL_checkpoint_sleepycat ()
+dbfe::checkpoint ()
 {
   if (dbe)
 #if (DB_VERSION_MAJOR < 4)
@@ -257,14 +241,7 @@ dbfe::IMPL_checkpoint_sleepycat ()
 #endif
 }
 
-int 
-dbfe::IMPL_create_sleepycat(char *filename, dbOptions opts) 
-{ 
-  warn << "use open instead\n";
-  return 0;
-} 
-
-int dbfe::IMPL_insert_sync_sleepycat(const str &key, const str &data) { 
+int dbfe::insert (const str &key, const str &data) { 
   DB_TXN *t = NULL;
   int r = 0, tr = 0;
   DBT skey, content;
@@ -308,7 +285,7 @@ int dbfe::IMPL_insert_sync_sleepycat(const str &key, const str &data) {
 } 
 
 str 
-dbfe::IMPL_lookup_sync_sleepycat(const str &key) 
+dbfe::lookup (const str &key) 
 { 
   DBT skey, content;
   bzero(&skey, sizeof(skey));
@@ -327,7 +304,7 @@ dbfe::IMPL_lookup_sync_sleepycat(const str &key)
 } 
 
 int 
-dbfe::IMPL_delete_sync_sleepycat(const str &key) {
+dbfe::del (const str &key) {
   DB_TXN *t = NULL;
   int err, terr;
   DBT dkey;
@@ -359,51 +336,21 @@ dbfe::IMPL_delete_sync_sleepycat(const str &key) {
   return err;
 }
 
-void dbfe::itemReturn_dummy_cb (itemReturn_cb cb, str ret)
-{ 
-  cb (ret); 
-} 
-
-void dbfe::errReturn_dummy_cb (errReturn_cb cb, int err)
-{
-  cb (err);
-}
-
-void dbfe::IMPL_insert_async_sleepycat
-(const str &key, const str &data, errReturn_cb cb)
-{
-  int err = IMPL_insert_sync_sleepycat(key, data);
-  timecb (tsnow, wrap(&dbfe::errReturn_dummy_cb, cb, err));
-}
-
-void dbfe::IMPL_lookup_async_sleepycat(const str &key, itemReturn_cb cb)
-{ 
-  str ret = IMPL_lookup_sync_sleepycat(key);
-  timecb (tsnow, wrap(&dbfe::itemReturn_dummy_cb, cb, ret));
-}
-
 int 
-dbfe::IMPL_close_sleepycat() { 
+dbfe::closedb () { 
   int r;
   r = db->close(db, 0);
   if(dbe) dbe->close(dbe, 0);
   return r;
 }
 
-ptr<dbEnumeration> dbfe::IMPL_make_enumeration_sleepycat()
+ptr<dbEnumeration> dbfe::enumerate ()
 {
   return New refcounted<dbEnumeration>(db, dbe);
 }
 
-void 
-dbfe::IMPL_delete_async_sleepycat(const str &key, errReturn_cb cb)
-{
-  int err = IMPL_delete_sync_sleepycat(key);
-  timecb (tsnow, wrap(&dbfe::errReturn_dummy_cb, cb, err));
-}
-
 void
-dbfe::IMPL_sync () 
+dbfe::sync () 
 {
   if (dbe)
     return;

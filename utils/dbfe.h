@@ -41,10 +41,6 @@
 #ifndef _DBFE_H_
 #define _DBFE_H_
 
-#include "vec.h"
-#include "async.h"
-#include "callback.h"
-
 #include <db.h>
 
 int dbfe_initialize_dbenv (DB_ENV **dbep, str filename, bool join, unsigned int cachesize = 1024);
@@ -137,84 +133,27 @@ struct dbEnumeration {
 ref<dbImplInfo> dbGetImplInfo();
 
 class dbfe {
-  typedef callback<void, int>::ptr errReturn_cb;
-  typedef callback<void, const str &>::ptr itemReturn_cb;
-  typedef callback<int, char *, dbOptions>::ptr open_cb;
-  typedef callback<int>::ptr ivcb;
-  
-  typedef callback<int, const str &, const str &>::ptr insert_cb;
-  typedef callback<str, const str &>::ptr lookup_cb;
-  
-  typedef callback<int, const str &>::ptr  delete_cb;
-  typedef callback<void, const str &, errReturn_cb>::ptr delete_cb_async;
-
-  typedef callback<void, const str &, const str &, errReturn_cb >::ptr insert_cb_async;
-  typedef callback<void, const str &, itemReturn_cb >::ptr lookup_cb_async;
-
-  static void itemReturn_dummy_cb (itemReturn_cb cb, str ret);
-  static void errReturn_dummy_cb (errReturn_cb cb, int err);
-
-
-  open_cb create_impl;
-  open_cb  open_impl;
-  ivcb close_impl;
-
-  insert_cb insert_impl;
-  callback<void>::ptr checkpoint_impl;
-  lookup_cb lookup_impl;
-
-  delete_cb delete_impl;
-  delete_cb_async delete_impl_async;
-
-  insert_cb_async  insert_impl_async;
-  lookup_cb_async lookup_impl_async;
-  callback<ptr<dbEnumeration> >::ptr make_enumeration;
-
-  DB_ENV* dbe;
-  DB* db;
-  int IMPL_open_sleepycat(char *filename, dbOptions opts);
-  int IMPL_close_sleepycat();
-  int IMPL_create_sleepycat(char *filename, dbOptions opts);
-  int IMPL_insert_sync_sleepycat(const str &key, const str &data);
-  str IMPL_lookup_sync_sleepycat(const str &key);
-  void IMPL_insert_async_sleepycat(const str &key, const str &data, errReturn_cb cb);
-  void IMPL_checkpoint_sleepycat ();
-  void IMPL_lookup_async_sleepycat(const str &key, itemReturn_cb cb);
-  ptr<dbEnumeration> IMPL_make_enumeration_sleepycat();
-  void IMPL_delete_async_sleepycat(const str &key, errReturn_cb cb);
-  int IMPL_delete_sync_sleepycat(const str &key);
-  void IMPL_sync ();
+  DB_ENV *dbe;
+  DB *db;
 
   char closed;
   
+  dbfe (const dbfe &d);
  public:
+  dbfe ();
+  ~dbfe ();
 
-  dbfe();
-  ~dbfe();
-
-  int createdb(char *filename, dbOptions opts) { return (*create_impl)(filename, opts); };
-  int opendb(char *filename, dbOptions opts)  { return (*open_impl)(filename, opts); };
-  int closedb()  { return (*close_impl)(); };
+  int opendb(char *filename, dbOptions opts);
+  int closedb();
   
-  int insert(const str &key, const str &data)  { return (*insert_impl)(key, data); };
-  str lookup(const str &key) { return (*lookup_impl)(key); };
-  int del(const str &key) { return (*delete_impl) (key); };
+  int insert (const str &key, const str &data);
+  str lookup (const str &key);
+  int del (const str &key);
 
-  void insert(const str &key, const str &data, callback<void, int>::ref cb)  
-    { return (*insert_impl_async)(key, data, cb); };
-  void lookup(const str &key, callback<void, const str & >::ref cb)
-    { return (*lookup_impl_async)(key, cb); };
-  void del(const str &key, errReturn_cb cb) 
-    { return (*delete_impl_async) (key, cb); };
-  void sync () 
-    { IMPL_sync (); };
+  void checkpoint ();
+  void sync ();
 
-  void checkpoint ()
-  {  (*checkpoint_impl) (); };
-
-
-
-  ptr<dbEnumeration> enumerate() { return (*make_enumeration)(); };
+  ptr<dbEnumeration> enumerate ();
 };
 
 #endif
