@@ -77,44 +77,49 @@ dbOptions::getOption(const char *optionSig) {
 
 //////////////////////dbEnumeration//////////////////////
 
-dbEnumeration::dbEnumeration(DB *db, DB_ENV *dbe) {
+dbEnumeration::dbEnumeration (DB *db, DB_ENV *dbe) :
+  txnid (NULL),
+  dbe (dbe),
+  cursor (NULL)
+{
   int r = 0;
-  db_sync = db;
+  if (dbe) {
+    r = dbfe_txn_begin (dbe, &txnid);
+    if (r) {
+      const char *path (NULL);
+      dbe->get_home (dbe, &path);
+      fatal << "enumeration error for " << path << ": "
+	    << db_strerror (r) << "\n";
+    }
+  }
 
-  r = db->cursor(db, NULL, &cursor, 0);
+  // Choose the best stablest txn protected level available
+  int flags =
+#if (DB_VERSION_MAJOR < 4) || \
+    ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 3))
+    DB_DIRTY_READ
+#elif ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR == 3))
+    DB_DEGREE_2
+#else 
+    DB_READ_COMMITTED
+#endif 
+    ;
+
+  r = db->cursor(db, txnid, &cursor, flags);
   if (r) {
     const char *path (NULL);
     dbe->get_home (dbe, &path);
     fatal << "enumeration error for " << path << ": "
           << db_strerror (r) << "\n";
   }
-  cursor_init = 0;
 }
 
 dbEnumeration::~dbEnumeration() {
   cursor->c_close (cursor);
-}
-
-char
-dbEnumeration::hasMoreElements()
-{
-  assert (0); // i don't think this works.  --josh
-
-  char ci = cursor_init;
-  ptr<dbPair> next = nextElement();
-  if (next == NULL) return 0;
- 
-  //otherwise, back up one in preparation for the call
-  if (!ci) {
-    //reset the cursor to beginning
-    db_sync->cursor(db_sync, NULL, &cursor, 0);
-    return 1;
+  if (txnid) {
+    dbfe_txn_commit (dbe, txnid);
+    txnid = NULL;
   }
-  DBT key, data;
-  bzero(&key, sizeof(key));
-  bzero(&data, sizeof(data));
-  cursor->c_get(cursor, &key, &data, DB_PREV);
-  return 1;
 }
 
 ptr<dbPair>
@@ -136,9 +141,8 @@ dbEnumeration::getElement(u_int32_t flags, const str &startkey)
   data.flags = DB_DBT_PARTIAL;
 
   int err = cursor->c_get(cursor, &key, &data, flags);
-  cursor_init = 1;
   if (err) {
-    //    warn << "db3 error: " << db_strerror(err) << "\n";
+    //    warn << "db error: " << db_strerror(err) << "\n";
     return NULL;
   }
   str keyrec (static_cast<char *> (key.data), key.size);
@@ -205,6 +209,13 @@ int dbfe::opendb (const char *filename, dbOptions opts) {
 
   long cachesize = opts.getOption(CACHE_OPT);
   if (cachesize == -1) cachesize = 1024;  /* KB */
+
+#if (DB_VERSION_MAJOR < 4) || \
+    ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 3))
+  // BerkeleyDB 4.3 introduces support for level 2 isolation.
+  // Until then, we need support for dirtier stuff, if requested.
+  flags |= DB_DIRTY_READ;
+#endif 
 
   if (do_dbenv) {
     r = dbfe_initialize_dbenv (&dbe, filename, join >= 0, cachesize);

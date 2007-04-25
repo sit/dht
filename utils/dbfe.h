@@ -120,11 +120,10 @@ struct dbEnumeration {
   ptr<dbPair> firstElement();
 
   //ptr<dbPair> prevElement(const str &startkey); -- not implemented
-  char hasMoreElements();  // broken -- don't use
 
-  DB* db_sync;
+  DB_TXN *txnid;
+  DB_ENV *dbe;
   DBC *cursor;
-  char cursor_init;
 };
 
 ref<dbImplInfo> dbGetImplInfo();
