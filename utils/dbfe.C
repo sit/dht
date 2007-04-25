@@ -45,12 +45,6 @@
 ref<dbImplInfo>
 dbGetImplInfo() {
   ref<dbImplInfo> info = New refcounted<dbImplInfo>();
-#ifndef SLEEPYCAT
-  info->supportedOptions.push_back(CACHE_OPT);
-  info->supportedOptions.push_back(NODESIZE_OPT);
-  info->supportedOptions.push_back(ASYNC_OPT);
-  info->supportedOptions.push_back(CREATE_OPT);
-#else
   info->supportedOptions.push_back(CACHE_OPT);
   info->supportedOptions.push_back(PERM_OPT);
   info->supportedOptions.push_back(TYPE_OPT);
@@ -58,7 +52,6 @@ dbGetImplInfo() {
   info->supportedOptions.push_back(FLAG_OPT);
   info->supportedOptions.push_back(JOIN_OPT);
   info->supportedOptions.push_back(DBENV_OPT);
-#endif
   return info;
 }
 
@@ -93,7 +86,6 @@ dbOptions::getOption(char *optionSig) {
 
 //////////////////////dbEnumeration//////////////////////
 
-#ifdef SLEEPYCAT
 dbEnumeration::dbEnumeration(DB *db, DB_ENV *dbe) {
   int r = 0;
   db_sync = db;
@@ -112,27 +104,9 @@ dbEnumeration::~dbEnumeration() {
   cursor->c_close (cursor);
 }
 
-#else
-dbEnumeration::dbEnumeration(btreeSync *adb) {
-
-  it = New bIteration();
-  ADB_sync = adb;
-  ADB_async = NULL;
-}
-dbEnumeration::dbEnumeration(btreeDispatch *adb) {
-  it = New bIteration();
-  ADB_async = adb;
-  ADB_sync = NULL;
-}
-dbEnumeration::~dbEnumeration() {
-  delete it;
-}
-#endif
-
 char
 dbEnumeration::hasMoreElements()
 {
-#ifdef SLEEPYCAT
   assert (0); // i don't think this works.  --josh
 
   char ci = cursor_init;
@@ -150,12 +124,8 @@ dbEnumeration::hasMoreElements()
   bzero(&data, sizeof(data));
   cursor->c_get(cursor, &key, &data, DB_PREV);
   return 1;
-#else
-  return (it->lastNode() != 0);
-#endif
 }
 
-#ifdef SLEEPYCAT
 ptr<dbPair>
 dbEnumeration::getElement(u_int32_t flags, const str &startkey)
 {
@@ -215,72 +185,8 @@ dbEnumeration::firstElement()
   return getElement(DB_FIRST, NULL);
 }
 
-#else
-ptr<dbPair> dbEnumeration::nextElement() {
-  assert(ADB_sync);
-  
-  record *rec;
-  int err = ADB_sync->iterate(it, &rec);
-  if (err) return NULL;
-  void *val, *key;
-  long valLen, keyLen;
-  val = rec->getValue(&valLen);
-  key = rec->getKey(&keyLen);
-  
-  str keyrec (key, keyLen);
-  str valrec (val, valLen);
-  
-  return New refcounted<dbPair>(keyrec, valrec);
-  
-}
-
-void dbEnumeration::nextElement(callback<void, ptr<dbPair> >::ref cb) {
-  assert(ADB_async);
-  ADB_async->iterate(it, wrap(this, &dbEnumeration::ne_cb, cb));
-  return;
-}
-
-void dbEnumeration::ne_cb(callback<void, ptr<dbPair> >::ref cb, 
-			   tid_t tid, 
-			   int err, 
-			   record *rec) {
- 
-  if ((err) || (rec == NULL)) { 
-    (*cb)(NULL);
-    return;
-  }
-
-  void *val, *key;
-  long valLen, keyLen;
-  val = rec->getValue(&valLen);
-  key = rec->getKey(&keyLen);
-  
-  str keyrec (key, keyLen);
-  str valrec (val, valLen);
-  
-  (*cb)(New refcounted<dbPair>(keyrec, valrec));
-  
-}
-#endif
-  
 ////////////////////// dbfe //////////////////////////////
 dbfe::dbfe() {
-  
-#ifndef SLEEPYCAT
-    create_impl = wrap(this, &dbfe::IMPL_create_adb);
-    open_impl = wrap(this, &dbfe::IMPL_open_adb);
-    close_impl = wrap(this, &dbfe::IMPL_close_adb);
-
-    insert_impl = wrap(this, &dbfe::IMPL_insert_sync_adb);
-    lookup_impl = wrap(this, &dbfe::IMPL_lookup_sync_adb);
-    
-    insert_impl_async = wrap(this, &dbfe::IMPL_insert_async_adb);
-    lookup_impl_async = wrap(this, &dbfe::IMPL_lookup_async_adb);
-    make_enumeration = wrap(this, &dbfe::IMPL_make_enumeration_adb);
-
-    gADB_sync = NULL;
-    gADB_async = NULL;
-#else
     db = NULL;
     dbe = NULL;
 
@@ -299,15 +205,12 @@ dbfe::dbfe() {
     insert_impl_async = wrap(this, &dbfe::IMPL_insert_async_sleepycat);
     lookup_impl_async = wrap(this, &dbfe::IMPL_lookup_async_sleepycat);
     make_enumeration = wrap(this, &dbfe::IMPL_make_enumeration_sleepycat);
-#endif
-
 }
 
 dbfe::~dbfe() {
   closedb ();
 }
 
-#ifdef SLEEPYCAT
 int dbfe::IMPL_open_sleepycat(char *filename, dbOptions opts) { 
   int r = -1;
   bool do_dbenv = false;
@@ -506,116 +409,3 @@ dbfe::IMPL_sync ()
     return;
   db->sync (db, 0L);
 }
-
-#else 
-
-ptr<dbEnumeration> dbfe::IMPL_make_enumeration_adb() {
-  
-  if (gADB_sync)
-    return New refcounted<dbEnumeration>(gADB_sync);
-  else
-    return New refcounted<dbEnumeration>(gADB_async);
-}
-
-int
-dbfe::IMPL_create_adb(char *filename, dbOptions opts) {
- 
-  long ns = opts.getOption(NODESIZE_OPT);
-  if (ns == -1) ns = 4096;
-  long dlf = opts.getOption(LEAFSIZE_OPT);
-  if (dlf == -1) dlf = 4;
-  long create = opts.getOption(CREATE_OPT);
-  if (create == -1) create = 0;
-
-  gADB_sync = NULL;
-  gADB_async = NULL;
-
-  return createTree(filename, create, ns, dlf);
-}
-
-int
-dbfe::IMPL_open_adb(char *filename, dbOptions opts) {
-
-  long cacheSize = opts.getOption(CACHE_OPT);
-  if (cacheSize == -1) cacheSize = 1000000;
-  long async = opts.getOption(ASYNC_OPT);
-  if (async == -1) async = 0;
-  warn << cacheSize << async;
-  if (async) {
-    gADB_async = New btreeDispatch(filename, cacheSize);
-    if (gADB_async) return 0;
-    else return -1;  
-  } else {
-    gADB_sync = New btreeSync();
-    return gADB_sync->open(filename, cacheSize);
-  }
-
-}
-
-int dbfe::IMPL_insert_sync_adb(const str &key, const str &data) { 
-  assert(gADB_sync);
-  return  gADB_sync->insert(key.cstr (), key.len (), data.cstr (), data.len ());
-} 
-
-str dbfe::IMPL_lookup_sync_adb(const str &key) { 
-  assert(gADB_sync);
-  record *rec;
-  void *retValue;
-  long retLen;
-
-  int err = gADB_sync->lookup(key.cstr (), key.len (), &rec);
-  if (err) return NULL;
-  
-  retValue = rec->getValue(&retLen);
-  str ret (retValue, retLen);
-  return ret;
-  
-} 
-
-void 
-dbfe::IMPL_insert_async_adb(const str &key, const str &data, errReturn_cb cb)  { 
-  assert(gADB_async);
-  gADB_async->insert(key.cstr (), key.len (), data.cstr (), data.len (), wrap(this, &dbfe::IMPL_insert_async_adb_comp, cb));
-}
-void 
-dbfe::IMPL_insert_async_adb_comp(errReturn_cb cb, tid_t tid, int err, record *res) {
-  (*cb)(err);
-}
-
-void dbfe::IMPL_lookup_async_adb(const str &key, itemReturn_cb cb)  { 
-  assert(gADB_async);
-  gADB_async->lookup(key.cstr (), key.len (), wrap(this, &dbfe::IMPL_lookup_async_adb_comp, cb));
-}
-void dbfe::IMPL_lookup_async_adb_comp(itemReturn_cb cb, tid_t tid, int err,record *res) {
-  void *val;
-  long len;
-
-  if ((err) || (res == NULL)) { (*cb)(NULL); return; }
-  
-  val = res->getValue(&len);
-
-  str ret (val, len);
-  (*cb)(ret);
-}
-
-int dbfe::IMPL_close_adb() { 
-  if (gADB_async){
-    gADB_async->finalize(wrap(this, &dbfe::IMPL_close_adb_comp));
-    while (!closed) acheck();
-    delete gADB_async;
-  } else {
-    gADB_sync->finalize();
-    delete gADB_sync;
-  }
- 
-  closed = 1;
-  return 0;
-}
-
-void dbfe::IMPL_close_adb_comp(tid_t tid, int err, record *res) {
-  closed = 1;
-}
-
-#endif
-
-
