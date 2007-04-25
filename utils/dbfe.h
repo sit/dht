@@ -89,19 +89,17 @@ struct dbPair {
 };
 
 struct optionRec {
-  char *sig;
+  const char *sig;
   long value;
 };
 
 
 struct dbOptions {
-  
   dbOptions();
-  int addOption(char *optionSig, long value);
-  long getOption(char *optionSig);
+  int addOption(const char *optionSig, long value);
+  long getOption(const char *optionSig);
 
   vec<optionRec> options;
-  int sel;
 };
 
 struct dbImplInfo {
@@ -127,7 +125,6 @@ struct dbEnumeration {
   DB* db_sync;
   DBC *cursor;
   char cursor_init;
-  char async;
 };
 
 ref<dbImplInfo> dbGetImplInfo();
@@ -135,15 +132,13 @@ ref<dbImplInfo> dbGetImplInfo();
 class dbfe {
   DB_ENV *dbe;
   DB *db;
-
-  char closed;
   
   dbfe (const dbfe &d);
  public:
   dbfe ();
   ~dbfe ();
 
-  int opendb(char *filename, dbOptions opts);
+  int opendb(const char *filename, dbOptions opts);
   int closedb();
   
   int insert (const str &key, const str &data);

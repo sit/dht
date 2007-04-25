@@ -25,41 +25,31 @@
 #include "dmalloc.h"
 #endif
 
-//adb options
 #define CACHE_OPT "opt_cachesize"
-#define NODESIZE_OPT "opt_nodesize"
-#define LEAFSIZE_OPT "opt_leafsize"
-#define ASYNC_OPT "opt_async"
-
-//sleepy options
-#define PERM_OPT "opt_permissions"
-#define TYPE_OPT "opt_dbtype"
 #define CREATE_OPT "opt_create"
+#define DBENV_OPT    "opt_dbenv"
 #define FLAG_OPT   "opt_flag"
 #define JOIN_OPT  "opt_join"
-#define DBENV_OPT    "opt_dbenv"
+#define PERM_OPT "opt_permissions"
 
 ///////////////// static /////////////////////
-
-// XXX fix the u_int casting..
 
 ref<dbImplInfo>
 dbGetImplInfo() {
   ref<dbImplInfo> info = New refcounted<dbImplInfo>();
   info->supportedOptions.push_back(CACHE_OPT);
-  info->supportedOptions.push_back(PERM_OPT);
-  info->supportedOptions.push_back(TYPE_OPT);
   info->supportedOptions.push_back(CREATE_OPT);
+  info->supportedOptions.push_back(DBENV_OPT);
   info->supportedOptions.push_back(FLAG_OPT);
   info->supportedOptions.push_back(JOIN_OPT);
-  info->supportedOptions.push_back(DBENV_OPT);
+  info->supportedOptions.push_back(PERM_OPT);
   return info;
 }
 
 //////////////////// dbOptions ///////////////////////
 dbOptions::dbOptions()  {}
 
-int verifyOption(char *optionSig) {
+int verifyOption (const char *optionSig) {
   vec<char *> allowed = dbGetImplInfo()->supportedOptions;
   for (unsigned int i=0; i < allowed.size(); i++) 
     if (memcmp(allowed[i], optionSig, strlen(allowed[i])) == 0) return 1;
@@ -67,7 +57,7 @@ int verifyOption(char *optionSig) {
 }
 
 int
-dbOptions::addOption(char *optionSig, long value) {
+dbOptions::addOption(const char *optionSig, long value) {
   if (!verifyOption(optionSig)) return EINVAL;
 
   optionRec optr;
@@ -78,7 +68,7 @@ dbOptions::addOption(char *optionSig, long value) {
 }
 
 long
-dbOptions::getOption(char *optionSig) {
+dbOptions::getOption(const char *optionSig) {
   for (unsigned int i=0; i < options.size(); i++) 
     if (memcmp(options[i].sig, optionSig, strlen(options[i].sig)) == 0) return options[i].value;
   return -1;
@@ -195,7 +185,7 @@ dbfe::~dbfe() {
   closedb ();
 }
 
-int dbfe::opendb (char *filename, dbOptions opts) { 
+int dbfe::opendb (const char *filename, dbOptions opts) { 
   int r = -1;
   bool do_dbenv = false;
 
@@ -224,7 +214,7 @@ int dbfe::opendb (char *filename, dbOptions opts) {
     }
     r = dbfe_opendb (dbe, &db, "db", flags, mode);
   } else {
-    r = dbfe_opendb (dbe, &db, (const char *) filename, flags, mode);
+    r = dbfe_opendb (dbe, &db, filename, flags, mode);
   }
   return r;
 }
