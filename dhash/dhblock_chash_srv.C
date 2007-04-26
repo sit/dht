@@ -107,6 +107,8 @@ void
 dhblock_chash_srv::maintqueue (const vec<maint_repair_t> &repairs)
 {
   vec<ptr<location> > preds = node->preds ();
+  if (preds.size () < dhblock_chash::num_efrags())
+    return;
   chordID firstpred = preds[dhblock_chash::num_efrags () - 1]->id ();
   chordID myID = node->my_ID ();
   for (size_t i = 0; i < repairs.size (); i++) {

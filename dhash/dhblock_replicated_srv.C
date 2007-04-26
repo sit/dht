@@ -149,6 +149,8 @@ void
 dhblock_replicated_srv::maintqueue (const vec<maint_repair_t> &repairs)
 {
   vec<ptr<location> > preds = node->preds ();
+  if (preds.size () < dhblock_replicated::num_replica ())
+    return;
   chordID firstpred = preds[dhblock_replicated::num_replica () - 1]->id ();
   chordID myID = node->my_ID ();
   for (size_t i = 0; i < repairs.size (); i++) {
