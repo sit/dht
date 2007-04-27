@@ -123,12 +123,9 @@ dbEnumeration::~dbEnumeration() {
 }
 
 ptr<dbPair>
-dbEnumeration::getElement(u_int32_t flags, const str &startkey)
+dbEnumeration::getElement(u_int32_t flags, const str &startkey,
+    bool getdata)
 {
-  // XXX hack
-  // nextElement doesn't return any data, just keys.
-  // use the lookup routine if you want the data. 
-  // Perhaps, change nextElement to only return a str!
   DBT key;
   bzero(&key, sizeof(key));
   if (startkey) {
@@ -138,7 +135,8 @@ dbEnumeration::getElement(u_int32_t flags, const str &startkey)
 
   DBT data;
   bzero(&data, sizeof(data));
-  data.flags = DB_DBT_PARTIAL;
+  if (!getdata)
+    data.flags = DB_DBT_PARTIAL;
 
   int err = cursor->c_get(cursor, &key, &data, flags);
   if (err) {
@@ -147,37 +145,39 @@ dbEnumeration::getElement(u_int32_t flags, const str &startkey)
   }
   str keyrec (static_cast<char *> (key.data), key.size);
   str valrec = NULL;
+  if (getdata) 
+    valrec = str (static_cast<char *> (data.data), data.size);
   return New refcounted<dbPair>(keyrec, valrec);
 }
 
 ptr<dbPair>
-dbEnumeration::nextElement()
+dbEnumeration::nextElement(bool getdata)
 {
-  return getElement (DB_NEXT, NULL);
+  return getElement (DB_NEXT, NULL, getdata);
 }
 
 ptr<dbPair>
-dbEnumeration::prevElement()
+dbEnumeration::prevElement(bool getdata)
 {
-  return getElement (DB_PREV, NULL);
+  return getElement (DB_PREV, NULL, getdata);
 }
 
 ptr<dbPair>
-dbEnumeration::nextElement(const str &startkey)
+dbEnumeration::nextElement(const str &startkey, bool getdata)
 {
-  return getElement(DB_SET_RANGE, startkey);
+  return getElement(DB_SET_RANGE, startkey, getdata);
 }
 
 ptr<dbPair>
-dbEnumeration::lastElement()
+dbEnumeration::lastElement(bool getdata)
 {
-  return getElement(DB_LAST, NULL);
+  return getElement(DB_LAST, NULL, getdata);
 }
 
 ptr<dbPair>
-dbEnumeration::firstElement()
+dbEnumeration::firstElement(bool getdata)
 {
-  return getElement(DB_FIRST, NULL);
+  return getElement(DB_FIRST, NULL, getdata);
 }
 
 ////////////////////// dbfe //////////////////////////////

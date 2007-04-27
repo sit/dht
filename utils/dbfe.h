@@ -112,12 +112,12 @@ struct dbEnumeration {
   dbEnumeration(DB *db, DB_ENV *dbe);
   ~dbEnumeration ();
 
-  ptr<dbPair> getElement(u_int32_t flags, const str &startkey);
-  ptr<dbPair> nextElement();
-  ptr<dbPair> prevElement();
-  ptr<dbPair> nextElement(const str &startkey);
-  ptr<dbPair> lastElement();
-  ptr<dbPair> firstElement();
+  ptr<dbPair> getElement(u_int32_t flags, const str &startkey, bool getdata = false);
+  ptr<dbPair> nextElement(bool getdata = false);
+  ptr<dbPair> prevElement(bool getdata = false);
+  ptr<dbPair> nextElement(const str &startkey, bool getdata = false);
+  ptr<dbPair> lastElement(bool getdata = false);
+  ptr<dbPair> firstElement(bool getdata = false);
 
   //ptr<dbPair> prevElement(const str &startkey); -- not implemented
 
