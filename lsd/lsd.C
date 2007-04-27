@@ -144,6 +144,47 @@ lsdctl_fillnodeinfo (lsdctl_nodeinfo &ni, ptr<location> l)
 }
 
 void
+lsdctl_finishstats (svccb *sbp, ptr<lsdctl_rpcstatlist> sl, clnt_stat err)
+{
+  // Pull up our stats after RPC since maintd's stats may
+  // take a while.  This should ensure that all the stats
+  // are from about the same time interval.
+
+  bool *clear = sbp->Xtmpl getarg<bool> ();
+
+  rpcstats *s = rpc_stats_tab.first ();
+  while (s) {
+    lsdctl_rpcstat si;
+    si.key          = s->key;
+    si.ncall        = s->ncall;
+    si.nrexmit      = s->nrexmit;
+    si.nreply       = s->nreply;
+    si.call_bytes   = s->call_bytes;
+    si.rexmit_bytes = s->rexmit_bytes;
+    si.reply_bytes  = s->reply_bytes;
+    si.latency_ewma = s->latency_ewma;
+    sl->stats.push_back (si);
+    s = rpc_stats_tab.next (s);
+  }
+  
+  u_int64_t now = getusec ();
+  sl->interval = now - rpc_stats_lastclear;
+  if (*clear) {
+    s = rpc_stats_tab.first ();
+    while (s) {
+      rpcstats *t = rpc_stats_tab.next (s);
+      rpc_stats_tab.remove (s);
+      delete s;
+      s = t;
+    }
+    rpc_stats_tab.clear ();
+    rpc_stats_lastclear = now;
+  }
+
+  sbp->reply (sl);
+}
+
+void
 lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
 {
   if (!sbp) {
@@ -222,39 +263,11 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
       if (fd >= 0) {
 	ptr<aclnt> c = aclnt::alloc (axprt_unix::alloc (fd, 32*1024),
 	    lsdctl_prog_1);
-	c->scall (LSDCTL_GETRPCSTATS, clear, sl);
+	c->call (LSDCTL_GETRPCSTATS, clear, sl,
+	    wrap (&lsdctl_finishstats, sbp, sl));
+      } else {
+	lsdctl_finishstats (sbp, sl, RPC_SUCCESS);
       }
-      
-      rpcstats *s = rpc_stats_tab.first ();
-      while (s) {
-	lsdctl_rpcstat si;
-	si.key          = s->key;
-	si.ncall        = s->ncall;
-	si.nrexmit      = s->nrexmit;
-	si.nreply       = s->nreply;
-	si.call_bytes   = s->call_bytes;
-	si.rexmit_bytes = s->rexmit_bytes;
-	si.reply_bytes  = s->reply_bytes;
-	si.latency_ewma = s->latency_ewma;
-	sl->stats.push_back (si);
-	s = rpc_stats_tab.next (s);
-      }
-      
-      u_int64_t now = getusec ();
-      sl->interval = now - rpc_stats_lastclear;
-      if (*clear) {
-	s = rpc_stats_tab.first ();
-	while (s) {
-	  rpcstats *t = rpc_stats_tab.next (s);
-	  rpc_stats_tab.remove (s);
-	  delete s;
-	  s = t;
-	}
-	rpc_stats_tab.clear ();
-	rpc_stats_lastclear = now;
-      }
-
-      sbp->reply (sl);
     }
     break;
   case LSDCTL_GETMYIDS:
