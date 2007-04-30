@@ -437,8 +437,6 @@ dhashcli::insert_succlist_cb (ref<dhash_block> block, cbinsert_path_t cb,
   insert_lookup_cb (block, cb, options, DHASH_OK, succs, r);
 }
 
-u_int64_t start_insert, end_insert, total_insert = 0;
-
 void
 dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, 
 			    int options, dhash_stat status, 
@@ -474,10 +472,6 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
 
   ref<sto_state> ss = New refcounted<sto_state> (block, cb);
   ss->succs = succs;
-  
-  timeval tp;
-  gettimeofday (&tp, NULL);
-  start_insert = tp.tv_sec * (u_int64_t) 1000000 + tp.tv_usec;
 
   for (u_int i = 0; i < succs.size(); i++) {
       // Count up for each RPC that will be dispatched
