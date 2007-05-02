@@ -32,6 +32,18 @@
 #define JOIN_OPT  "opt_join"
 #define PERM_OPT "opt_permissions"
 
+// Choose the best stablest txn protected level available
+static const int isolated_read_flag = 
+#if (DB_VERSION_MAJOR < 4) || \
+    ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 3))
+    DB_DIRTY_READ
+#elif ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR == 3))
+    DB_DEGREE_2
+#else 
+    DB_READ_COMMITTED
+#endif 
+    ;
+
 ///////////////// static /////////////////////
 
 ref<dbImplInfo>
@@ -93,19 +105,7 @@ dbEnumeration::dbEnumeration (DB *db, DB_ENV *dbe) :
     }
   }
 
-  // Choose the best stablest txn protected level available
-  int flags =
-#if (DB_VERSION_MAJOR < 4) || \
-    ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR < 3))
-    DB_DIRTY_READ
-#elif ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR == 3))
-    DB_DEGREE_2
-#else 
-    DB_READ_COMMITTED
-#endif 
-    ;
-
-  r = db->cursor(db, txnid, &cursor, flags);
+  r = db->cursor(db, txnid, &cursor, isolated_read_flag);
   if (r) {
     const char *path (NULL);
     dbe->get_home (dbe, &path);
@@ -356,4 +356,93 @@ dbfe::sync ()
   if (dbe)
     return;
   db->sync (db, 0L);
+}
+
+int
+dbfe::traverse (traverse_act_t cb)
+{
+  /* Adapted from BerkeleyDB get_bulk example code */
+  DBC *dbcp;
+  DBT key, data, onedata;
+  DB_TXN *txnid = NULL;
+  size_t retklen, retdlen;
+  void *retkey, *retdata;
+  int ret, t_ret;
+  void *p;
+
+  bzero (&key, sizeof (key));
+  bzero (&data, sizeof (data));
+  bzero (&onedata, sizeof (onedata));
+
+  /* Review the database in 5MB chunks. */
+#define BUFFER_LENGTH (5 * 1024 * 1024)
+  if ((data.data = malloc(BUFFER_LENGTH)) == NULL) {
+    return (errno);
+  }
+  data.ulen = BUFFER_LENGTH;
+  data.flags = DB_DBT_USERMEM;
+
+  ret = dbfe_txn_begin (dbe, &txnid);
+  if (ret) {
+    db->err (db, ret, "DBE->txn_begin");
+    free (data.data);
+    return (ret);
+  }
+
+  /* Acquire a cursor for the database. */
+  if ((ret = db->cursor(db, txnid, &dbcp, isolated_read_flag)) != 0) {
+    db->err (db, ret, "DB->cursor");
+    dbfe_txn_abort (dbe, txnid);
+    free (data.data);
+    return (ret);
+  }
+
+  for (;;) {
+    /*
+     * Acquire the next set of key/data pairs.
+     */
+    if ((ret = dbcp->c_get (dbcp,
+	    &key, &data, DB_MULTIPLE_KEY | DB_NEXT)) != 0)
+    {
+      if (ret == DB_BUFFER_SMALL) {
+	/* Single key too big! Allow BDB to allocate memory. */
+	ret = dbcp->c_get (dbcp, &key, &onedata, DB_NEXT);
+	if (ret != 0) {
+	  if (ret != DB_NOTFOUND)
+	    db->err (db, ret, "DBcursor->c_get one");
+	  break;
+	}
+	str rk ((const char *) key.data, key.size);
+	str rd ((const char *) onedata.data, onedata.size);
+	(*cb) (rk, rd);
+	continue;
+      } else
+      if (ret != DB_NOTFOUND)
+	db->err (db, ret, "DBcursor->c_get bulk");
+
+      break;
+    }
+
+    for (DB_MULTIPLE_INIT (p, &data);;) {
+      DB_MULTIPLE_KEY_NEXT (p, &data, retkey, retklen, retdata, retdlen);
+      if (p == NULL)
+	break;
+      str rk ((char *) retkey, retklen);
+      str rd ((char *) retdata, retdlen);
+      (*cb) (rk, rd);
+    }
+  }
+
+  if ((t_ret = dbcp->c_close (dbcp)) != 0) {
+    db->err(db, ret, "DBcursor->close");
+    if (ret == 0)
+      ret = t_ret;
+  }
+
+  free (data.data);
+  if (ret != 0)
+    dbfe_txn_abort (dbe, txnid);
+  else
+    dbfe_txn_commit (dbe, txnid);
+  return (ret);
 }

@@ -148,6 +148,10 @@ class dbfe {
   void sync ();
 
   ptr<dbEnumeration> enumerate ();
+
+  // This function blocks!  It does not operate async!
+  typedef callback<void, const str &, const str &>::ref traverse_act_t;
+  int traverse (traverse_act_t cb);
 };
 
 #endif
