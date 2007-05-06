@@ -473,10 +473,10 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
   ref<sto_state> ss = New refcounted<sto_state> (block, cb);
   ss->succs = succs;
 
+  // Track number of times insert_store_cb is to be called.
+  ss->out = succs.size ();
+
   for (u_int i = 0; i < succs.size(); i++) {
-      // Count up for each RPC that will be dispatched
-      ss->out += 1;
-      
       ptr<location> dest = clntnode->locations->lookup_or_create (succs[i]);
 
       str frag = blk->generate_fragment (block, i);
