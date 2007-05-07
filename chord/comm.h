@@ -123,7 +123,6 @@ class rpc_manager {
   // statistics
   float a_lat;
   float a_var;
-  vec<float> lat_history;
   float c_err;
   float c_err_rel;
   float c_var;
@@ -209,8 +208,6 @@ class stp_manager : public rpc_manager {
   vec<float> timers;
   vec<float> cwind_time;
   vec<float> cwind_cwind;
-  vec<long> acked_seq;
-  vec<float> acked_time;
   vec<long> qued_hist;
   vec<long> lat_inq;
 

@@ -393,12 +393,6 @@ void stp_manager::stats ()
     warnx << "t: " << buf << "\n";
   }
 
-  warnx << "Latencies:\n";
-  for (unsigned int i = 0; i < lat_history.size (); i++) {
-    sprintf (buf, "%f", lat_history[i]);
-    warnx << "lat: " << buf << "\n";
-  }
-
   warnx << "Latencies (in q):\n";
   for (unsigned int i = 0; i < lat_inq.size (); i++) {
     warnx << "lat(q): " << lat_inq[i] << "\n";
