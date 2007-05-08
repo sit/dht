@@ -36,9 +36,17 @@ gettime()
 u_int64_t
 getusec ()
 {
+#if 0
   timeval tv;
   gettimeofday (&tv, NULL);
   return tv.tv_sec * INT64(1000000) + tv.tv_usec;
+#else
+  /*
+   * Use SFS(lite)'s global time variable.
+   * It is updated at least once per event loop, probably enough.
+   */
+  return tsnow.tv_sec * INT64(1000000) + tsnow.tv_nsec / 1000;
+#endif /* 0 */
 }
 
 float

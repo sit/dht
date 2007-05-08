@@ -543,6 +543,10 @@ main (int argc, char **argv)
   mp_clearscrub ();
   // sfsconst_init ();
   random_init ();
+
+  /* Initialize for getusec calls before amain is called. */
+  clock_gettime (CLOCK_REALTIME, &tsnow);
+
   sigcb(SIGUSR1, wrap (&stats));
   sigcb(SIGUSR2, wrap (&stop));
   sigcb(SIGHUP, wrap (&start_logs));
