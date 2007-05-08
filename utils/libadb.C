@@ -78,6 +78,7 @@ adb::store (chordID key, str data, cb_adbstat cb)
   arg.key = key;
   arg.name = name_space;
   arg.data = data;
+  arg.auxdata = 0;
 
   adb_status *res = New adb_status ();
 
