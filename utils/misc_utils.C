@@ -34,19 +34,18 @@ gettime()
 }
 
 u_int64_t
-getusec ()
+getusec (bool syscall)
 {
-#if 0
-  timeval tv;
-  gettimeofday (&tv, NULL);
-  return tv.tv_sec * INT64(1000000) + tv.tv_usec;
-#else
+  static bool initialized (false);
   /*
    * Use SFS(lite)'s global time variable.
-   * It is updated at least once per event loop, probably enough.
+   * It is updated at least once per event loop, and optionally, here.
    */
+  if (syscall || !initialized) {
+    initialized = true;
+    clock_gettime (CLOCK_REALTIME, &tsnow);
+  } 
   return tsnow.tv_sec * INT64(1000000) + tsnow.tv_nsec / 1000;
-#endif /* 0 */
 }
 
 float

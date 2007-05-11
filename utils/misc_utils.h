@@ -12,7 +12,7 @@ bool in_vector (const vec<chordID> &v, chordID N);
 bool in_vector (const vec<ptr<location> > &l, chordID N);
 
 str gettime ();
-u_int64_t getusec ();
+u_int64_t getusec (bool syscall = false);
 
 u_int32_t uniform_random(double a, double b);
 float uniform_random_f (float max);

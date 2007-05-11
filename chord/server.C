@@ -400,8 +400,8 @@ user_args::reply (void *res)
   }
 
   assert (rpc_res->status == DORPC_OK);
-
-  u_int64_t diff = getusec () - init_time;
+  
+  u_int64_t diff = getusec (true) - init_time;
   track_proctime (*prog, procno, diff);
  
   //reply
