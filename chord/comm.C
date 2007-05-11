@@ -152,7 +152,7 @@ rpc_manager::stats ()
   warnx << "RPC MANAGER STATS:\n";
   warnx << "total # of RPCs: good " << nrpc
 	<< " failed " << nrpcfailed << "\n";
-  warnx << buf << "  Per link avg. RPC latencies\n";
+  warnx << "  Per link avg. RPC latencies\n";
   for (hostinfo *h = hosts.first (); h ; h = hosts.next (h)) {
     warnx << "    host " << h->host
 	  << " # RPCs: " << h->nrpc

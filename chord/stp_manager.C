@@ -385,6 +385,7 @@ void stp_manager::stats ()
   sprintf(buf, "  Average latency/variance: %f/%f\n", a_lat, a_var);
   warnx << buf;
   sprintf(buf, "  Average cwind: %f\n", cwind_cum/num_cwind_samples);
+  warnx << buf;
 
   if (shortstats) return;
   warnx << "Timer history:\n";
