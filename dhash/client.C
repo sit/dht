@@ -472,6 +472,8 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
 
   ref<sto_state> ss = New refcounted<sto_state> (block, cb);
   ss->succs = succs;
+  ss->r = r;
+  ss->blk = blk;
 
   // Track number of times insert_store_cb is to be called.
   ss->out = succs.size ();
@@ -484,10 +486,8 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
 			    blockID(block->ID, block->ctype),
 			    frag,
 			    wrap (this, &dhashcli::insert_store_cb,  
-				  ss, r, i,
-				  blk->num_put (), 
-				  blk->min_put ()), 
-			    get_store_status(block->ctype)); 
+				  ss, i, getusec ()),
+			    get_store_status (block->ctype)); 
       // XXX reactivate retry later
   }
   return;
@@ -495,26 +495,21 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
 }
 
 void
-dhashcli::insert_store_cb (ref<sto_state> ss, route r, u_int i,
-			   u_int nstores, u_int min_needed,
+dhashcli::insert_store_cb (ref<sto_state> ss, u_int i, u_int64_t t,
 			   dhash_stat err, chordID id, bool present)
 {
+  u_int nstores = ss->blk->num_put ();
+  u_int min_needed = ss->blk->min_put ();
   ss->out -= 1;
-  if (err) {
-    info << "fragment/block store failed: " << ss->block->ID
-	 << " fragment " << i << "/" << nstores
-	 << ": " << err << "\n";
-  } else {
-    info << "fragment/block store ok: " << ss->block->ID
-	 << " fragment " << i << "/" << nstores
-	 << " at " << id << "\n";
+  info << "store " << ss->block->ID << " (frag " <<
+    i + 1 << "/" << nstores << ") -> " << id << " in " <<
+    (getusec () - t)/1000 << "ms: " << err << "\n";
+  if (!err)
     ss->good += 1;
-  }
 
   // Count down until all outstanding RPCs have returned
-  vec<chordID> r_ret;
-
   if (ss->out == 0) {
+    vec<chordID> r_ret;
     chordID myID = clntnode->my_ID ();
     if (ss->good < nstores) {
       warning << myID << ": store (" << ss->block->ID << "): only stored "
@@ -531,8 +526,8 @@ dhashcli::insert_store_cb (ref<sto_state> ss, route r, u_int i,
       }
     }
     
-    for (unsigned int i = 0; i < r.size (); i++)
-      r_ret.push_back (r[i]->id ());
+    for (unsigned int i = 0; i < ss->r.size (); i++)
+      r_ret.push_back (ss->r[i]->id ());
 
     (*ss->cb) (DHASH_OK, r_ret);
   }

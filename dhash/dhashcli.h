@@ -68,14 +68,16 @@ public:
   // State for a fragment store
   struct sto_state {
     ref<dhash_block> block;
-    vec<chord_node> succs;
     cbinsert_path_t cb;
+    ptr<dhblock> blk;
+    vec<chord_node> succs;
+    route r;
     
     u_int out;
     u_int good;
     
     sto_state (ref<dhash_block> b, cbinsert_path_t x) :
-      block (b), cb (x), out (0), good (0) {}
+      block (b), cb (x), blk (NULL), out (0), good (0) {}
   };
 
 private:
@@ -95,8 +97,7 @@ private:
     
   void insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb, int options, 
 			 dhash_stat status, vec<chord_node> succs, route r);
-  void insert_store_cb (ref<sto_state> ss, route r, u_int i, 
-			u_int nstores, u_int min_needed,
+  void insert_store_cb (ref<sto_state> ss, u_int i, u_int64_t t, 
 			dhash_stat err, chordID id, bool present);
   
   void fetch_frag (ptr<rcv_state> rs, ptr<dhblock> block);
