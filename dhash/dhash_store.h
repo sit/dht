@@ -75,8 +75,7 @@ protected:
   void timed_out (ptr<bool> deleted);
   void start (ptr<bool> deleted);
   void finish (ptr<bool> deleted, ptr<dhash_storeres> res, int num, clnt_stat err);
-  void store (char *data, size_t len, size_t off, size_t totsz, int num);  
-
+  void store (char *buf, size_t len, size_t off, int num);  
 };
 
 #endif

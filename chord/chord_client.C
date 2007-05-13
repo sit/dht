@@ -200,7 +200,7 @@ chord::tcpclient_cb (int srvfd)
   if (fd < 0)
     warn << "chord: accept failed " << strerror (errno) << "\n";
   else {
-    ptr<axprt> x = axprt_stream::alloc (fd, 230000);
+    ptr<axprt> x = axprt_stream::alloc (fd, 260*1024);
 
     ptr<asrv> s = asrv::alloc (x, transport_program_1);
     s->setcb (wrap (mkref(this), &chord::dispatch, s));

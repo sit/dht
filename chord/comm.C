@@ -422,7 +422,7 @@ tcp_manager::doRPC_tcp_connect_cb (RPC_delay_args *args, int fd)
     tcp_nodelay (fd);
     make_async(fd);
     hi->fd = fd;
-    hi->xp = axprt_stream::alloc (fd);
+    hi->xp = axprt_stream::alloc (fd, 260*1024);
     assert (hi->xp);
     send_RPC (args);
     while (hi->connect_waiters.size ())

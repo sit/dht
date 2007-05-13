@@ -25,7 +25,11 @@ dhash_store::start (ptr<bool> p_deleted)
   dcb = delaycb
     (STORE_TIMEOUT, wrap (this, &dhash_store::timed_out, deleted));
  
+  // XXX Try larger block sizes when we are going to use TCP stream.
   unsigned int mtu = dhblock::dhash_mtu ();
+  if (data.len () > 8192)
+    mtu = 256 * 1024;
+
   size_t nstored = 0;
   int blockno = 0;
   while (nstored < data.len ()) {
@@ -33,7 +37,7 @@ dhash_store::start (ptr<bool> p_deleted)
     char  *chunkdat = (char *)(data.cstr () + nstored);
     size_t chunkoff = nstored;
     npending++;
-    store (chunkdat, chunklen, chunkoff, data.len (), blockno);
+    store (chunkdat, chunklen, chunkoff, blockno);
     if (*p_deleted) return;
     nstored += chunklen;
     blockno++;
@@ -70,22 +74,22 @@ dhash_store::finish (ptr<bool> p_deleted,
 
 
 void 
-dhash_store::store (char *data, size_t len, size_t off, size_t totsz, int num)
+dhash_store::store (char *buf, size_t len, size_t off, int num)
 {
   trace << clntnode->my_ID () << ": dhash_store::store (" << bid << ", "
-       << len << ", " << off << ", " << totsz << ", " << num << ")\n";
+       << len << ", " << off << ", " << data.len () << ", " << num << ")\n";
   ref<dhash_storeres> res = New refcounted<dhash_storeres> (DHASH_OK);
   ref<s_dhash_insertarg> arg = New refcounted<s_dhash_insertarg> ();
   arg->key     = bid.ID;
   arg->ctype   = bid.ctype;
   arg->data.setsize (len);
-  memcpy (arg->data.base (), data, len);
+  memcpy (arg->data.base (), buf, len);
   arg->offset  = off;
   arg->type    = store_type;
-  arg->attr.size     = totsz;
+  arg->attr.size = data.len ();
   arg->nonce = nonce;
 
-  bool stream = (totsz > 8000);
+  bool stream = (data.len () > 8000);
   clntnode->doRPC
     (dest, dhash_program_1, procno, arg, res,
      wrap (this, &dhash_store::finish, deleted, res, num), NULL, stream);
