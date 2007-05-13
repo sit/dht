@@ -150,8 +150,11 @@ Ida::pack (vec<u_long> &in)
   int i, n;
 
   n = in[0]; /* over length */
-  
-  strbuf out;
+  int outp = 0;
+
+  mstr mbuf (4*n);
+  char *buf = mbuf.cstr ();
+
   // This encoding takes advantage of the fact that the 32-bit in[]
   // values rarely have anything in the high 16 bits.
   for (i = 0; i < n; i++) {
@@ -159,27 +162,27 @@ Ida::pack (vec<u_long> &in)
     // The magic character and high-bit nums must be encoded carefully.
     // NOTE: if field == 65537, the highest order byte should always be zero.
     assert (!(c & 0xff000000));
-    char c1 = (char) (c >> 8) & 0xff;
-    char c2 = (char) c & 0xff;
+    register char c1 = (char) (c >> 8) & 0xff;
+    register char c2 = (char) c & 0xff;
     if (c & 0xffff0000) {
-      out.fmt ("%c%c%c%c",
-	       magic,
-	       (char) (c >> 16) & 0xff,
-	       c1,
-	       c2);
+      buf[outp++] = magic;
+      buf[outp++] = (char) (c >> 16) & 0xff;
+      buf[outp++] = c1;
+      buf[outp++] = c2;
     } else {
       if (c1 == magic) {
-	out.fmt ("%c%c%c%c", magic, 0, c1, c2);
+	buf[outp++] = magic;
+	buf[outp++] = 0;
+	buf[outp++] = c1;
+	buf[outp++] = c2;
       } else {
-	out.fmt ("%c%c", c1, c2);
+	buf[outp++] = c1;
+	buf[outp++] = c2;
       }
     }
   }
-  // XXX there is a copy here, but I'm not sure we can really get
-  //     rid of it the way that str's and strbuf's are structured.
-  //     The other option would be to use a char array but then
-  //     callers would have to worry about delete'ing the memory.
-  return out;
+  mbuf.setlen (outp);
+  return mbuf;
 }
 
 
