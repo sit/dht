@@ -567,7 +567,8 @@ vnode_impl::doRPC (ref<location> l, const rpc_program &prog, int procno,
   //check to see if this is alive
   ptr<location> loc = locations->lookup (l->id ());
   if (loc && !loc->alive()) {
-    warn << "doRPC on dead node " << l->id () << "\n";
+    warn << my_ID () << ": doRPC (" << prog.name << "." << procno 
+         << ") on dead node " << l->address () << "\n";
     delaycb (0, wrap (&err_cb, cb));
     return -1;
   }
