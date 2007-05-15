@@ -325,7 +325,7 @@ harness_t::tcp_connect_cb (int fd)
   if (fd < 0) 
     fatal << "connect failed\n";
   warnx << "... connected!\n";
-  ptr<axprt_stream> xprt = axprt_stream::alloc (fd);    
+  ptr<axprt_stream> xprt = axprt_stream::alloc (fd, 1024*1025);
   dhash = New dhashclient (xprt);
   delaycb (0, wrap (this, &harness_t::connected));
 }
