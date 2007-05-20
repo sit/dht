@@ -408,14 +408,12 @@ carbonite::handle_missing (ptr<locationcc> from,
   if (db->hasaux ()) {
     chordID aux = (key & 0xFFFFFFFF);
     chordID dbkey = (key >> 32) << 32;
-    db->update (dbkey, rfrom, aux.getui (), missing_local, true);
     if (missing_local) {
       t->insert (dbkey, aux.getui ());
     } else {
       t->remove (dbkey, aux.getui ());
     }
   } else {
-    db->update (key, rfrom, missing_local, true);
     if (missing_local) {
       t->insert (key);
     } else {
@@ -659,16 +657,6 @@ passingtone::handle_missing (ptr<locationcc> from,
     ptr<merkle_tree> t,
     chordID key, bool missing_local)
 {
-  // For completeness, keep adbd up to date.
-  ptr<location> rfrom = New refcounted<location> (from->chordnode ());
-  if (db->hasaux ()) {
-    chordID aux = (key & 0xFFFFFFFF);
-    chordID dbkey = (key >> 32) << 32;
-    db->update (dbkey, rfrom, aux.getui (), missing_local, true);
-  } else {
-    db->update (key, rfrom, missing_local, true);
-  }
-
   // for key on succ/pred:
   //   if key in responsible range and not locally present:
   //     replicate key locally

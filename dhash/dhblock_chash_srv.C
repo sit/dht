@@ -77,8 +77,6 @@ dhblock_chash_srv::store (chordID key, str d, cb_dhstat cb)
     action = "R";
     cb (DHASH_OK);
   }
-  // Force a BSM update just in case it was confused.
-  db->update (key, node->my_location (), true);
   
   bigint h = compute_hash (d.cstr (), d.len ());
   info << "db write: " << node->my_ID () << " " << action
@@ -292,7 +290,6 @@ rjchash::send_frag_cb (dhash_stat err, bool present)
   strbuf x;
   x << "repair: " << bsrv->node->my_ID ();
   if (!err) {
-    bsrv->db->update (key.ID, where, true);
     x << " sent ";
   } else {
     x << " error sending ";

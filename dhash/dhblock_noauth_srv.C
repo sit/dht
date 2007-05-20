@@ -84,7 +84,6 @@ dhblock_noauth_srv::real_store (chordID dbkey,
     // put the key in the merkle tree; kick out the old key
     if (old_data.len ()) {
       u_int32_t hash = mhashdata (old_data);
-      db->update (kdb, node->my_location (), hash, false);
       db->remove (kdb, hash, wrap (this, &dhblock_noauth_srv::after_delete, 
 				   dbkey, dprep, cb));
     } else
@@ -105,7 +104,6 @@ dhblock_noauth_srv::after_delete (chordID key, str data, cb_dhstat cb,
   warn << node->my_ID () << " db write: " 
        << "U " << key << " " << data.len ()  << "\n";
   db_store (key, data, hash, cb); 
-  db->update (key, node->my_location (), hash, true);
 }
 
 
