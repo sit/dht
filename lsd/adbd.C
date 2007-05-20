@@ -171,7 +171,7 @@ dbns::dbns (const str &dbpath, const str &name, bool aux) :
   strbuf fullpath ("%s%s", dbpath.cstr (), name.cstr ());
 
   int r = -1;
-  r = dbfe_initialize_dbenv (&dbe, fullpath, false, 1024);
+  r = dbfe_initialize_dbenv (&dbe, fullpath, false, 30*1024);
   DBNS_ERRCHECK ("dbe->open");
 
   r = dbfe_opendb (dbe, &datadb, "db", DB_CREATE, 0);

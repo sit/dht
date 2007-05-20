@@ -9,7 +9,8 @@ dbfe_generate_config (str path, unsigned int cachesize)
   db_config << "# MIT lsd db configuration\n\n";
 
   db_config << "set_flags DB_AUTO_COMMIT\n";
-  db_config << "set_flags DB_TXN_WRITE_NOSYNC\n";
+//  db_config << "set_flags DB_TXN_WRITE_NOSYNC\n";
+  db_config << "set_flags DB_TXN_NOSYNC\n";
 
   // clean up old log files not available in old versions
 #if ((DB_VERSION_MAJOR >= 4) && (DB_VERSION_MINOR >= 2))
@@ -17,6 +18,9 @@ dbfe_generate_config (str path, unsigned int cachesize)
 #endif
   db_config << "# create " << cachesize << " KB cache\n";
   db_config << "set_cachesize 0 " << cachesize * 1024 << " 1\n";
+
+  db_config << "# Ensure log can handle large I/Os (log buffer size in bytes)\n";
+  db_config << "set_lg_bsize " << 4*1024*1024 << "\n";
   
 #if 0
   /* This should be the default */
