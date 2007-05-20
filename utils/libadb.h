@@ -54,6 +54,10 @@ class adb {
     UPDATE_BATCH_MAX_SIZE = 128
   };
 
+  bool connecting;
+  void connect (ptr<chord_trigger_t> t = NULL);
+  void handle_eof ();
+
   void initspace_cb (ptr<chord_trigger_t> t, adb_status *astat, clnt_stat stat);
   void generic_cb (adb_status *res, cb_adbstat cb, clnt_stat err);
   void fetch_cb (adb_fetchres *res, chordID key, cb_fetch cb, clnt_stat err);

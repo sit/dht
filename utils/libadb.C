@@ -19,23 +19,33 @@ make_chord_node (const adb_vnodeid &n)
 }
 
 adb::adb (str sock_name, str name, bool hasaux, ptr<chord_trigger_t> t) :
+  c (NULL),
   dbsock_ (sock_name),
   name_space (name),
   hasaux_ (hasaux),
-  next_batch (NULL)
+  next_batch (NULL),
+  connecting (false)
 {
-  int fd = unixsocket_connect (sock_name);
+  connect (t);
+}
+
+void
+adb::connect (ptr<chord_trigger_t> t)
+{
+  connecting = true;
+  int fd = unixsocket_connect (dbsock_);
   if (fd < 0) {
     fatal ("adb_connect: Error connecting to %s: %s\n",
-	   sock_name.cstr (), strerror (errno));
+	   dbsock_.cstr (), strerror (errno));
   }
   make_async (fd);
   c = aclnt::alloc (axprt_unix::alloc (fd, 1024*1025),
 		    adb_program_1);
+  c->seteofcb (wrap (this, &adb::handle_eof));
 
   adb_initspacearg arg;
   arg.name = name_space;
-  arg.hasaux = hasaux;
+  arg.hasaux = hasaux_;
 
   adb_status *res = New adb_status ();
 
@@ -51,6 +61,19 @@ adb::initspace_cb (ptr<chord_trigger_t> t, adb_status *astat, clnt_stat stat)
   else if (*astat)
     fatal << "adb_initspace_cb: adbd error for " << name_space << ": " << *astat << "\n";
   delete astat;
+  connecting = false;
+}
+
+void
+adb::handle_eof ()
+{
+  if (connecting)
+    fatal << "Unexpected EOF for " << dbsock_ << " during connection.\n";
+  else
+    warn << "Unexpected EOF for " << dbsock_ << "; reconnecting.\n";
+
+  c = NULL;
+  connect (NULL);
 }
 
 void
