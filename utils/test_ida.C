@@ -114,26 +114,29 @@ main (int argc, char *argv[])
   }
 
   int sz = 32768;
-  while (sz > 512) {
-    warnx << "Testing " << sz << " byte cyclical block\n";
-    ok = test_cyclic (sz);
-    if (!ok)
-      exit (1);
-    sz >>= 1;
-  }
-  
-  u_long seed = time (NULL);
-  srandom (seed);
-  sz = 32767;
-  while (sz > 256) {
-    warnx << "Testing " << sz << " byte random block w/ seed " << seed << "\n";
-    ok = test_random (sz);
-    if (!ok)
-      exit (1);
-    if (sz & 1)
-      sz -= 1;
-    else
+  for (int m = 1; m < 16; m++) {
+    sz = 32768;
+    while (sz > 512) {
+      warnx << "Testing " << sz << " byte cyclical block\n";
+      ok = test_cyclic (sz, m);
+      if (!ok)
+	exit (1);
       sz >>= 1;
+    }
+    
+    u_long seed = time (NULL);
+    srandom (seed);
+    sz = 32767;
+    while (sz > 256) {
+      warnx << "Testing " << sz << " byte random block w/ seed " << seed << "\n";
+      ok = test_random (sz, m);
+      if (!ok)
+	exit (1);
+      if (sz & 1)
+	sz -= 1;
+      else
+	sz >>= 1;
+    }
   }
 
   for (int i = 0; i < 32; i++) {

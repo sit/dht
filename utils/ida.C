@@ -191,6 +191,15 @@ Ida::gen_frag (int m, const str &in)
 {
   assert (m);
   vec<u_long> tmp;
+  if (m == 1) {
+    // Special case handling for replication to reduce CPU usage.
+    tmp.push_back (3);
+    tmp.push_back (in.len ());
+    tmp.push_back (m);
+    strbuf o;
+    o << pack (tmp) << in;
+    return o;
+  } 
   gen_frag_ (m, in, tmp);
   // This copy is cheap; only refcounting involved.
   return pack (tmp);
@@ -275,6 +284,15 @@ Ida::reconstruct (const vec<str> &f, strbuf &out)
   u_long len = unpackone (frags[0], inp);
   u_long rawlen = unpackone (frags[0], inp);
   u_long m = unpackone (frags[0], inp);
+  if (m == 1 && len == 3) {
+    if (frags[0].len () - inp != rawlen) {
+      idatrace << "bad special case: " << frags[0].len () << " " << len << "\n";
+      return false;
+    }
+    // Special case handling for replication.
+    out << substr (frags[0], inp);
+    return true;
+  }
   if (len < m + 4) {
     idatrace
       << "fragment 0 too short; coded length " << frags[0].len () << "\n";
