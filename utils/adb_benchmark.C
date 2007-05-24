@@ -9,8 +9,12 @@
 str adbsock;
 ptr<adb> db (NULL);
 vec<ptr<location> > population;
+
 size_t count (1024);
 size_t remaining (count);
+
+size_t blocksize (8192);
+
 bool batch (false);
 
 static const int max_out (128);
@@ -88,15 +92,16 @@ void
 bench_store (void)
 {
   u_int64_t start = getusec ();
-  char buf[1024];
+  char *buf = New char[blocksize];
   aout << "Sending " << count << " requests.\n";
   remaining = count;
   for (size_t i = 0; i < count; i++, ops_out++) {
-    chordID k = make_block (buf, sizeof (buf) - 1);
-    db->store (k, str (buf), wrap (&bench_store_cb, start));
+    chordID k = make_block (buf, blocksize);
+    db->store (k, str (buf, blocksize), wrap (&bench_store_cb, start));
     while (ops_out > max_out) 
       acheck ();
   }
+  delete[] buf;
 }
 
 void
@@ -129,8 +134,32 @@ bench_getkeys (void)
 void
 usage ()
 {
-  warnx << "Usage: " << progname << " dbsock update|store|getkeys [count] [batch]\n";
+  warnx << "Usage: " << progname << " dbsock update|store|getkeys [size=N] [count=N] [batch=0|1]\n";
   exit (1);
+}
+
+bool
+parse_argv (const vec<str> &argv)
+{
+  for (size_t i = 0; i < argv.size (); i++) {
+    char *eoff = strchr (argv[i].cstr (), '=');
+    if (!eoff)
+      return false;
+    str name = substr (argv[i], 0, eoff - argv[i].cstr ());
+    str val  = str (eoff + 1);
+    if (name == "count") {
+      count = atoi (val.cstr ());
+    }
+    else if (name == "size") {
+      blocksize = atoi (val.cstr ());
+      if (blocksize < 0)
+	return false;
+    } else if (name == "batch") {
+      int x = atoi (val.cstr ());
+      batch = (x > 0);
+    }
+  }
+  return true;
 }
 
 int main (int argc, char *argv[])
@@ -142,6 +171,14 @@ int main (int argc, char *argv[])
 
   adbsock = argv[1];
   str mode (argv[2]);
+
+  vec<str> sargv;
+  for (int i = 3; i < argc; i++)
+    sargv.push_back (str (argv[i]));
+
+  if (!parse_argv (sargv))
+    usage ();
+
   if (mode == "update") {
     delaycb (1, wrap (&bench_update));
   } else if (mode == "store") {
@@ -151,11 +188,6 @@ int main (int argc, char *argv[])
   } else {
     usage ();
   }
-
-  if (argc >= 4) 
-    count = atoi (argv[3]);
-  if (argc >= 5)
-    batch = atoi (argv[4]);
 
   db = New refcounted<adb> (adbsock, "test", false);
 
