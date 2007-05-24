@@ -19,7 +19,7 @@ maintd_LDADD = ../dhash/libdhash.a \
 	../svc/libsvc.la  \
 	$(DBLIB) ${LDADD} 
 
-TAMEOUT = maint_sync.C maint_policy.C
+TAMEOUT = maint_sync.C maint_global.C maint_policy.C
 
 CLEANFILES = core *.core *~ *.rpo $(TAMEOUT)
 MAINTAINERCLEANFILES = Makefile.in
