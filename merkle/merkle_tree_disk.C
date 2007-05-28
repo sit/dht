@@ -243,7 +243,7 @@ merkle_node_disk::set_child (merkle_node_disk *n, u_int i)
 
   (*children)[i] = ((n->get_block_no() << 1) | (n->isleaf()?0x00000001:0));
   (*hashes)[i].hash = n->hash;
-  (*hashes)[i].id = tobigint(n->hash);
+  (*hashes)[i].id = static_cast<bigint> (n->hash);
 }
 
 void
@@ -547,7 +547,7 @@ merkle_tree_disk::remove (u_int depth, merkle_hash& key,
   MERKLE_DISK_TYPE old_type;
 
   if (n->isleaf ()) {
-    chordID k = tobigint(key);
+    chordID k = static_cast<bigint> (key);
     merkle_key *mkey = nd->keylist[k];
     assert(mkey);
     nd->keylist.remove(mkey);
@@ -824,7 +824,7 @@ get_keyrange_recurs (merkle_hash min, chordID max, u_int n,
   bool over_max = false;
 
   if (node->isleaf ()) {
-    chordID min_id = tobigint (min);
+    chordID min_id = static_cast<bigint> (min);
     merkle_key *k = node->keylist.first ();
     merkle_key *last_key = NULL;
 
@@ -869,7 +869,7 @@ get_keyrange_recurs (merkle_hash min, chordID max, u_int n,
 
     // special case for when we hit the right edge of the ring
     if (depth == 0 && !over_max && keys->size () < n && 
-	betweenrightincl (tobigint (min), max, 0))
+	betweenrightincl (static_cast<bigint> (min), max, 0))
     {
       over_max = get_keyrange_recurs (0, max, n, depth, keys, node, true);
     }

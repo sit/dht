@@ -154,3 +154,20 @@ merkle_hash::cmp (const merkle_hash &b) const
       return -1;
   return 0;
 }
+
+merkle_hash::operator bigint () const
+{
+#if 0
+  str raw = str ((char *)h.bytes, h.size);
+  bigint ret;
+  ret.setraw (raw);
+  return ret;
+#else
+  bigint ret = 0;
+  for (int i = size - 1; i >= 0; i--) {
+    ret <<= 8;
+    ret += bytes[i];
+  }
+  return ret;
+#endif
+}

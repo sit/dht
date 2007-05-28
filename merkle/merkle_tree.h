@@ -29,7 +29,7 @@ struct merkle_key {
   itree_entry<merkle_key> ik;
 
   merkle_key (chordID id) : id (id) {};
-  merkle_key (merkle_hash id) : id (tobigint(id)) {};
+  merkle_key (merkle_hash id) : id (static_cast<bigint> (id)) {};
 };
 
 class merkle_tree {

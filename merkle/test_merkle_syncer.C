@@ -253,7 +253,7 @@ removesome (ptr<merkle_tree> tr, int count, bool rand = false)
     merkle_hash key (0);
     if (rand)
       key.randomize ();
-    vec<chordID> keys = tr->get_keyrange (tobigint (key), idmax, count);
+    vec<chordID> keys = tr->get_keyrange (static_cast<bigint> (key), idmax, count);
     while (keys.size () && (nremoved < count)) {
       nremoved++;
       tr->remove (keys.back ());

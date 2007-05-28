@@ -197,7 +197,7 @@ void
 merkle_tree::remove (u_int depth, merkle_hash& key, merkle_node *n)
 {
   if (n->isleaf ()) {
-    chordID k = tobigint (key);
+    chordID k = static_cast<bigint> (key);
     merkle_key *mkey = keylist[k];
     assert (mkey);
     keylist.remove (mkey);
@@ -240,7 +240,7 @@ int
 merkle_tree::insert (merkle_hash &key)
 {
 
-  if (keylist[tobigint (key)])
+  if (keylist[static_cast<bigint> (key)])
     fatal << "merkle_tree::insert: key already exists " << key << "\n";
 
   return insert (0, key, get_root());
@@ -274,7 +274,7 @@ merkle_tree::remove (merkle_hash &key)
 {
   // assert block must exist..
   str foo;
-  if (!keylist[tobigint (key)])
+  if (!keylist[static_cast<bigint> (key)])
     fatal << (u_int) this << " merkle_tree::remove: key does not exist " << key << "\n";
 
   remove (0, key, get_root());
@@ -354,7 +354,7 @@ vec<merkle_hash>
 merkle_tree::database_get_keys (u_int depth, const merkle_hash &prefix)
 {
   vec<merkle_hash> ret;
-  merkle_key *cur = closestsucc (keylist, tobigint (prefix));
+  merkle_key *cur = closestsucc (keylist, static_cast<bigint> (prefix));
   
   while (cur) {
     merkle_hash key (cur->id);
@@ -372,7 +372,7 @@ merkle_tree::database_get_IDs (u_int depth, const merkle_hash &prefix)
   vec<merkle_hash> mhash = database_get_keys (depth, prefix);
   vec<chordID> ret;
   for (unsigned int i = 0; i < mhash.size (); i++)
-    ret.push_back (tobigint(mhash[i]));
+    ret.push_back (static_cast<bigint> (mhash[i]));
   return ret;
 }
 

@@ -388,8 +388,8 @@ merkle_syncer::next (void)
       p.second += 1;
       trace << "CHECKING: " << i << " of " << rnode->prefix << " at depth " << rnode->depth << "\n";
 
-      bigint remote = tobigint (rnode->child_hash[i]);
-      bigint local = tobigint (lnode->child_hash (i));
+      bigint remote = static_cast<bigint> (rnode->child_hash[i]);
+      bigint local = static_cast<bigint> (lnode->child_hash (i));
 
       u_int depth = rnode->depth + 1;
 
@@ -397,7 +397,7 @@ merkle_syncer::next (void)
       // the node is responsible for.
       merkle_hash prefix = rnode->prefix;
       prefix.write_slot (rnode->depth, i);
-      bigint slot_rngmin = tobigint (prefix);
+      bigint slot_rngmin = static_cast<bigint> (prefix);
       bigint slot_width = bigint (1) << (160 - 6*depth);
       bigint slot_rngmax = slot_rngmin + slot_width - 1;
 
@@ -457,11 +457,11 @@ merkle_syncer::compare_nodes (bigint rngmin, bigint rngmax,
   if (rnode->isleaf) {
     vec<chordID> rkeys;
     for (u_int i = 0; i < rnode->child_hash.size (); i++)
-	rkeys.push_back (tobigint (rnode->child_hash[i]));
+	rkeys.push_back (static_cast<bigint> (rnode->child_hash[i]));
 
     compare_keylists (lkeys, rkeys, rngmin, rngmax, missingfnc);
   } else if (lnode->isleaf () && !rnode->isleaf) {
-    bigint tmpmin = tobigint (rnode->prefix);
+    bigint tmpmin = static_cast<bigint> (rnode->prefix);
     bigint node_width = bigint (1) << (160 - 6*rnode->depth);
     bigint tmpmax = tmpmin + node_width - 1;
 

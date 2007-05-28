@@ -60,7 +60,7 @@ insert_blocks (merkle_tree *mtree, int upto, bool random,
       key = i;
 
     if (keys)
-      keys->insert (tobigint (key));
+      keys->insert (static_cast<bigint> (key));
     mtree->insert (key);
   }
 }

@@ -32,6 +32,8 @@ public:
   void clear_suffix (int slotno);
   int cmp (const merkle_hash &b) const;
   hash_t to_hash () const;
+
+  operator bigint () const;
 };
 
 inline const strbuf &

@@ -21,24 +21,6 @@ todbrec (const merkle_hash &h)
 }
 #endif
 
-static inline bigint
-tobigint (const merkle_hash &h)
-{
-#if 0
-  str raw = str ((char *)h.bytes, h.size);
-  bigint ret;
-  ret.setraw (raw);
-  return ret;
-#else
-  bigint ret = 0;
-  for (int i = h.size - 1; i >= 0; i--) {
-    ret <<= 8;
-    ret += h.bytes[i];
-  }
-  return ret;
-#endif
-}
-
 #if 0
 static inline ref<dbrec>
 id2dbrec(chordID id)
