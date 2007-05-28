@@ -7,6 +7,13 @@
 #include "merkle_sync_prot.h"
 #include <bigint.h>
 
+template <class T1, class T2>
+struct pair {
+  T1 first;
+  T2 second;
+  pair (T1 f, T2 s) : first (f), second (s) {}
+};
+
 // see comment in merkle_syncer::doRPC for this work around.
 struct RPC_delay_args;
 typedef callback<void, RPC_delay_args *>::ref rpcfnc_t;

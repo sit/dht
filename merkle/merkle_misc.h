@@ -4,13 +4,6 @@
 #include "merkle_hash.h"
 #include "merkle_sync_prot.h"
 
-template <class T1, class T2>
-struct pair {
-  T1 first;
-  T2 second;
-  pair (T1 f, T2 s) : first (f), second (s) {}
-};
-
 #if 0
 static inline ref<dbrec>
 todbrec (const merkle_hash &h)
