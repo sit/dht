@@ -2,7 +2,6 @@
 #define _MERKLE_NODE_H_
 
 #include "merkle_hash.h"
-#include "merkle_misc.h"
 
 class merkle_node {
 private:
