@@ -11,23 +11,6 @@ struct pair {
   pair (T1 f, T2 s) : first (f), second (s) {}
 };
 
-
-static inline void
-reverse (u_char *buf, u_int size)
-{
-  assert (size == sha1::hashsize);
-
-  for (u_int i = 0; i < (size / 2); i++) {
-    char tmp = buf[i];
-    buf[i] = buf[size - 1 - i];
-    buf[size - 1 - i] = tmp;
-  }
-}
-
-merkle_hash to_merkle_hash (str a);
-merkle_hash to_merkle_hash (bigint id);
-
-
 #if 0
 static inline ref<dbrec>
 todbrec (const merkle_hash &h)

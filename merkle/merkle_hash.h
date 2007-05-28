@@ -22,6 +22,9 @@ public:
   // operator T *() const { return base; }
 
   merkle_hash (unsigned int i = 0);
+  merkle_hash (const str &a);
+  merkle_hash (const bigint &id);
+
   void randomize ();
   u_int read_slot (u_int slotno) const;
   void write_slot (u_int slotno, u_int val);

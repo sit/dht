@@ -81,7 +81,7 @@ int main (int argc, char **argv)
 
   // lookups
 
-  merkle_node_disk *n = (merkle_node_disk *) tree->lookup (to_merkle_hash (c));
+  merkle_node_disk *n = (merkle_node_disk *) tree->lookup (c);
 
   warn << "found node " << n->count << ": \n";
 

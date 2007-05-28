@@ -1,5 +1,17 @@
 #include "merkle_hash.h"
 
+static inline void
+reverse (u_char *buf, u_int size)
+{
+  assert (size == sha1::hashsize);
+
+  for (u_int i = 0; i < (size / 2); i++) {
+    char tmp = buf[i];
+    buf[i] = buf[size - 1 - i];
+    buf[size - 1 - i] = tmp;
+  }
+}
+
 bool
 func_xdr_merkle_hash (register XDR *xdr, merkle_hash *obj)
 {
@@ -61,6 +73,22 @@ merkle_hash::merkle_hash (u_int i)
   bytes[1] = (i & 0x0000ff00) >>  8;
   bytes[2] = (i & 0x00ff0000) >> 16;
   bytes[3] = (i & 0xff000000) >> 24;
+}
+
+merkle_hash::merkle_hash (const str &a)
+{
+  assert (a.len () == size);
+  bcopy (a.cstr (), bytes, size);
+  reverse (bytes, size);
+}
+
+merkle_hash::merkle_hash (const bigint &id)
+{
+  char buf[size];
+  bzero (buf, size);
+  mpz_get_rawmag_be (buf, size, &id);
+  bcopy (buf, bytes, size);
+  reverse (bytes, size);
 }
 
 void

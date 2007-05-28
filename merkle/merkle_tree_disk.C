@@ -118,7 +118,7 @@ merkle_node_disk::merkle_node_disk (FILE *internal, FILE *leaf,
     for (uint i = 0; i < 64; i++) {
       mpz_set_rawmag_be (&((*hashes)[i].id), internal.hashes[i].key, 
 			 sizeof(internal.hashes[i].key));
-      (*hashes)[i].hash = to_merkle_hash ((*hashes)[i].id);
+      (*hashes)[i].hash = merkle_hash ((*hashes)[i].id);
       (*children)[i] = ntohl (internal.child_pointers[i]);
     }
   }
@@ -153,7 +153,7 @@ void merkle_node_disk::rehash ()
     assert (count > 0 && count <= 64);
     merkle_key *k = keylist.first();
     while (k != NULL) {
-      merkle_hash h = to_merkle_hash(k->id);
+      merkle_hash h (k->id);
       sc.update (h.bytes, h.size);
       k = keylist.next(k);
     }
@@ -619,7 +619,7 @@ merkle_tree_disk::leaf2internal (uint depth, merkle_node_disk *n)
   array< vec<chordID>, 64> keys;
   uint added = 0;
   while (k != NULL) {
-    merkle_hash h = to_merkle_hash(k->id);
+    merkle_hash h (k->id);
     u_int32_t branch = h.read_slot (depth);
     //warn << "picked branch " << branch << " for key " << k->id << ", hash " 
     // << h << "\n";
@@ -772,7 +772,7 @@ get_all_keys (u_int depth, const merkle_hash &prefix, merkle_node_disk *n)
   if (n->isleaf ()) {
     merkle_key *k = n->keylist.first ();
     while (k != NULL) {
-      merkle_hash key = to_merkle_hash (k->id);
+      merkle_hash key (k->id);
       if (prefix_match(depth, key, prefix)) {
 	keys.push_back (key);
       }
@@ -885,7 +885,7 @@ merkle_tree_disk::get_keyrange (chordID min, chordID max, u_int n)
 
   merkle_node *root = get_root ();
   if(root->count > 0) {
-    get_keyrange_recurs (to_merkle_hash(min), max, n, 0, &keys, 
+    get_keyrange_recurs (min, max, n, 0, &keys, 
 			 (merkle_node_disk *) root, false);
   }
   delete root;
@@ -897,7 +897,7 @@ bool
 merkle_tree_disk::key_exists (chordID key)
 {
   merkle_node_disk *n = 
-    (merkle_node_disk *) merkle_tree::lookup (to_merkle_hash (key));
+    (merkle_node_disk *) merkle_tree::lookup (key);
   merkle_key *mkey = n->keylist[key];
   lookup_release (n);
 

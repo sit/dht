@@ -249,7 +249,7 @@ merkle_tree::insert (merkle_hash &key)
 int
 merkle_tree::insert (const chordID &id)
 {
-  merkle_hash mkey = to_merkle_hash (id);
+  merkle_hash mkey (id);
   return insert (mkey);
 }
 
@@ -265,7 +265,7 @@ merkle_tree::insert (const chordID &id, const u_int32_t aux)
   key <<= 32;
   assert (key > 0);
   key |= aux;
-  merkle_hash mkey = to_merkle_hash (key);
+  merkle_hash mkey (key);
   return insert (mkey);
 }
 
@@ -283,7 +283,7 @@ merkle_tree::remove (merkle_hash &key)
 void
 merkle_tree::remove (const chordID &id)
 {
-  merkle_hash mkey = to_merkle_hash (id);
+  merkle_hash mkey (id);
   remove (mkey);
 }
 
@@ -295,7 +295,7 @@ merkle_tree::remove (const chordID &id, const u_int32_t aux)
   key <<= 32;
   assert (key > 0);
   key |= aux;
-  merkle_hash mkey = to_merkle_hash (key);
+  merkle_hash mkey (key);
   remove (mkey);
 }
 
@@ -357,7 +357,7 @@ merkle_tree::database_get_keys (u_int depth, const merkle_hash &prefix)
   merkle_key *cur = closestsucc (keylist, tobigint (prefix));
   
   while (cur) {
-    merkle_hash key = to_merkle_hash (cur->id);
+    merkle_hash key (cur->id);
     if (!prefix_match (depth, key, prefix))
       break;
     ret.push_back (key);

@@ -126,7 +126,7 @@ test_reads (merkle_tree *mtree, const keys_t &keys)
     uint j = i + random() % (nkeys-i);
     uint key = order[j]; order[j] = order[i]; order[i] = key;
     assert (mtree->key_exists (intree[key]));
-    merkle_node *n = mtree->lookup (to_merkle_hash (intree[key]));
+    merkle_node *n = mtree->lookup (intree[key]);
     assert (n);
     assert (n->isleaf ());
   }
@@ -140,7 +140,7 @@ test_reads (merkle_tree *mtree, const keys_t &keys)
       continue;
     todo--;
     assert (!mtree->key_exists (c));
-    merkle_node *n = mtree->lookup (to_merkle_hash (c));
+    merkle_node *n = mtree->lookup (c);
     assert (n);
   }
   warn << "OK\n";

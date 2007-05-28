@@ -309,13 +309,13 @@ runsync (chordID rngmin, chordID rngmax, bool perturb = false)
 
     while (keys_for_server.size ()) {
       chordID k = keys_for_server.pop_front ();
-      merkle_hash key = to_merkle_hash (k);
+      merkle_hash key (k);
       SERVER.tree->insert (key);
       nkeyspushed++;
     }
     while (keys_for_syncer.size ()) {
       chordID k = keys_for_syncer.pop_front ();
-      merkle_hash key = to_merkle_hash (k);
+      merkle_hash key (k);
       SYNCER.tree->insert (key);
       nkeyspulled++;
     }
