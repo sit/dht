@@ -11,6 +11,12 @@
 #define trace modlogger ("merkle", modlogger::TRACE)
 
 // {{{ General utility functions
+inline const strbuf &
+strbuf_cat (const strbuf &sb, merkle_stat status)
+{
+  return rpc_print (sb, status, 0, NULL, NULL);
+}
+
 void
 format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
 		merkle_node *node, merkle_rpc_node *rpcnode)
@@ -177,7 +183,7 @@ merkle_getkeyrange::getkeys_cb (ref<getkeys_arg> arg, ref<getkeys_res> res,
     finish ();
     return;
   } else if (res->status != MERKLE_OK) {
-    warn << "GETKEYS: protocol error " << err2str (res->status) << "\n";
+    warn << "GETKEYS: protocol error " << res->status << "\n";
     finish ();
     return;
   }
@@ -331,7 +337,7 @@ merkle_syncer::sendnode_cb (ptr<bool> deleted,
     error (strbuf () << "SENDNODE: rpc error " << err);
     return;
   } else if (res->status != MERKLE_OK) {
-    warn << "SENDNODE: protocol error " << err2str (res->status) << "\n";
+    warn << "SENDNODE: protocol error " << res->status << "\n";
   } else {
     merkle_rpc_node *rnode = &res->resok->node;
     merkle_node *lnode = ltree->lookup_exact (rnode->depth,

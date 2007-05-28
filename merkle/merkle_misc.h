@@ -4,11 +4,6 @@
 #include "merkle_hash.h"
 #include "merkle_sync_prot.h"
 
-static inline str err2str (merkle_stat status)
-{
-  return rpc_print (strbuf (), status, 0, NULL, NULL);
-}
-
 template <class T1, class T2>
 struct pair {
   T1 first;
