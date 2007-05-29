@@ -1,6 +1,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include <chord_types.h>
+
 #include <qhash.h>
 #include "merkle.h"
 #include "merkle_tree_disk.h"
@@ -289,11 +291,11 @@ main (int argc, char *argv[])
   if (argc == 1) {
     int sz[] = { 1, 64, 256, 64*64+1, 10000 };
     for (uint i = 0; i < sizeof (sz) / sizeof (sz[0]); i++) {
-      merkle_tree *t = New merkle_tree ();
+      merkle_tree *t = New merkle_tree_mem ();
       test ("In-memory", t, sz[i], false);
       delete t; t = NULL;
 
-      t = New merkle_tree ();
+      t = New merkle_tree_mem ();
       test ("In-memory", t, sz[i], true);
       delete t; t = NULL;
     }

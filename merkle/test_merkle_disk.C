@@ -1,5 +1,5 @@
-#include "merkle_tree_disk.h"
 #include <id_utils.h>
+#include "merkle_tree_disk.h"
 #include <rxx.h>
 
 static char *indexpath = "/tmp/index.mrk";

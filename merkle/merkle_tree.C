@@ -1,45 +1,16 @@
 #include <chord_types.h>
-#include <id_utils.h>
 #include "merkle_tree.h"
-#include "dhash_common.h"
 
-static merkle_key *
-closestsucc (itree<chordID, merkle_key, &merkle_key::id, &merkle_key::ik> &keylist, chordID k)
+merkle_node::~merkle_node ()
 {
-  merkle_key *p = NULL;
-  merkle_key *n = keylist.root ();
-  // warnx << "closestsucc k = " << k << "\n";
-  if (!n)
-    return NULL;
-  while (n) {
-    p = n;
-    // warnx << "closestsucc n->id = " << n->id << "\n";
-    if (k < n->id)
-      n = keylist.left (n);
-    else if (k > n->id)
-      n = keylist.right (n);
-    else
-      return n;
-  }
-  if (k < p->id)
-    return p;
-  else {
-    // Wrap around at the end.
-    n = keylist.next (p);
-    return n ? n : keylist.first ();
-  }
 }
 
 merkle_tree::merkle_tree () :
   do_rehash (true)
 {
-  root = New merkle_node();
-  // warn << "root: " << root->isleaf() << "\n";
 }
-
 merkle_tree::~merkle_tree ()
 {
-  keylist.deleteall_correct ();
 }
 
 void
@@ -148,104 +119,6 @@ merkle_tree::rehash (u_int depth, const merkle_hash &key, merkle_node *n)
   ///warn << "final: " << n->hash << "\n";
 }
 
-
-void
-merkle_tree::count_blocks (u_int depth, const merkle_hash &key,
-			   array<u_int64_t, 64> &nblocks)
-{
-  for (int i = 0; i < 64; i++)
-    nblocks[i] = 0;
-  
-  // XXX duplicates code with rehash ()
-  merkle_hash prefix = key;
-  prefix.clear_suffix (depth);
-  
-  vec<merkle_hash> keys = database_get_keys (depth, prefix);
-  for (u_int i = 0; i < keys.size (); i++) {
-    u_int32_t branch = keys[i].read_slot (depth);
-    nblocks[branch] += 1;
-  }
-
-}
-
-
-void
-merkle_tree::leaf2internal (u_int depth, const merkle_hash &key, 
-			    merkle_node *n) 
-{
-  assert (n->isleaf ());
-  array<u_int64_t, 64> nblocks;
-  count_blocks (depth, key, nblocks);
-  n->leaf2internal ();
-  
-  merkle_hash prefix = key;
-  prefix.clear_suffix (depth);
-  
-  u_int xmax = (depth == merkle_hash::NUM_SLOTS) ? 16 : 64;
-  for (u_int i = 0; i < xmax; i++) {
-    // warn << "leaf2internal [" << i << "] = " << nblocks[i] << "\n";
-    
-    merkle_node *child = n->child (i);
-    child->initialize (nblocks[i]);
-    prefix.write_slot (depth, i);
-    rehash (depth+1, prefix, child);
-  }
-}
-
-
-void
-merkle_tree::remove (u_int depth, merkle_hash& key, merkle_node *n)
-{
-  if (n->isleaf ()) {
-    chordID k = static_cast<bigint> (key);
-    merkle_key *mkey = keylist[k];
-    assert (mkey);
-    keylist.remove (mkey);
-  } else {
-    u_int32_t branch = key.read_slot (depth);
-    remove (depth+1, key, n->child (branch));
-  }
-  
-  assert (n->count != 0);
-  n->count -= 1;
-  if (!n->isleaf () && n->count <= 64)
-    n->internal2leaf ();
-  rehash (depth, key, n);
-}
-
-
-int
-merkle_tree::insert (u_int depth, merkle_hash& key, merkle_node *n)
-{
-  int ret = 0;
-    
-  if (n->isleaf () && n->leaf_is_full ())
-    leaf2internal (depth, key, n);
-  
-  if (n->isleaf ()) {
-    merkle_key *k = New merkle_key (key);
-    assert (!keylist[k->id]);
-    keylist.insert (k);
-  } else {
-    u_int32_t branch = key.read_slot (depth);
-    ret = insert (depth+1, key, n->child (branch));
-  }
-  
-  n->count += 1;
-  rehash (depth, key, n);
-  return ret;
-}
-
-int
-merkle_tree::insert (merkle_hash &key)
-{
-
-  if (keylist[static_cast<bigint> (key)])
-    fatal << "merkle_tree::insert: key already exists " << key << "\n";
-
-  return insert (0, key, get_root());
-}
-
 int
 merkle_tree::insert (const chordID &id)
 {
@@ -270,17 +143,6 @@ merkle_tree::insert (const chordID &id, const u_int32_t aux)
 }
 
 void
-merkle_tree::remove (merkle_hash &key)
-{
-  // assert block must exist..
-  str foo;
-  if (!keylist[static_cast<bigint> (key)])
-    fatal << (u_int) this << " merkle_tree::remove: key does not exist " << key << "\n";
-
-  remove (0, key, get_root());
-}
-
-void
 merkle_tree::remove (const chordID &id)
 {
   merkle_hash mkey (id);
@@ -299,7 +161,6 @@ merkle_tree::remove (const chordID &id, const u_int32_t aux)
   remove (mkey);
 }
 
-
 merkle_node *
 merkle_tree::lookup (u_int *depth, u_int max_depth, 
 		     const merkle_hash &key, merkle_node *n)
@@ -314,34 +175,6 @@ merkle_tree::lookup (u_int *depth, u_int max_depth,
   return lookup (depth, max_depth, key, n->child (branch));
 }
 
-// return the node a given depth matching key
-// returns NULL if no such node exists
-merkle_node *
-merkle_tree::lookup_exact (u_int depth, const merkle_hash &key)
-{
-  u_int realdepth = 0;
-  merkle_node *n = lookup (&realdepth, depth, key, get_root());
-  assert (realdepth <= depth);
-  return  (realdepth != depth) ? NULL : n;
-}
-
-// Might return parent.
-// Never returns NULL.
-// Never returns a node deeper than depth.
-merkle_node *
-merkle_tree::lookup (u_int depth, const merkle_hash &key)
-{
-  u_int depth_ignore = 0;
-  return lookup (&depth_ignore, depth, key, get_root());
-}
-
-merkle_node *
-merkle_tree::lookup (u_int *depth, u_int max_depth, const merkle_hash &key)
-{
-  *depth = 0;
-  return lookup (depth, max_depth, key, get_root());
-}
-
 // return the deepest node whose prefix matches key
 // Never returns NULL
 merkle_node *
@@ -350,20 +183,9 @@ merkle_tree::lookup (const merkle_hash &key)
   return lookup (merkle_hash::NUM_SLOTS, key);
 }
 
-vec<merkle_hash>
-merkle_tree::database_get_keys (u_int depth, const merkle_hash &prefix)
+void
+merkle_tree::lookup_release (merkle_node *n)
 {
-  vec<merkle_hash> ret;
-  merkle_key *cur = closestsucc (keylist, static_cast<bigint> (prefix));
-  
-  while (cur) {
-    merkle_hash key (cur->id);
-    if (!prefix_match (depth, key, prefix))
-      break;
-    ret.push_back (key);
-    cur = keylist.next (cur);
-  } 
-  return ret;
 }
 
 vec<chordID>
@@ -376,20 +198,6 @@ merkle_tree::database_get_IDs (u_int depth, const merkle_hash &prefix)
   return ret;
 }
 
-vec<chordID> 
-merkle_tree::get_keyrange (chordID min, chordID max, u_int n)
-{
-  vec<chordID> keys;
-  merkle_key *k = closestsucc (keylist, min);
-  for (u_int i = 0; k && i < n; i++) {
-    if (!betweenbothincl (min, max, k->id))
-      break;
-    keys.push_back (k->id);
-    k = keylist.next (k);
-  }
-  
-  return keys;
-}
 
 bool
 merkle_tree::key_exists (chordID id, uint aux)
@@ -491,4 +299,10 @@ merkle_tree::compute_stats ()
 					stats.num_empty_leaves),
 	    get_root()->count / (float)stats.num_internals);
   warn << buf;
+}
+
+void
+merkle_tree::sync (bool reopen)
+{
+  return;
 }

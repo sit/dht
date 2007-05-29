@@ -1,6 +1,5 @@
 #include <chord.h>
 #include "merkle_hash.h"
-#include "merkle_node.h"
 #include "merkle_tree.h"
 #include "merkle_syncer.h"
 #include "merkle_sync_prot.h"

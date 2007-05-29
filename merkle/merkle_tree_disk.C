@@ -289,6 +289,36 @@ void merkle_node_disk::leaf2internal () {
   assert (!isleaf ());
 }
 
+static void
+indent (u_int depth)
+{
+  while (depth-- > 0)
+    warnx << " ";
+}
+
+void
+merkle_node_disk::dump (u_int depth)
+{
+  warnx << "[NODE "
+	<< strbuf ("0x%x", (u_int)this)
+	<< " cnt:" << count
+	<< " hash:" << hash
+	<< ">\n";
+  err_flush ();
+
+  merkle_node *n = dynamic_cast<merkle_node *> (this);
+  if (!n->isleaf ()) {
+    for (int i = 0; i < 64; i++) {
+      merkle_node *child = n->child (i);
+      if (child->count) {
+	indent (depth + 1);
+	warnx << "[" << i << "]: ";
+	child->dump (depth + 1);
+      }
+    }
+  }
+}
+
 //////////////// merkle_tree_disk /////////////////
 
 static inline str

@@ -1,11 +1,8 @@
 #ifndef _MERKLE_TREE_H_
 #define _MERKLE_TREE_H_
 
-#include <async.h>
 #include <itree.h>
-#include <sha1.h>
 #include "merkle_hash.h"
-#include "merkle_node.h"
 
 class location;
 class merkle_tree;
@@ -23,6 +20,28 @@ struct merkle_tree_stats {
   u_int32_t num_internals;
 };
 
+class merkle_node {
+public:
+  u_int32_t count;
+  merkle_hash hash;
+
+  virtual merkle_hash child_hash (u_int i) = 0;
+  virtual merkle_node *child (u_int i) = 0;
+  virtual bool isleaf () const = 0;
+  virtual bool leaf_is_full () const {
+    // XXX what about at the bottom level (count == 16)!!!!
+    assert (isleaf ());
+    return (count == 64);
+  }
+  virtual void internal2leaf () = 0;
+  virtual void leaf2internal () = 0;
+  virtual void dump (u_int depth) = 0;
+
+  merkle_node () : count (0), hash (0) {}
+  virtual ~merkle_node ();
+};
+
+class merkle_node_mem;
 
 struct merkle_key {
   chordID id;
@@ -34,21 +53,18 @@ struct merkle_key {
 
 class merkle_tree {
 protected:
-  merkle_node *root;
   bool do_rehash;
 
   void _hash_tree (u_int depth, const merkle_hash &key, merkle_node *n, bool check);
   void rehash (u_int depth, const merkle_hash &key, merkle_node *n);
-  void count_blocks (u_int depth, const merkle_hash &key,
-		     array<u_int64_t, 64> &nblocks);
-  void leaf2internal (u_int depth, const merkle_hash &key, merkle_node *n);
-
-  itree<chordID, merkle_key, &merkle_key::id, &merkle_key::ik> keylist;
-  virtual void remove (u_int depth, merkle_hash &key, merkle_node *n);
-  virtual int insert (u_int depth, merkle_hash &key, merkle_node *n);
-  merkle_node *lookup (u_int *depth, u_int max_depth, 
-		       const merkle_hash &key, merkle_node *n);
   void stats_helper (uint depth, merkle_node *n);
+
+  merkle_node *lookup (u_int *depth, u_int max_depth,
+		       const merkle_hash &key, merkle_node *n);
+
+  // Internal functions that sub-classes must implement.
+  virtual void remove (u_int depth, merkle_hash &key, merkle_node *n) = 0;
+  virtual int insert (u_int depth, merkle_hash &key, merkle_node *n) = 0;
 
 public:
   enum { max_depth = merkle_hash::NUM_SLOTS }; // XXX off by one? or two?
@@ -56,41 +72,80 @@ public:
 
   merkle_tree ();
   virtual ~merkle_tree ();
-  virtual void remove (merkle_hash &key);
-  void remove (const chordID &id);
-  void remove (const chordID &id, const u_int32_t aux);
-  virtual int insert (merkle_hash &key);
+
+  // Sub-classes must implement the following methods
+  virtual merkle_node *get_root () = 0;
+  virtual int insert (merkle_hash &key) = 0;
+  virtual void remove (merkle_hash &key) = 0;
+  virtual bool key_exists (chordID key) = 0;
+  virtual vec<merkle_hash> database_get_keys (u_int depth,
+      const merkle_hash &prefix) = 0;
+  virtual vec<chordID> get_keyrange (chordID min, chordID max, u_int n) = 0;
+
+  virtual merkle_node *lookup_exact (u_int depth, const merkle_hash &key) = 0;
+  virtual merkle_node *lookup (u_int depth, const merkle_hash &key) = 0;
+  virtual merkle_node *lookup (u_int *depth, u_int max_depth,
+			       const merkle_hash &key) = 0;
+
+  // Sub-classes may override the following methods
+  virtual void lookup_release (merkle_node *n);
+  virtual void sync (bool reopen = true);
+
+  virtual vec<chordID> database_get_IDs (u_int depth, const merkle_hash &prefix);
+
+  // Sub-classes should not override the following methods
   int insert (const chordID &id);
   int insert (const chordID &id, const u_int32_t aux);
-  virtual merkle_node *lookup_exact (u_int depth, const merkle_hash &key);
-  virtual merkle_node *lookup (u_int depth, const merkle_hash &key);
-  virtual merkle_node *lookup (u_int *depth, u_int max_depth, 
-			       const merkle_hash &key);
+  void remove (const chordID &id);
+  void remove (const chordID &id, const u_int32_t aux);
   merkle_node *lookup (const merkle_hash &key);
-  virtual void lookup_release( merkle_node *n ) {} // do nothing
 
-  virtual merkle_node *get_root() { return root; }
+  bool key_exists (chordID key, uint aux);
 
-  virtual void sync (bool reopen = true) {}
-
-  // If bulk-modifying the tree, it is undesirable to rehash tree after each
-  // mod.  In that case, users should disable rehashing on modifications
-  // until all modifications are complete, hash_tree, and then re-enable.
+  // If bulk-modifying the tree, it is undesirable to rehash tree
+  // after each mod.  In that case, users should disable rehashing on
+  // modifications until all modifications are complete, hash_tree,
+  // and then re-enable.
   void set_rehash_on_modification (bool enable);
   void hash_tree ();
-
-  virtual vec<merkle_hash> database_get_keys (u_int depth, 
-					      const merkle_hash &prefix);
-  vec<chordID> database_get_IDs (u_int depth, const merkle_hash &prefix);
-  virtual bool key_exists (chordID key) { return keylist[key] != NULL; };
-  bool key_exists (chordID key, uint aux);
-  virtual vec<chordID> get_keyrange (chordID min, chordID max, u_int n);
 
   void dump ();
   void check_invariants ();
   void compute_stats ();
 };
 
+class merkle_tree_mem : public merkle_tree {
+protected:
+  merkle_node_mem *root;
+  itree<chordID, merkle_key, &merkle_key::id, &merkle_key::ik> keylist;
+
+  void count_blocks (u_int depth, const merkle_hash &key,
+		     array<u_int64_t, 64> &nblocks);
+  void leaf2internal (u_int depth, const merkle_hash &key, merkle_node *n);
+
+  virtual void remove (u_int depth, merkle_hash &key, merkle_node *n);
+  virtual int insert (u_int depth, merkle_hash &key, merkle_node *n);
+
+public:
+  merkle_tree_mem ();
+  virtual ~merkle_tree_mem ();
+
+  virtual merkle_node *get_root ();
+
+  virtual int insert (merkle_hash &key);
+  virtual void remove (merkle_hash &key);
+  virtual bool key_exists (chordID key) {
+    return keylist[key] != NULL;
+  }
+  virtual vec<merkle_hash> database_get_keys (u_int depth,
+      const merkle_hash &prefix);
+  virtual vec<chordID> get_keyrange (chordID min, chordID max, u_int n);
+
+  virtual merkle_node *lookup_exact (u_int depth, const merkle_hash &key);
+  virtual merkle_node *lookup (u_int depth, const merkle_hash &key);
+  virtual merkle_node *lookup (u_int *depth, u_int max_depth,
+			       const merkle_hash &key);
+};
 
 
 

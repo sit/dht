@@ -174,8 +174,8 @@ setup ()
 						    syncer_internal, syncer_leaf,
 						    true);
   } else {
-    SERVER.tree = New refcounted<merkle_tree> ();
-    SYNCER.tree = New refcounted<merkle_tree> ();
+    SERVER.tree = New refcounted<merkle_tree_mem> ();
+    SYNCER.tree = New refcounted<merkle_tree_mem> ();
   }
 
   // these are closed by axprt_stream's dtor, right? 

@@ -64,6 +64,7 @@ class merkle_node_disk : public merkle_node {
   void set_block_no (u_int32_t block_no) { _block_no = block_no; }
   u_int32_t get_block_no () { return _block_no; }
   void rehash ();
+  void dump (u_int depth);
 
   merkle_node_disk (FILE *internal, FILE *leaf,
 		    MERKLE_DISK_TYPE type, u_int32_t block_no);
@@ -104,7 +105,6 @@ private:
 public:
   vec<merkle_hash> database_get_keys (u_int depth,
 					      const merkle_hash &prefix);
-  vec<chordID> database_get_IDs (u_int depth, const merkle_hash &prefix);
   bool key_exists (chordID key);
   vec<chordID> get_keyrange (chordID min, chordID max, u_int n);
 
