@@ -171,6 +171,7 @@ merkle_node_disk::write_out ()
 {
   if (isleaf ()) {
     merkle_leaf_node leaf;
+    bzero (&leaf, sizeof (leaf));
     leaf.key_count = htonl (count);
     merkle_key *m = keylist.first();
     int i = 0;
