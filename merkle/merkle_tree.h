@@ -67,7 +67,7 @@ protected:
   virtual int insert (u_int depth, merkle_hash &key, merkle_node *n) = 0;
 
 public:
-  enum { max_depth = merkle_hash::NUM_SLOTS }; // XXX off by one? or two?
+  enum { MAX_DEPTH = merkle_hash::NUM_SLOTS }; // XXX off by one? or two?
   merkle_tree_stats stats;
 
   merkle_tree ();

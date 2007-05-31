@@ -252,7 +252,7 @@ merkle_tree::compute_stats ()
   warn.fmt ("      %10s %10s %10s %10s\n", "leaves", "MT leaves", "internals", "nodes");
 
   // dont print the trailing zeroes...
-  uint cutoff = max_depth - 1;
+  uint cutoff = MAX_DEPTH - 1;
   while (cutoff && !stats.nodes_per_level[cutoff])
     cutoff--;
   for (uint i = 0; i <= cutoff; i++) {
@@ -268,10 +268,10 @@ merkle_tree::compute_stats ()
 	    stats.num_leaves, stats.num_empty_leaves, stats.num_internals, stats.num_nodes);
   assert (stats.num_leaves > 0);
 
-  u_int64_t mn = max_depth;
+  u_int64_t mn = MAX_DEPTH;
   u_int64_t mx = 0;
   double ave = 0;
-  for (uint i = 0; i < max_depth; i++) {
+  for (uint i = 0; i < MAX_DEPTH; i++) {
     if (stats.leaves_per_level[i] == 0)
       continue;
 
