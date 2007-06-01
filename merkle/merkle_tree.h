@@ -4,10 +4,6 @@
 #include <itree.h>
 #include "merkle_hash.h"
 
-class location;
-class merkle_tree;
-class block_status_manager;
-
 struct merkle_tree_stats {
   u_int32_t nodes_per_level[merkle_hash::NUM_SLOTS];
   u_int32_t empty_leaves_per_level[merkle_hash::NUM_SLOTS];
@@ -40,8 +36,6 @@ public:
   merkle_node () : count (0), hash (0) {}
   virtual ~merkle_node ();
 };
-
-class merkle_node_mem;
 
 struct merkle_key {
   chordID id;
@@ -82,8 +76,16 @@ public:
       const merkle_hash &prefix) = 0;
   virtual vec<chordID> get_keyrange (chordID min, chordID max, u_int n) = 0;
 
+  // return the node a given depth matching key
+  // returns NULL if no such node exists
   virtual merkle_node *lookup_exact (u_int depth, const merkle_hash &key) = 0;
+  // Might return parent.
+  // Never returns NULL.
+  // Never returns a node deeper than depth.
   virtual merkle_node *lookup (u_int depth, const merkle_hash &key) = 0;
+
+  // Return deepest node no deeper than max_depth matching key.
+  // Return the depth of the node in *depth.
   virtual merkle_node *lookup (u_int *depth, u_int max_depth,
 			       const merkle_hash &key) = 0;
 
@@ -113,6 +115,8 @@ public:
   void check_invariants ();
   void compute_stats ();
 };
+
+class merkle_node_mem;
 
 class merkle_tree_mem : public merkle_tree {
 protected:
@@ -146,7 +150,5 @@ public:
   virtual merkle_node *lookup (u_int *depth, u_int max_depth,
 			       const merkle_hash &key);
 };
-
-
 
 #endif /* _MERKLE_TREE_H_ */
