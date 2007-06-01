@@ -81,17 +81,17 @@ test_insertions (str msg,
 {
   uint okeyssz = keys.size ();
   warn << msg << " bulk insertion... ";
-  u_int64_t start = getusec ();
+  u_int64_t start = getusec (true);
   mtree->set_rehash_on_modification (false);
   insert_blocks (mtree, nkeys, rand, &keys);
-  warn << "completed in: " << (getusec ()-start)/1000 << "ms... ";
+  warn << "completed in: " << (getusec (true)-start)/1000 << "ms... ";
   assert ((keys.size () - okeyssz) == nkeys);
   warn << "OK\n";
 
   warn << msg << " hash full tree... ";
-  start = getusec ();
+  start = getusec (true);
   mtree->hash_tree ();
-  warn << "completed in: " << (getusec ()-start)/1000 << "ms... ";
+  warn << "completed in: " << (getusec (true)-start)/1000 << "ms... ";
   test_numkeys (mtree, keys.size ());
   warn << "OK\n";
 
