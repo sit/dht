@@ -1,15 +1,15 @@
 #include <chord.h>
 #include <modlogger.h>
 #include <id_utils.h>
+#include <db.h>
 #include "merkle.h"
 #include "merkle_tree_disk.h"
+#include "merkle_tree_bdb.h"
 #include <location.h>
 #include <transport_prot.h>
 #include <comm.h>
 
 // {{{ Globals
-static const bool usedisk = false;
-
 static struct {
   ptr<merkle_tree> tree;
   ptr<merkle_server> server;
@@ -26,6 +26,23 @@ u_int32_t nkeyspushed = 0;
 u_int32_t nkeyspulled = 0;
 vec<chordID> keys_for_server;
 vec<chordID> keys_for_syncer;
+// }}}
+
+// {{{ Merkle Tree setup/teardown harness
+struct harness_t {
+  harness_t () {}
+  virtual ~harness_t () {}
+};
+ptr<harness_t> harness (NULL);
+
+struct mem_harness_t : public harness_t {
+  mem_harness_t () {
+    SERVER.tree = New refcounted<merkle_tree_mem> ();
+    SYNCER.tree = New refcounted<merkle_tree_mem> ();
+  }
+  ~mem_harness_t () {
+  }
+};
 
 str server_index = "/tmp/server.index.mrk";
 str server_internal = "/tmp/server.internal.mrk";
@@ -40,8 +57,57 @@ str server_leaf_ro = "/tmp/server.leaf.mrk.ro";
 str syncer_index_ro = "/tmp/syncer.index.mrk.ro";
 str syncer_internal_ro = "/tmp/syncer.internal.mrk.ro";
 str syncer_leaf_ro = "/tmp/syncer.leaf.mrk.ro";
-// }}}
 
+struct disk_harness_t : public harness_t {
+  disk_harness_t () {
+    SERVER.tree = New refcounted<merkle_tree_disk> (server_index,
+	server_internal, server_leaf, true);
+    SYNCER.tree = New refcounted<merkle_tree_disk> (syncer_index,
+	syncer_internal, syncer_leaf, true);
+  }
+  ~disk_harness_t () {
+    unlink (server_index);
+    unlink (server_internal);
+    unlink (server_leaf);
+    unlink (server_index_ro);
+    unlink (server_internal_ro);
+    unlink (server_leaf_ro);
+
+    unlink (syncer_index);
+    unlink (syncer_internal);
+    unlink (syncer_leaf);
+    unlink (syncer_index_ro);
+    unlink (syncer_internal_ro);
+    unlink (syncer_leaf_ro);
+  }
+};
+
+struct bdb_harness_t : public harness_t {
+  bdb_harness_t () {
+    SERVER.tree = New refcounted<merkle_tree_bdb> ("/tmp/server.bdb", false, false);
+    SYNCER.tree = New refcounted<merkle_tree_bdb> ("/tmp/syncer.bdb", false, false);
+  }
+  ~bdb_harness_t () {
+    system ("rm -rf /tmp/server.bdb");
+    system ("rm -rf /tmp/syncer.bdb");
+  }
+};
+
+str mode ("bdb");
+ptr<harness_t> allocate_harness ()
+{
+  if (mode == "bdb")
+    return New refcounted<bdb_harness_t> ();
+  else if (mode == "disk")
+    return New refcounted<disk_harness_t> ();
+  else if (mode == "mem")
+    return New refcounted<mem_harness_t> ();
+  else
+    fatal << "Unknown mode " << mode << "\n";
+  return NULL;
+}
+
+// }}}
 // {{{ RPC Magic
 static void
 doRPCcb (xdrproc_t proc, dorpc_res *res, aclnt_cb cb, void *out, clnt_stat err)
@@ -166,17 +232,8 @@ void
 setup ()
 {
   warn << "===> setup() +++++++++++++++++++++++++++\n";
-  if (usedisk) {
-    SERVER.tree = New refcounted<merkle_tree_disk> (server_index, 
-						    server_internal, server_leaf,
-						    true);
-    SYNCER.tree = New refcounted<merkle_tree_disk> (syncer_index, 
-						    syncer_internal, syncer_leaf,
-						    true);
-  } else {
-    SERVER.tree = New refcounted<merkle_tree_mem> ();
-    SYNCER.tree = New refcounted<merkle_tree_mem> ();
-  }
+
+  harness = allocate_harness ();
 
   // these are closed by axprt_stream's dtor, right? 
   int fds[2];
@@ -211,21 +268,7 @@ finish ()
   SYNCER.tree = NULL;
   SERVER.tree = NULL;
 
-  if (usedisk) {
-    unlink (server_index);
-    unlink (server_internal);
-    unlink (server_leaf);
-    unlink (server_index_ro);
-    unlink (server_internal_ro);
-    unlink (server_leaf_ro);
-
-    unlink (syncer_index);
-    unlink (syncer_internal);
-    unlink (syncer_leaf);
-    unlink (syncer_index_ro);
-    unlink (syncer_internal_ro);
-    unlink (syncer_leaf_ro);
-  }
+  harness = NULL;
 }
 
 void
@@ -325,8 +368,10 @@ runsync (chordID rngmin, chordID rngmax, bool perturb = false)
 int
 main (int argc, char *argv[])
 {
-  if (argc > 1)
+  if (argc > 2)
     modlogger::setmaxprio (modlogger::TRACE);
+  if (argc == 2)
+    mode = argv[1];
 
   // Make sure no old state remains on disk.
   finish ();

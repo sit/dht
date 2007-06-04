@@ -1,11 +1,14 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include <db.h>
+
 #include <chord_types.h>
 
 #include <qhash.h>
 #include "merkle.h"
 #include "merkle_tree_disk.h"
+#include "merkle_tree_bdb.h"
 #include <misc_utils.h>
 #include <id_utils.h>
 
@@ -18,6 +21,28 @@ static char *indexpathro = "/tmp/index.mrk.ro";
 static char *internalpathro = "/tmp/internal.mrk.ro";
 static char *leafpathro  = "/tmp/leaf.mrk.ro";
 
+// Better be careful here!  We call rm -rf on this later.
+static char *bdbpath = "/tmp/mtree.bdb";
+
+typedef callback<merkle_tree *, bool>::ref merkle_allocator_t;
+
+merkle_tree *
+allocate_disk (bool master)
+{
+  // Master should be read-write
+  return
+    New merkle_tree_disk (indexpath, internalpath, leafpath, master);
+}
+
+merkle_tree *
+allocate_bdb (bool master)
+{
+  return
+    New merkle_tree_bdb (bdbpath, !master, !master);
+  // slaves should join and be read-only;
+  // master should not join and be read-write.
+}
+
 void
 cleanup ()
 {
@@ -27,6 +52,9 @@ cleanup ()
   unlink (indexpathro);
   unlink (internalpathro);
   unlink (leafpathro);
+  char buf[80];
+  sprintf (buf, "rm -rf %s", bdbpath);
+  system (buf);
 }
 
 bool
@@ -180,8 +208,8 @@ test (str msg, merkle_tree *mtree, uint nkeys, bool rand = true)
   test_insertions ("Initial", mtree, nkeys, rand, keys);
   const vec<chordID> intree = test_reads (mtree, keys);
 
-  warn << "Removes... ";
   uint limit = (nkeys < 128) ? nkeys : (128 + int (nkeys * 0.2));
+  warn << "Removing " << limit << " keys... ";
   uint order[nkeys];
   for (uint i=0; i<nkeys; i++) order[i] = i;
   for (uint i = 0; i < limit; i++) {
@@ -211,11 +239,10 @@ test (str msg, merkle_tree *mtree, uint nkeys, bool rand = true)
 }
 
 void
-test_merkle_disk_specific ()
+test_merkle_disk_specific (str desc, merkle_allocator_t alloc)
 {
-  warn << "\n=================== Merkle Disk Specific Tests\n";
-  merkle_tree *mtree = 
-      New merkle_tree_disk (indexpath, internalpath, leafpath, true);
+  warn << "\n=================== Disk specific tests for " << desc << "\n";
+  merkle_tree *mtree = alloc (true);
 
   keys_t keys;
   keys.clear ();
@@ -229,10 +256,9 @@ test_merkle_disk_specific ()
     fatal ("fork: %m\n");
   if (pid == 0) {
     // Child
-    mtree = 
-      New merkle_tree_disk (indexpath, internalpath, leafpath, false);
-
+    mtree = alloc (false);
     const vec<chordID> intree = test_reads (mtree, keys);
+    delete mtree;
     exit (0);
   }
   reap (pid);
@@ -246,8 +272,7 @@ test_merkle_disk_specific ()
   if (pid > 0) {
     // Parent
     bool reaped = false;
-    mtree = 
-      New merkle_tree_disk (indexpath, internalpath, leafpath, true);
+    mtree = alloc (true);
     for (int i = 0; i < 32; i++) {
       warn << "  Parent insertion burst " << i+1 << "\n";
       for (int j = 0; j < 100; j++) {
@@ -259,12 +284,13 @@ test_merkle_disk_specific ()
       mtree->sync ();
       sleep (1);
     }
+    delete mtree;
     if (!reaped)
       reap (pid);
   } else {
+    sleep (1);
     chordID highest = (((chordID) 1) << 160) - 1;
-    mtree = 
-      New merkle_tree_disk (indexpath, internalpath, leafpath, false);
+    mtree = alloc (false);
     for (int i = 0; i < 32; i++) {
       warn << "  Child read-range " << i+1 << "\n";
       chordID min = make_randomID ();
@@ -276,6 +302,7 @@ test_merkle_disk_specific ()
       mtree->sync ();
       sleep (1);
     }
+    delete mtree;
     exit (0);
   } 
   warn << "Dynamic child reads seem OK\n";
@@ -290,6 +317,15 @@ main (int argc, char *argv[])
   // Any arguments mean we skip the "normal" tests.
   if (argc == 1) {
     int sz[] = { 1, 64, 256, 64*64+1, 10000 };
+
+    for (uint i = 0; i < sizeof (sz) / sizeof (sz[0]); i++) {
+      merkle_tree *t =
+	New merkle_tree_bdb (bdbpath, false, false);
+      test ("BDB", t, sz[i]);
+      delete t; t = NULL;
+      cleanup ();
+    }
+
     for (uint i = 0; i < sizeof (sz) / sizeof (sz[0]); i++) {
       merkle_tree *t = New merkle_tree_mem ();
       test ("In-memory", t, sz[i], false);
@@ -309,6 +345,9 @@ main (int argc, char *argv[])
     }
   }
 
-  test_merkle_disk_specific ();
+  test_merkle_disk_specific ("bdb", wrap (&allocate_bdb));
+  cleanup ();
+
+  test_merkle_disk_specific ("disk", wrap (&allocate_disk));
   cleanup ();
 }

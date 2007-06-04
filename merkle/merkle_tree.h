@@ -95,6 +95,8 @@ public:
 
   virtual vec<chordID> database_get_IDs (u_int depth, const merkle_hash &prefix);
 
+  virtual void check_invariants ();
+
   // Sub-classes should not override the following methods
   int insert (const chordID &id);
   int insert (const chordID &id, const u_int32_t aux);
@@ -112,7 +114,6 @@ public:
   void hash_tree ();
 
   void dump ();
-  void check_invariants ();
   void compute_stats ();
 };
 
