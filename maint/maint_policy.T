@@ -3,12 +3,13 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <db.h>
 #include <arpc.h>
 
 #include <chord_prot.h>
 #include <comm.h>
 #include <merkle.h>
-#include <merkle_tree_disk.h>
+#include <merkle_tree_bdb.h>
 
 #include <id_utils.h>
 #include <location.h>
@@ -256,8 +257,6 @@ maintainer::run_cycle (cbv cb)
 {
   in_progress = true;
 
-  // Now seems a good time to pick up any local changes.
-  ltree->sync ();
   // Run local and global cycle in parallel
   BLOCK {
     local_maint_cycle (@());
@@ -390,7 +389,10 @@ carbonite::init_ltree (cbv cb, adb_status err, str path, bool hasaux)
     warn << "carbonite::init_ltree: Unexpected adbd error: " << err << "\n";
     return;
   }
-  ltree = New refcounted<merkle_tree_disk> (path, /* rw = */ false);
+  str mpath = strbuf () << path << "/mtree";
+  ltree = New refcounted<merkle_tree_bdb> (mpath.cstr (),
+      /* join = */ true,
+      /* ro = */ true);
   cb ();
 }
 
@@ -441,11 +443,12 @@ carbonite::process_neighbors (
   BLOCK {
     // Merkle data structures for remote nodes are private to maintd.
     for (unsigned int i=0; i < succs.size(); i++) {
-      strbuf succtreepath; succtreepath << private_path << "/" 
+      str succtreepath = strbuf () << private_path << "/" 
 	<< host.vnode_num << "-"
 	<< succs[i]->id () << "." << ctype2ext (ctype);
-      ptr<merkle_tree> t = New refcounted<merkle_tree_disk> 
-	(succtreepath, /* rw = */ true);
+      ptr<merkle_tree> t = New refcounted<merkle_tree_bdb> 
+	(succtreepath.cstr (),
+	 /* join = */ false, /* ro = */ false);
       sync->sync_with (succs[i], rngmin, rngmax,
 	  t, 
 	  wrap (this, &carbonite::handle_missing, succs[i], t),
@@ -525,11 +528,11 @@ carbonite::getrepairs (chordID start, int thresh, int count,
   treedone.push_back (false);
 
   for (unsigned int i = 0; i < succs.size (); i++) {
-    strbuf succtreepath; succtreepath << private_path << "/" 
+    str succtreepath = strbuf () << private_path << "/" 
       << host.vnode_num << "-"
       << succs[i]->id () << "." << ctype2ext (ctype);
-    ptr<merkle_tree> t = New refcounted<merkle_tree_disk> 
-      (succtreepath, /* rw = */ false);
+    ptr<merkle_tree> t = New refcounted<merkle_tree_bdb> 
+      (succtreepath.cstr (), /* join = */ false, /* ro = */ true);
     trees.push_back (t);
     lastread.push_back (start);
     treedone.push_back (false);
@@ -646,7 +649,10 @@ passingtone::init_ltree (cbv cb, adb_status err, str path, bool hasaux)
     warn << "passingtone::init_ltree: Unexpected adbd error: " << err << "\n";
     return;
   }
-  ltree = New refcounted<merkle_tree_disk> (path, /* rw = */ false);
+  str mpath = strbuf () << path << "/mtree";
+  ltree = New refcounted<merkle_tree_bdb> (mpath.cstr (),
+      /* join = */ true,
+      /* ro = */ true);
   cb ();
 }
 

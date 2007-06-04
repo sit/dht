@@ -1,15 +1,19 @@
 #include <async.h>
 #include <aios.h>
+#include <db.h>
 #include <id_utils.h>
-#include <merkle_tree_disk.h>
+#include <merkle_tree_bdb.h>
 
 int
 main (int argc, char *argv[])
 {
   setprogname (argv[0]);
   if (argc < 2)
-    fatal <<  "Usage: " << progname << " merkletreedisk\n";
-  ptr<merkle_tree_disk> tree = New refcounted<merkle_tree_disk> (argv[1], false);
+    fatal <<  "Usage: " << progname << " merkletreebdb\n";
+  char pathbuf[PATH_MAX];
+  sprintf (pathbuf, "%s/mtree", argv[1]);
+  ptr<merkle_tree_bdb> tree =
+    New refcounted<merkle_tree_bdb> (pathbuf, true, true);
 
   chordID lastread = 0;
   chordID maxid = (chordID (1) << 160) - 1;

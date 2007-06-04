@@ -39,7 +39,7 @@ dbdump_SOURCES = dbdump.C
 dbdump_LDADD = $(DBLIB) ../utils/dbfe_sleepycat.o $(LDADD)
 
 merkledump_SOURCES = merkledump.C
-merkledump_LDADD = ../merkle/libmerkle.a ../utils/libutil.a $(LDADD)
+merkledump_LDADD = ../merkle/libmerkle.a ../utils/libutil.a $(DBLIB) $(LDADD)
 
 findroute_SOURCES = findroute.C
 findroute_LDADD = ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)

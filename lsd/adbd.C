@@ -7,7 +7,7 @@
 #include <adb_prot.h>
 #include <id_utils.h>
 #include <dbfe.h>
-#include <merkle_tree_disk.h>
+#include <merkle_tree_bdb.h>
 
 // {{{ Globals
 static bool dbstarted (false);
@@ -183,20 +183,10 @@ dbns::dbns (const str &dbpath, const str &name, bool aux) :
   DBNS_ERRCHECK ("bsdb->associate (bsdx)");
   warn << "dbns::dbns (" << dbpath << ", " << name << ", " << aux << ")\n";
 
-  // now make the on disk merkle tree, migrating keys as necessary
-  str mtree_index = strbuf() << fullpath << "/index.mrk";
-  FILE *f = fopen (mtree_index, "r");
-  bool mtree_exists = true;
-  if (f == NULL) {
-    mtree_exists = false;
-  } else {
-    fclose (f);
-  }
-
-  mtree = New merkle_tree_disk
-     (mtree_index,
-      strbuf() << fullpath << "/internal.mrk",
-      strbuf() << fullpath << "/leaf.mrk", true /*read-write*/);
+  str mpath = strbuf () << fullpath << "/mtree";
+  mtree = New merkle_tree_bdb (mpath.cstr (),
+      /* join = */ false,
+      /* ro = */ false);
 }
 // }}}
 // {{{ dbns::~dbns
