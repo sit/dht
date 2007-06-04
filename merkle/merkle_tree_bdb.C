@@ -473,7 +473,7 @@ merkle_tree_bdb::insert (merkle_hash &key)
     dbfe_txn_abort (dbe, t);
     fatal << "merkle_tree_bdb::insert: bottom of tree is not a leaf?\n";
   }
-  if (n->leaf_is_full ()) {
+  while (n->leaf_is_full ()) {
     n->leaf2internal (t); // Creates all the children
     n = read_node (n->depth + 1, key, t);
     nodes.push_back (n);

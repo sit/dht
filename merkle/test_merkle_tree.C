@@ -321,7 +321,12 @@ main (int argc, char *argv[])
     for (uint i = 0; i < sizeof (sz) / sizeof (sz[0]); i++) {
       merkle_tree *t =
 	New merkle_tree_bdb (bdbpath, false, false);
-      test ("BDB", t, sz[i]);
+      test ("BDB", t, sz[i], false);
+      delete t; t = NULL;
+      cleanup ();
+
+      t = New merkle_tree_bdb (bdbpath, false, false);
+      test ("BDB", t, sz[i], true);
       delete t; t = NULL;
       cleanup ();
     }
