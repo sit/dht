@@ -5,7 +5,6 @@
 #include <sha1.h>
 
 #include <adb_prot.h>
-#include <keyauxdb.h>
 #include <id_utils.h>
 #include <dbfe.h>
 #include <merkle_tree_disk.h>
@@ -108,7 +107,6 @@ class dbns {
   DB *bsdb;
   DB *bsdx;
 
-  keyauxdb *kdb;
   merkle_tree *mtree;
 
   // XXX should have a instance-level lock that governs datadb/auxdatadb.
@@ -133,11 +131,8 @@ public:
   int lookup (const chordID &key, str &data);
   int lookup_nextkey (const chordID &key, chordID &nextkey);
   int del (const chordID &key, u_int32_t auxdata);
-  int kgetkeys (u_int32_t start, size_t count, bool getaux,
-      rpc_vec<adb_keyaux_t, RPC_INFINITY> &out); 
   int getkeys (const chordID &start, size_t count, bool getaux,
       rpc_vec<adb_keyaux_t, RPC_INFINITY> &out); 
-  int migrate_getkeys (void);
 
   // Block status information
   int getblockrange_all (const chordID &start, const chordID &stop,
@@ -159,8 +154,7 @@ dbns::dbns (const str &dbpath, const str &name, bool aux) :
   datadb (NULL),
   auxdatadb (NULL),
   bsdb (NULL),
-  bsdx (NULL),
-  kdb (NULL)
+  bsdx (NULL)
 {
 #define DBNS_ERRCHECK(desc) \
   if (r) {		  \
@@ -189,14 +183,6 @@ dbns::dbns (const str &dbpath, const str &name, bool aux) :
   DBNS_ERRCHECK ("bsdb->associate (bsdx)");
   warn << "dbns::dbns (" << dbpath << ", " << name << ", " << aux << ")\n";
 
-  str fullpath_kdb = strbuf() << fullpath << "/kdb.db";
-  kdb = New keyauxdb (fullpath_kdb);
-  u_int32_t dummy;
-  if (NULL == kdb->getkeys (0, 1, &dummy) ) {
-    // This could take a very long time if there's a lot of data.
-    migrate_getkeys ();
-  }
-
   // now make the on disk merkle tree, migrating keys as necessary
   str mtree_index = strbuf() << fullpath << "/index.mrk";
   FILE *f = fopen (mtree_index, "r");
@@ -211,28 +197,6 @@ dbns::dbns (const str &dbpath, const str &name, bool aux) :
      (mtree_index,
       strbuf() << fullpath << "/internal.mrk",
       strbuf() << fullpath << "/leaf.mrk", true /*read-write*/);
-  
-  if (!mtree_exists) {
-    uint avail;
-    uint at_a_time = 100000;
-    const keyaux_t *keys;
-    uint recno = 0;
-    while ((keys = kdb->getkeys (recno, at_a_time, &avail)) && avail > 0) {
-      for (uint j = 0; j < avail; j++) {
-	chordID k;
-	uint aux;
-	keyaux_unmarshall (&(keys[j]), &k, &aux);
-	if (hasaux ()) {
-	  mtree->insert (k, aux);
-	} else {
-	  mtree->insert (k);
-	}
-      }
-      recno += avail;
-    }
-    warn << "Migrated " << recno << " records to the mtree\n";
-  }
-
 }
 // }}}
 // {{{ dbns::~dbns
@@ -251,8 +215,6 @@ dbns::~dbns ()
   // Shut down the environment
   DBNS_DBCLOSE(dbe);
 #undef DBNS_DBCLOSE
-  delete kdb;
-  kdb = NULL;
   delete mtree;
   mtree = NULL;
   warn << "dbns::~dbns (" << name << ")\n";
@@ -278,7 +240,6 @@ dbns::sync ()
 #else
    dbe->txn_checkpoint (dbe, 0, 0, 0);
 #endif
-   kdb->sync ();
    mtree->sync ();
 }
 // }}}
@@ -298,7 +259,6 @@ dbns::kinsert (const chordID &key, u_int32_t auxdata)
     }
     mtree->insert (key);
   }
-  kdb->addkey (key, auxdata);
   return true;
 }
 // }}}
@@ -413,7 +373,6 @@ dbns::del (const chordID &key, u_int32_t auxdata)
   str_to_dbt (key_str, &skey);
   // Implicit transaction
   r = datadb->del (datadb, NULL, &skey, DB_AUTO_COMMIT);
-  // XXX Should delkey from kdb.
 
   if (hasaux ()) {
     mtree->remove (key, auxdata);
@@ -481,74 +440,6 @@ dbns::getkeys (const chordID &start, size_t count, bool getaux, rpc_vec<adb_keya
 
   if (r && r != DB_NOTFOUND)
     warner ("dbns::getkeys", "cursor get", r);
-  (void) cursor->c_close (cursor);
-
-  return r;
-}
-// }}}
-// {{{ dbns::kgetkeys
-int
-dbns::kgetkeys (u_int32_t start, size_t count, bool getaux, rpc_vec<adb_keyaux_t, RPC_INFINITY> &out)
-{
-  u_int32_t n (0);
-  const keyaux_t *v = kdb->getkeys (start, count, &n);
-  if (!v)
-    return DB_NOTFOUND;
-  out.setsize (n);
-  for (u_int32_t i = 0; i < n; i++) {
-    keyaux_unmarshall (&v[i], &out[i].key, &out[i].auxdata);
-  }
-  return 0;
-}
-// }}}
-// {{{ dbns::migrate_getkeys
-int
-dbns::migrate_getkeys (void)
-{
-  warn << "migrate_getkeys (" << name << ")\n";
-  int r = 0;
-  DBC *cursor;
-  // Fully serialized reads of auxdatadb
-  if (auxdatadb) 
-    r = auxdatadb->cursor (auxdatadb, NULL, &cursor, 0);
-  else
-    r = datadb->cursor (datadb, NULL, &cursor, 0);
-
-  if (r) {
-    warner ("dbns::migrate_getkeys", "cursor open", r);
-    (void) cursor->c_close (cursor);
-    return r;
-  }
-
-  // Could possibly improve efficiency here by using SleepyCat's bulk reads
-  str key_str = id_to_str (chordID (0));
-  DBT key;
-  str_to_dbt (key_str, &key);
-  DBT data_template;
-  bzero (&data_template, sizeof (data_template));
-  // If DB_DBT_PARTIAL and data.dlen == 0, no data is returned.
-  // Of course, since BerkeleyDB BTree's puts data and keys
-  // on the leaf pages, we are left reading lots of data anyway.
-  if (!auxdatadb)
-    data_template.flags = DB_DBT_PARTIAL;
-  DBT data = data_template;
-
-  r = cursor->c_get (cursor, &key, &data, DB_FIRST);
-  while (!r) {
-    chordID k = dbt_to_id (key);
-    u_int32_t auxdata (0);
-    if (auxdatadb)
-      auxdata = ntohl (*(u_int32_t *)data.data);
-
-    kdb->addkey (k, auxdata);
-
-    bzero (&key, sizeof (key));
-    data = data_template;
-    r = cursor->c_get (cursor, &key, &data, DB_NEXT);
-  }
-
-  if (r && r != DB_NOTFOUND)
-    warner ("dbns::migrate_getkeys", "cursor get", r);
   (void) cursor->c_close (cursor);
 
   return r;
@@ -1148,16 +1039,9 @@ do_getkeys (dbmanager *dbm, svccb *sbp)
   res.resok->ordered = arg->ordered;
 
   int r (-1);
-  if (db->hasaux () || arg->ordered) {
-    r = db->getkeys (arg->continuation, arg->batchsize, arg->getaux, res.resok->keyaux);
-    if (!r)
-      res.resok->continuation = incID (res.resok->keyaux.back ().key);
-  } else {
-    u_int32_t start = arg->continuation.getui ();
-    r = db->kgetkeys (start, arg->batchsize, arg->getaux, res.resok->keyaux);
-    if (!r)
-      res.resok->continuation = bigint (start + res.resok->keyaux.size ());
-  }
+  r = db->getkeys (arg->continuation, arg->batchsize, arg->getaux, res.resok->keyaux);
+  if (!r)
+    res.resok->continuation = incID (res.resok->keyaux.back ().key);
   res.resok->complete = (r == DB_NOTFOUND);
   if (r && r != DB_NOTFOUND) 
     res.set_status (ADB_ERR);
