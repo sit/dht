@@ -354,6 +354,7 @@ maintainer::get_global_repairs (size_t max,
   while (gm->maintqueue.size () && repairs.size () < max)
   {
     maint_repair_t repair;
+    repair.responsible = false;
     repair.id = gm->maintqueue.pop_front ();
     hostcc->fill_ipportvn (repair.src_ipv4_addr,
 	repair.src_port_vnnum);
@@ -577,6 +578,7 @@ carbonite::getrepairs (chordID start, int thresh, int count,
       }
       if (k->count < (unsigned) thresh) {
 	maint_repair_t repair;
+	repair.responsible = true;
 	repair.id = k->id;
 
 	repair.src_ipv4_addr = 0;
@@ -736,6 +738,7 @@ passingtone::getrepairs (chordID start, int thresh, int count,
     chordID k = repairqueue.pop_front ();
     ptr<locationcc> from = repairfrom.pop_front ();
     maint_repair_t r;
+    r.responsible = true;
     r.id = k;
     from->fill_ipportvn (r.src_ipv4_addr, r.src_port_vnnum);
     r.dst_ipv4_addr = a;

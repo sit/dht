@@ -151,8 +151,6 @@ dhblock_replicated_srv::maintqueue (const vec<maint_repair_t> &repairs)
   vec<ptr<location> > preds = node->preds ();
   if (preds.size () < dhblock_replicated::num_replica ())
     return;
-  chordID firstpred = preds[dhblock_replicated::num_replica () - 1]->id ();
-  chordID myID = node->my_ID ();
   for (size_t i = 0; i < repairs.size (); i++) {
     ptr<location> f = maintloc2location (
 	repairs[i].src_ipv4_addr,
@@ -162,7 +160,7 @@ dhblock_replicated_srv::maintqueue (const vec<maint_repair_t> &repairs)
 	repairs[i].dst_port_vnnum);
     blockID key (repairs[i].id, ctype);
     ptr<repair_job> job (NULL);
-    if (betweenleftincl (firstpred, myID, repairs[i].id)) {
+    if (repairs[i].responsible) {
       job = New refcounted<rjrep> (key, f, w, mkref (this));
     } else {
       // Not responsible for this object;

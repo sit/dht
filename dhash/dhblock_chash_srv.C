@@ -107,15 +107,13 @@ dhblock_chash_srv::maintqueue (const vec<maint_repair_t> &repairs)
   vec<ptr<location> > preds = node->preds ();
   if (preds.size () < dhblock_chash::num_efrags())
     return;
-  chordID firstpred = preds[dhblock_chash::num_efrags () - 1]->id ();
-  chordID myID = node->my_ID ();
   for (size_t i = 0; i < repairs.size (); i++) {
     blockID key (repairs[i].id, DHASH_CONTENTHASH);
     ptr<location> w = maintloc2location (
 	repairs[i].dst_ipv4_addr,
 	repairs[i].dst_port_vnnum);
     ptr<repair_job> job (NULL);
-    if (betweenleftincl(firstpred, myID, repairs[i].id)) {
+    if (repairs[i].responsible) {
       job = New refcounted<rjchash> (key, w, mkref (this));
     } else {
       // This is a pmaint repair job; just transfer our local object.

@@ -35,6 +35,8 @@ struct maint_getrepairsarg {
 };
 
 struct maint_repair_t {
+  /* True if the local node is responsible for this id. */
+  bool responsible;
   /* Object to repair */
   chordID id;
   /* Below, port_vnnum = (port << 16) | vnnum */
