@@ -466,7 +466,7 @@ merkle_tree_bdb::insert (merkle_hash &key)
   while (n != NULL) {
     nodes.push_back (n);
     depth++;
-    n = read_node (depth, key, t);
+    n = read_node (depth, key, t, DB_RMW);
   }
   n = nodes.back ();
   if (!n->isleaf ()) {
@@ -475,7 +475,7 @@ merkle_tree_bdb::insert (merkle_hash &key)
   }
   while (n->leaf_is_full ()) {
     n->leaf2internal (t); // Creates all the children
-    n = read_node (n->depth + 1, key, t);
+    n = read_node (n->depth + 1, key, t, DB_RMW);
     nodes.push_back (n);
     assert (n->isleaf ());
   }
@@ -542,7 +542,7 @@ merkle_tree_bdb::remove (merkle_hash &key)
   while (n != NULL) {
     nodes.push_back (n);
     depth++;
-    n = read_node (depth, key, t);
+    n = read_node (depth, key, t, DB_RMW);
   }
   n = nodes.back ();
   if (!n->isleaf ()) {
