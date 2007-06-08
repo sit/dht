@@ -298,6 +298,8 @@ merkle_tree_bdb::merkle_tree_bdb (const char *path, bool join, bool ro) :
 // {{{ merkle_tree_bdb::~merkle_tree_bdb
 merkle_tree_bdb::~merkle_tree_bdb ()
 {
+  sync ();
+  
 #define DBCLOSE(x)			\
   if (x) {				\
     (void) x->close (x, 0); x = NULL;	\
