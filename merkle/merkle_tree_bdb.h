@@ -52,7 +52,7 @@ public:
 
   // Sub-classes may override the following methods
   void lookup_release (merkle_node *n);
-  void sync (bool reopen);
+  void sync (bool reopen = true);
   void check_invariants ();
 };
 

@@ -309,7 +309,7 @@ merkle_tree_bdb::~merkle_tree_bdb ()
 // }}}
 // {{{ merkle_tree_bdb::sync
 void
-merkle_tree_bdb::sync (bool reopen = true)
+merkle_tree_bdb::sync (bool reopen)
 {
   // reopen is ignored
 #if (DB_VERSION_MAJOR < 4)
