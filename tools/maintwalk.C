@@ -130,8 +130,6 @@ getsucc_cb1 (chord_node curr, chord_nodelistextres *res, clnt_stat err)
     getsucc (sequential[0]);
     return;
   }
-
-  assert (res->resok->nlist.size () >= 2);
   
   size_t sz = res->resok->nlist.size ();
   vec<chord_node> zs;
@@ -162,6 +160,10 @@ getsucc_cb2 (chord_node curr)
     exit (0);
   }
   
+  // Out of nodes, done.
+  if (!sequential.size ())
+    exit (0);
+
   getsucc (sequential[0]);
 }
 

@@ -119,8 +119,6 @@ getsucc_cb (u_int64_t start, chord_node curr, chord_nodelistextres *res, clnt_st
     return;
   }
 
-  assert (res->resok->nlist.size () >= 2);
-  
   size_t sz = res->resok->nlist.size ();
   vec<chord_node> zs;
   for (size_t i = 0; i < sz; i++) {
@@ -150,6 +148,10 @@ getsucc_cb (u_int64_t start, chord_node curr, chord_nodelistextres *res, clnt_st
     sequential = zs;
     sequential.pop_front ();
   }
+  // Out of nodes, done.
+  if (!sequential.size ())
+    exit (0);
+
   next = sequential[0];
 
   // wrapped around ring. done.
