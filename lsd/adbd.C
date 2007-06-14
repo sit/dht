@@ -19,6 +19,37 @@ static const u_int32_t asrvbufsize (1024*1025);
 class dbmanager;
 static dbmanager *dbm;
 // }}}
+// {{{ IO timing
+static bool iotime (false);
+
+static inline u_int64_t
+io_start ()
+{
+  if (!iotime)
+    return 0;
+  timespec ts;
+  clock_gettime (CLOCK_REALTIME, &ts);
+  u_int64_t key = ts.tv_sec * INT64(1000000) + ts.tv_nsec / 1000;
+  return key;
+}
+
+static inline void
+io_finish (u_int64_t t, strbuf s)
+{
+  if (!iotime)
+    return;
+  timespec ts;
+  clock_gettime (CLOCK_REALTIME, &ts);
+  u_int64_t now = ts.tv_sec * INT64(1000000) + ts.tv_nsec / 1000;
+  warn << "IO: " << s << " in " << (now - t) << "us\n";
+}
+
+static void
+toggle_iotime ()
+{
+  iotime = !iotime;
+}
+// }}}
 // {{{ DB key conversion
 str
 id_to_str (const chordID &key)
@@ -954,10 +985,13 @@ do_store (dbmanager *dbm, svccb *sbp)
     return;
   }
 
+  u_int64_t t = io_start ();
+
   // implicit policy: don't insert the same key twice for non-aux dbs.
   bool inserted_new_key = db->kinsert (arg->key, arg->auxdata);
   if (!inserted_new_key) {
     sbp->replyref (ADB_OK);
+    io_finish (t, strbuf("store %s", arg->name.cstr ()));
     return;
   }
 
@@ -973,6 +1007,7 @@ do_store (dbmanager *dbm, svccb *sbp)
   auxdatadbt.data = &nauxdata; 
 
   int r = db->insert (arg->key, data, auxdatadbt);
+  io_finish (t, strbuf("store %s", arg->name.cstr ()));
   sbp->replyref ((r == 0) ? ADB_OK : ADB_ERR);
 }
 // }}}
@@ -989,6 +1024,8 @@ do_fetch (dbmanager *dbm, svccb *sbp)
     sbp->replyref (res);
     return;
   }
+
+  u_int64_t t = io_start ();
  
   str data; 
 
@@ -1008,6 +1045,8 @@ do_fetch (dbmanager *dbm, svccb *sbp)
     res.resok->key = key;
     res.resok->data = data;
   }
+
+  io_finish (t, strbuf ("fetch %s", arg->name.cstr ()));
 
   sbp->replyref (res);
 }
@@ -1204,7 +1243,9 @@ do_sync (dbmanager *dbm, svccb *sbp)
   if (!db) {
     res = ADB_ERR;
   } else {
+    u_int64_t t = io_start ();
     db->sync ();
+    io_finish (t, strbuf ("sync %s", arg->name.cstr ()));
   }
   sbp->replyref (res);
 }
@@ -1347,6 +1388,8 @@ main (int argc, char **argv)
   sigcb (SIGHUP, wrap (&halt));
   sigcb (SIGINT, wrap (&halt));
   sigcb (SIGTERM, wrap (&halt));
+
+  sigcb (SIGUSR1, wrap (&toggle_iotime));
 
   //setup the asrv
   listen_unix (dbsock, dbm);
