@@ -5,12 +5,14 @@
  * Code adapted from tools/walk.C and maint/maint*
  */
 
+#include <db.h>
+
 #include <arpc.h>
 #include <aios.h>
 #include <comm.h>
 #include "rpclib.h"
 #include <merkle.h>
-#include <merkle_tree_disk.h>
+#include <merkle_tree_bdb.h>
 #include <merkle_sync_prot.h>
 
 void 
@@ -195,8 +197,8 @@ sync_with_cb1 (u_int64_t start, cbv cb, chord_node n, int fd)
     si->n = n;
     si->ctype = ctype;
     si->ndiffs = 0;
-    si->localtree = New refcounted<merkle_tree_disk> 
-      (succtreepath, /* rw = */ true);
+    si->localtree = New refcounted<merkle_tree_bdb> 
+      (str (succtreepath).cstr (), /* join = */ false, /* ro = */ false );
     si->msyncer = New refcounted<merkle_syncer> (
 	n.vnode_num, ctype,
 	si->localtree,

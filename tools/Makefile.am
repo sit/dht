@@ -30,7 +30,7 @@ filestore_SOURCES = filestore.C
 filestore_LDADD = ../dhash/libdhashclient.a  ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
 
 maintwalk_SOURCES = maintwalk.C
-maintwalk_LDADD = ../merkle/libmerkle.a ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la  $(LDADD) 
+maintwalk_LDADD = ../merkle/libmerkle.a ../chord/libchord.a ../utils/libutil.a ../svc/libsvc.la $(DBLIB) $(LDADD) 
 
 dbm_SOURCES = dbm.C
 dbm_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)
