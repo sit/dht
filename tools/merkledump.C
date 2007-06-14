@@ -10,10 +10,18 @@ main (int argc, char *argv[])
   setprogname (argv[0]);
   if (argc < 2)
     fatal <<  "Usage: " << progname << " merkletreebdb\n";
-  char pathbuf[PATH_MAX];
-  sprintf (pathbuf, "%s/mtree", argv[1]);
-  ptr<merkle_tree_bdb> tree =
-    New refcounted<merkle_tree_bdb> (pathbuf, true, true);
+
+  ptr<merkle_tree_bdb> tree = NULL;
+  if (merkle_tree_bdb::tree_exists (argv[1])) {
+    // Handle case where path is given directly
+    tree = New refcounted<merkle_tree_bdb> (argv[1], true, true);
+  } else {
+    // Handle case where path may owned by adbd.
+    char pathbuf[PATH_MAX];
+    sprintf (pathbuf, "%s/mtree", argv[1]);
+    tree = New refcounted<merkle_tree_bdb> (pathbuf, true, true);
+    // Fatal if this tree does not exist.
+  }
 
   chordID lastread = 0;
   chordID maxid = (chordID (1) << 160) - 1;
