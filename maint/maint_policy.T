@@ -531,6 +531,11 @@ carbonite::getrepairs (chordID start, int thresh, int count,
     str succtreepath = strbuf () << private_path << "/" 
       << host.vnode_num << "-"
       << succs[i]->id () << "." << ctype2ext (ctype);
+    if (!merkle_tree_bdb::tree_exists (succtreepath.cstr ())) {
+      warn << host << ": Not returning repairs due to missing tree "
+	   << succtreepath << "\n";
+      return;
+    }
     ptr<merkle_tree> t = New refcounted<merkle_tree_bdb> 
       (succtreepath.cstr (), /* join = */ false, /* ro = */ true);
     trees.push_back (t);

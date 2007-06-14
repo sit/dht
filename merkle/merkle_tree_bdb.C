@@ -295,6 +295,32 @@ merkle_tree_bdb::merkle_tree_bdb (const char *path, bool join, bool ro) :
   delete root;
 }
 // }}}
+// {{{ merkle_tree_bdb::tree_exists
+bool
+merkle_tree_bdb::tree_exists (const char *path)
+{
+  struct stat sb;
+  if (stat (path, &sb) < 0) {
+    // warn << "tree_exists (" << path << "): " << strerror (errno) << "\n";
+    return false;
+  }
+  if (!S_ISDIR (sb.st_mode)) {
+    // warn << "tree_exists (" path << "): not a directory\n";
+    return false;
+  }
+  str npath (strbuf ("%s/node.db", path));
+  if (stat (npath.cstr (), &sb) < 0) {
+    // warn << "tree_exists (" path << "): node.db: " << strerror (errno) << "\n";
+    return false;
+  }
+  str kpath (strbuf ("%s/key.db", path));
+  if (stat (kpath.cstr (), &sb) < 0) {
+    // warn << "tree_exists (" path << "): key.db: " << strerror (errno) << "\n";
+    return false;
+  }
+  return true;
+}
+// }}}
 // {{{ merkle_tree_bdb::~merkle_tree_bdb
 merkle_tree_bdb::~merkle_tree_bdb ()
 {

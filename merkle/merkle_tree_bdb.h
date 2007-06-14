@@ -35,6 +35,8 @@ public:
   merkle_tree_bdb (const char *path, bool join, bool ro);
   virtual ~merkle_tree_bdb ();
 
+  static bool tree_exists (const char *path);
+
   // Sub-classes must implement the following methods
   merkle_node *get_root ();
   int insert (merkle_hash &key);
