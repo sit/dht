@@ -273,7 +273,7 @@ maintainer::local_maint_cycle (cbv cb)
   BLOCK {
     update_neighbors (@());
   }
-  if (preds.size () >= 2) {
+  if (preds.size () > 0) {
     BLOCK { 
       process_neighbors (preds, succs, @());
     }
