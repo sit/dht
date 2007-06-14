@@ -217,12 +217,12 @@ sync_with_cb2 (u_int64_t start, sync_info *si, cbv cb, int err)
   aout << si->n << " " << ctype2ext (si->ctype)
        << " with "
        << si->ndiffs << " updates.\n";
-  delete si;
   if (!nout) {
     aout << si->n << " complete in " 
          << (getusec () - start)/1000 << "ms\n";
     delaycb (0, cb);
   }
+  delete si;
 }
 // }}}
 
