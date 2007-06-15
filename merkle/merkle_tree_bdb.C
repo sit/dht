@@ -173,7 +173,7 @@ merkle_node_bdb::internal2leaf (DB_TXN *t)
   // warnx << "internal2leaf " << depth << " / " << prefix << "\n";
   sha1ctx sc;
   vec<merkle_hash> keys;
-  int r = tree->get_hash_list (keys, depth, prefix, t);
+  tree->get_hash_list (keys, depth, prefix, t);
 
   assert (keys.size () <= 64);
   for (size_t i = 0; i < keys.size (); i++)
@@ -204,7 +204,7 @@ merkle_node_bdb::leaf2internal (DB_TXN *t)
 {
   // warnx << "leaf2internal " << depth << " / " << prefix << "\n";
   vec<merkle_hash> keys;
-  int r = tree->get_hash_list (keys, depth, prefix, t);
+  tree->get_hash_list (keys, depth, prefix, t);
 
   assert (keys.size () == count);
 
@@ -667,7 +667,7 @@ merkle_tree_bdb::database_get_keys (u_int depth, const merkle_hash &prefix)
   DB_TXN *t;
   dbfe_txn_begin (dbe, &t);
   vec<merkle_hash> keys;
-  int r = get_hash_list (keys, depth, prefix, t);
+  get_hash_list (keys, depth, prefix, t);
   dbfe_txn_commit (dbe, t);
   return keys;
 }
@@ -721,7 +721,6 @@ merkle_tree_bdb::lookup_exact (u_int depth, const merkle_hash &key)
 merkle_node *
 merkle_tree_bdb::lookup (u_int depth, const merkle_hash &key)
 {
-  u_int actual_depth (0);
   return lookup (&depth, MAX_DEPTH, key);
 }
 // }}}
@@ -788,7 +787,7 @@ merkle_tree_bdb::verify_subtree (merkle_node_bdb *n, DB_TXN *t)
     }
   } else {
     vec<merkle_hash> keys;
-    int r = get_hash_list (keys, n->depth, n->prefix, t);
+    get_hash_list (keys, n->depth, n->prefix, t);
     ncount = keys.size ();
     assert (n->count <= 64);
     for (u_int i = 0; i < keys.size (); i++) {
