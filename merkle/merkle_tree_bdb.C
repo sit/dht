@@ -341,9 +341,9 @@ merkle_tree_bdb::sync (bool reopen)
 {
   // reopen is ignored
 #if (DB_VERSION_MAJOR < 4)
-  txn_checkpoint (dbe, 0, 0, 0);
+  txn_checkpoint (dbe, 30*1024, 10, 0);
 #else
-  dbe->txn_checkpoint (dbe, 0, 0, 0);
+  dbe->txn_checkpoint (dbe, 30*1024, 10, 0);
 #endif
 }
 // }}}

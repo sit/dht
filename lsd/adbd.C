@@ -152,7 +152,7 @@ public:
 
   void warner (const char *method, const char *desc, int r);
 
-  void sync ();
+  void sync (bool force = false);
 
   bool hasaux () { return auxdatadb != NULL; };
 
@@ -223,10 +223,13 @@ dbns::dbns (const str &dbpath, const str &name, bool aux) :
 // {{{ dbns::~dbns
 dbns::~dbns ()
 {
+  sync (/* force = */ true);
+
 #define DBNS_DBCLOSE(x)			\
   if (x) {				\
     (void) x->close (x, 0); x = NULL;	\
   }
+
   // Start with main databases
   DBNS_DBCLOSE(datadb);
   DBNS_DBCLOSE(auxdatadb);
@@ -254,14 +257,17 @@ dbns::warner (const char *method, const char *desc, int r)
 // }}}
 // {{{ dbns::sync
 void
-dbns::sync ()
+dbns::sync (bool force)
 {
+  int flags = 0;
+  if (force)
+    flags = DB_FORCE;
 #if (DB_VERSION_MAJOR < 4)
-   txn_checkpoint (dbe, 0, 0, 0);
+  txn_checkpoint (dbe, 30*1024, 10, flags);
 #else
-   dbe->txn_checkpoint (dbe, 0, 0, 0);
+  dbe->txn_checkpoint (dbe, 30*1024, 10, flags);
 #endif
-   mtree->sync ();
+  mtree->sync ();
 }
 // }}}
 // {{{ dbns::kinsert (chordID, u_int32_t)
@@ -915,10 +921,9 @@ dbmanager::dbcloser (dbns *db)
 {
   if (db) {
     warn << "Closing db " << db->name << "\n";
-    db->sync ();
+    delete db;
+    db = NULL;
   }
-  delete db;
-  db = NULL;
 }
 
 dbns *
