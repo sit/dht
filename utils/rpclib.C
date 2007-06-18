@@ -67,9 +67,7 @@ doRPC (const chord_node &n, const rpc_program &prog,
   } else {
     int args_len = x.uio ()->resid ();
     arg->args.setsize (args_len);
-    void *marshalled_args = suio_flatten (x.uio ());
-    memcpy (arg->args.base (), marshalled_args, args_len);
-    free (marshalled_args);
+    x.uio ()->copyout (arg->args.base ());
 
     dorpc_res *res = New dorpc_res (DORPC_OK);
     c->timedcall (rpclib_timeout, TRANSPORTPROC_DORPC, arg, res,

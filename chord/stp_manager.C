@@ -595,10 +595,7 @@ rpccb_chord::timeout_cb (ptr<bool> del)
     //update the msg buffer so we send with the new timestamp
     unsigned int l = x.uio ()->resid ();
     assert (l == msglen);
-    char *newbuf = suio_flatten (x.uio ());
-    memcpy (msgbuf, newbuf, msglen);
-    xfree (newbuf);
-
+    x.uio ()->copyout (msgbuf);
 
     //send it
     xmit (rexmits);

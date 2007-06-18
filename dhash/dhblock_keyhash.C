@@ -18,10 +18,8 @@ dhblock_keyhash::marshal_block (sfs_pubkey2 key,
     fatal << "keyhash: marshal failed\n";
   } 
   
-  int m_len = x.uio ()->resid ();
-  char *m_dat = suio_flatten (x.uio ());
-  str v (m_dat, m_len);
-  xfree (m_dat);
+  mstr v (x.uio ()->resid ());
+  x.uio ()->copyout (v.cstr ());
   return v;
 }
 

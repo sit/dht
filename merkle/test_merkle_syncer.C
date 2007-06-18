@@ -146,9 +146,7 @@ doRPC (RPC_delay_args *a)
   } 
   int args_len = x.uio ()->resid ();
   arg->args.setsize (args_len);
-  void *marshalled_args = suio_flatten (x.uio ());
-  memcpy (arg->args.base (), marshalled_args, args_len);
-  free (marshalled_args);
+  x.uio ()->copyout (arg->args.base ());
 
   dorpc_res *res = New dorpc_res (DORPC_OK);
   SYNCER.clnt->call (TRANSPORTPROC_DORPC, arg, res,

@@ -382,10 +382,6 @@ user_args::reply (void *res)
     fatal << "couldn't marshall result\n";
 
   int res_len = x.uio ()->resid ();
-  void *marshalled_res = NULL;
-  if (res_len > 0)
-    marshalled_res = suio_flatten (x.uio ());
-
   track_reply (*prog, procno, res_len);
 
   //stuff into a transport wrapper
@@ -394,10 +390,8 @@ user_args::reply (void *res)
   me_->fill_node (rpc_res->resok->src);
   rpc_res->resok->send_time_echo = send_time;
   rpc_res->resok->results.setsize (res_len);
-  if (res_len > 0) {
-    memcpy (rpc_res->resok->results.base (), marshalled_res, res_len);
-    xfree (marshalled_res);
-  }
+  if (res_len > 0)
+    x.uio ()->copyout (rpc_res->resok->results.base ());
 
   assert (rpc_res->status == DORPC_OK);
   
@@ -546,9 +540,8 @@ ptr<dorpc_arg> vnode_impl::marshal_doRPC (ref<location> l,
   } else {
     int args_len = x.uio ()->resid ();
     arg->args.setsize (args_len);
-    void *marshalled_args = suio_flatten (x.uio ());
-    memcpy (arg->args.base (), marshalled_args, args_len);
-    xfree (marshalled_args);
+    if (args_len > 0)
+      x.uio ()->copyout (arg->args.base ());
   }
   return arg;
 }
