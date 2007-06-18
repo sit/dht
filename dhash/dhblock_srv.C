@@ -21,6 +21,7 @@ dhblock_srv::dhblock_srv (ptr<vnode> node,
 			  str dbname,
 			  bool hasaux,
 			  ptr<chord_trigger_t> t) :
+  sync_tcb (NULL),
   repair_tcb (NULL),
   ctype (c),
   db (New refcounted<adb> (dbsock, dbname, hasaux, t)),
@@ -30,11 +31,16 @@ dhblock_srv::dhblock_srv (ptr<vnode> node,
 {
   warn << "opened " << dbsock << " with space " << dbname 
        << (hasaux ? " (hasaux)\n" : "\n");
+  delaycb (dhash::reptm (), wrap (this, &dhblock_srv::sync_timer));
 }
 
 dhblock_srv::~dhblock_srv ()
 {
   stop ();
+  if (sync_tcb) {
+    timecb_remove (sync_tcb);
+    sync_tcb = NULL;
+  }
 }
 
 ptr<aclnt>
@@ -233,8 +239,6 @@ dhblock_srv::repair_qlength ()
 void
 dhblock_srv::repair_timer ()
 {
-  db->sync (wrap (this, &dhblock_srv::repair_timer_1));
-
   if (repairs_queued.size () < REPAIR_QUEUE_MAX)
     generate_repair_jobs ();
   // Generation will finish asynchronously
@@ -249,11 +253,22 @@ dhblock_srv::repair_timer ()
       wrap (this, &dhblock_srv::repair_timer));
 }
 
+
 void
-dhblock_srv::repair_timer_1 (adb_status stat)
+dhblock_srv::sync_timer ()
+{
+  sync_tcb = NULL;
+  db->sync (wrap (this, &dhblock_srv::sync_timer_cb));
+}
+
+void
+dhblock_srv::sync_timer_cb (adb_status stat)
 {
   if (stat)
     warn << node->my_ID () << ": sync failed: " << stat << ".\n";
+
+  sync_tcb = delaycb (dhash::reptm (),
+      wrap (this, &dhblock_srv::sync_timer));
 }
 
 void

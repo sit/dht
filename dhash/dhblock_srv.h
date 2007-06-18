@@ -35,9 +35,13 @@ struct repair_job : virtual public refcount {
 
 /** This class serves as the parent for new block storage types */
 class dhblock_srv : virtual public refcount {
+  timecb_t *sync_tcb;
+  void sync_timer ();
+  void sync_timer_cb (adb_status stat);
+
   timecb_t *repair_tcb;
   void repair_timer ();
-  void repair_timer_1 (adb_status stat);
+
   vec<ptr<repair_job> > repair_q;
   void repair_done (str desc);
   void repair_flush_q ();
