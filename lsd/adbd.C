@@ -995,8 +995,8 @@ do_store (dbmanager *dbm, svccb *sbp)
   // implicit policy: don't insert the same key twice for non-aux dbs.
   bool inserted_new_key = db->kinsert (arg->key, arg->auxdata);
   if (!inserted_new_key) {
-    sbp->replyref (ADB_OK);
     io_finish (t, strbuf("store %s", arg->name.cstr ()));
+    sbp->replyref (ADB_OK);
     return;
   }
 
