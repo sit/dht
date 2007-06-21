@@ -159,6 +159,7 @@ test_reads (merkle_tree *mtree, const keys_t &keys)
     merkle_node *n = mtree->lookup (intree[key]);
     assert (n);
     assert (n->isleaf ());
+    mtree->lookup_release (n);
   }
   warn << "OK\n";
 
@@ -172,6 +173,7 @@ test_reads (merkle_tree *mtree, const keys_t &keys)
     assert (!mtree->key_exists (c));
     merkle_node *n = mtree->lookup (c);
     assert (n);
+    mtree->lookup_release (n);
   }
   warn << "OK\n";
 
