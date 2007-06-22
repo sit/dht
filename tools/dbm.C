@@ -239,7 +239,7 @@ void
 harness_t::eofhandler () 
 {
   warn << "Unexpected EOF on transport: block too large?\n";
-  delete this;
+  complete ();
 }
 
 bool
@@ -403,7 +403,7 @@ harness_t::storecb (int iter, unsigned int dx, u_int64_t start,
   if (outfile != stdout)
     warnx << buf;
 
-  go (iter);
+  delaycb (0, wrap (this, &harness_t::go, iter));
 }
 
 void
@@ -441,7 +441,7 @@ harness_t::fetchcb (int iter, unsigned int i, u_int64_t start,
       warnx << buf;
   } 
 
-  go (iter);
+  delaycb (0, wrap (this, &harness_t::go, iter));
 }
 
 void
@@ -456,9 +456,7 @@ harness_t::complete ()
     timecb_remove (measurecb);
     measurecb = NULL;
     measure_bw ();
-    fclose (bwfile);
   }
-  fclose (outfile);
   delete this;
   exit (0);
 }
