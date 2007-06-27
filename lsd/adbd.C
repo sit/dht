@@ -137,10 +137,10 @@ class dbns {
   str name;
   ihash_entry<dbns> hlink;
 
+  const bool aux;
   DB_ENV *dbe;
 
   DB *datadb;
-  DB *auxdatadb;
   DB *metadatadb;
   DB *byexpiredb;
 
@@ -156,7 +156,7 @@ public:
 
   void sync (bool force = false);
 
-  bool hasaux () { return auxdatadb != NULL; };
+  bool hasaux () { return aux; };
 
   // Primary data management
   int insert (const chordID &key, DBT &data, u_int32_t auxdata = 0);
@@ -170,9 +170,9 @@ public:
 // {{{ dbns::dbns
 dbns::dbns (const str &dbpath, const str &name, bool aux) :
   name (name),
+  aux (aux),
   dbe (NULL),
   datadb (NULL),
-  auxdatadb (NULL),
   metadatadb (NULL),
   byexpiredb (NULL),
   mtree (NULL)
@@ -191,10 +191,6 @@ dbns::dbns (const str &dbpath, const str &name, bool aux) :
 
   r = dbfe_opendb (dbe, &datadb, "db", DB_CREATE, 0);
   DBNS_ERRCHECK ("datadb->open");
-  if (aux) {
-    r = dbfe_opendb (dbe, &auxdatadb, "auxdb", DB_CREATE, 0);
-    DBNS_ERRCHECK ("auxdatadb->open");
-  }
 
   mtree = New merkle_tree_bdb (dbe, /* ro = */ false);
 
@@ -220,7 +216,6 @@ dbns::~dbns ()
 
   // Start with main databases
   DBNS_DBCLOSE(datadb);
-  DBNS_DBCLOSE(auxdatadb);
   // Close out the merkle tree which shares our db environment
   delete mtree;
   mtree = NULL;
@@ -313,6 +308,7 @@ dbns::insert (const chordID &key, DBT &data, u_int32_t auxdata)
   adb_metadata_t md;
   md.size = data.size;
   md.expiration = 0;
+  md.auxdata = auxdata;
   str md_str = xdr2str (md);
   DBT metadata;
   str_to_dbt (md_str, &metadata);
@@ -322,16 +318,6 @@ dbns::insert (const chordID &key, DBT &data, u_int32_t auxdata)
     if (hasaux ()) {
       err = "mtree->insert aux";
       r = mtree->insert (key, auxdata, t);
-      if (r) break;
-
-      DBT auxdatadbt;
-      bzero (&auxdatadbt, sizeof (auxdatadbt));
-      auxdatadbt.size = sizeof (u_int32_t);
-      u_int32_t nauxdata = htonl (auxdata);
-      auxdatadbt.data = &nauxdata; 
-
-      err = "auxdatadb->put";
-      r = auxdatadb->put (auxdatadb, t, &skey, &auxdatadbt, 0);
       if (r) break;
     } else {
       err = "mtree->insert";
@@ -461,10 +447,6 @@ dbns::del (const chordID &key, u_int32_t auxdata)
       err = "mtree->remove aux";
       r = mtree->remove (key, auxdata, t);
       if (r) break;
-
-      err = "auxdatadb->del";
-      r = auxdatadb->del (auxdatadb, t, &skey, 0);
-      if (r) break;
     } else {
       err = "mtree->remove";
       r = mtree->remove (key, t);
@@ -498,12 +480,7 @@ dbns::getkeys (const chordID &start, size_t count, bool getaux, rpc_vec<adb_keya
 {
   int r = 0;
   DBC *cursor;
-  if (auxdatadb) {
-    r = auxdatadb->cursor (auxdatadb, NULL, &cursor, 0);
-  } else {
-    r = datadb->cursor (datadb, NULL, &cursor, 0);
-  }
-
+  r = metadatadb->cursor (metadatadb, NULL, &cursor, 0);
   if (r) {
     warner ("dbns::getkeys", "cursor open", r);
     (void) cursor->c_close (cursor);
@@ -515,9 +492,6 @@ dbns::getkeys (const chordID &start, size_t count, bool getaux, rpc_vec<adb_keya
   id_to_dbt (start, &key);
   DBT data_template;
   bzero (&data_template, sizeof (data_template));
-  // If DB_DBT_PARTIAL and data.dlen == 0, no data is read.
-  if (!auxdatadb || !getaux)
-    data_template.flags = DB_DBT_PARTIAL;
   DBT data = data_template;
 
   u_int32_t limit = count;
@@ -530,11 +504,21 @@ dbns::getkeys (const chordID &start, size_t count, bool getaux, rpc_vec<adb_keya
 
   r = cursor->c_get (cursor, &key, &data, DB_SET_RANGE);
   while (elements < limit && !r) {
+    if (key.size == master_metadata.size && 
+	!memcmp (key.data, master_metadata.data, key.size))
+      goto getkeys_nextkey;
     out[elements].key = dbt_to_id (key);
-    if (getaux)
-      out[elements].auxdata = ntohl (*(u_int32_t *)data.data);
+    if (getaux) {
+      adb_metadata_t md;
+      if (!buf2xdr (md, data.data, data.size)) {
+	warnx << name << ": Bad metadata for " << out[elements].key << "\n";
+	goto getkeys_nextkey;
+      }
+      out[elements].auxdata = md.auxdata;
+    }
     elements++;
 
+getkeys_nextkey:
     bzero (&key, sizeof (key));
     data = data_template;
     r = cursor->c_get (cursor, &key, &data, DB_NEXT);

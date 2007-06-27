@@ -29,6 +29,7 @@ struct adb_master_metadata_t {
 struct adb_metadata_t {
   u_int32_t size;       /* Object size in bytes */
   u_int32_t expiration; /* Seconds since epoch */
+  u_int32_t auxdata;	/* Optional: for distinguishing versions */
 };
 /* }}} */
 
