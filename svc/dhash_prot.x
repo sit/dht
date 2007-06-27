@@ -22,7 +22,6 @@ struct s_dhash_insertarg {
   int offset;
   store_status type;
   dhash_valueattr attr;
-  bool last; /* used by the merkle code only */
   int32_t nonce; /* used only if this is a fetch complete */
 };
 
