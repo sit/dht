@@ -5,7 +5,8 @@ enum adb_status {
   ADB_OK = 0,
   ADB_ERR = 1,
   ADB_NOTFOUND = 2,
-  ADB_COMPLETE = 3
+  ADB_COMPLETE = 3,
+  ADB_DISKFULL = 4
 };
 
 struct adb_vnodeid {
@@ -18,6 +19,16 @@ struct adb_vnodeid {
 struct adb_keyaux_t {
   chordID key;
   u_int32_t auxdata;
+};
+
+struct adb_master_metadata_t {
+  u_int64_t size;
+  u_int32_t expiration;
+};
+
+struct adb_metadata_t {
+  u_int32_t size;       /* Object size in bytes */
+  u_int32_t expiration; /* Seconds since epoch */
 };
 /* }}} */
 

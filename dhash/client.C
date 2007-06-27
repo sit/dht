@@ -506,6 +506,8 @@ dhashcli::insert_store_cb (ref<sto_state> ss, u_int i, u_int64_t t,
     (getusec () - t)/1000 << "ms: " << err << "\n";
   if (!err)
     ss->good += 1;
+  if (err == DHASH_DISKFULL)
+    ss->diskfull = true;
 
   // Count down until all outstanding RPCs have returned
   if (ss->out == 0) {
@@ -519,7 +521,7 @@ dhashcli::insert_store_cb (ref<sto_state> ss, u_int i, u_int64_t t,
 	  " insufficient frags/blocks stored.\n";
 	
 	r_ret.push_back (ss->succs[0].x);
-	(*ss->cb) (DHASH_ERR, r_ret);
+	(*ss->cb) (ss->diskfull ? DHASH_DISKFULL : DHASH_ERR, r_ret);
 	// We should do something here to try and store this fragment
 	// somewhere else.
 	return;

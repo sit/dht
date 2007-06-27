@@ -44,10 +44,18 @@ public:
 
   static bool tree_exists (const char *path);
 
+  // Special functions for BDB insert/remove.
+  int insert (merkle_hash &key, DB_TXN *t = NULL);
+  int insert (const chordID &key, DB_TXN *t = NULL);
+  int insert (const chordID &key, const u_int32_t aux, DB_TXN *t = NULL);
+  int remove (merkle_hash &key, DB_TXN *t = NULL);
+  int remove (const chordID &key, DB_TXN *t = NULL);
+  int remove (const chordID &key, const u_int32_t aux, DB_TXN *t = NULL);
+
   // Sub-classes must implement the following methods
   merkle_node *get_root ();
-  int insert (merkle_hash &key);
-  int remove (merkle_hash &key);
+  int insert (merkle_hash &key) { return insert (key, NULL); }
+  int remove (merkle_hash &key) { return remove (key, NULL); }
   bool key_exists (chordID key);
   vec<merkle_hash> database_get_keys (u_int depth,
       const merkle_hash &prefix);

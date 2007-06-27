@@ -75,9 +75,14 @@ public:
     
     u_int out;
     u_int good;
+
+    bool diskfull;
     
     sto_state (ref<dhash_block> b, cbinsert_path_t x) :
-      block (b), cb (x), blk (NULL), out (0), good (0) {}
+      block (b), cb (x), blk (NULL), out (0), good (0),
+      diskfull (false)
+    {
+    }
   };
 
 private:

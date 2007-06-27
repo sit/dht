@@ -3,6 +3,7 @@
 #include <wmstr.h>
 #include <ihash.h>
 #include <sha1.h>
+#include <parseopt.h>
 
 #include <adb_prot.h>
 #include <id_utils.h>
@@ -15,6 +16,16 @@ static str dbsock;
 static int clntfd (-1);
 
 static const u_int32_t asrvbufsize (1024*1025);
+
+// Total disk allowed for data per dbns, in bytes.
+// Default: unlimited
+static u_int64_t quota (0);
+
+// This is the key used to access the master metadata record.
+// The master metadata record contains:
+//   Total size of objects put into a dbns,
+//   The next expiration time for an object.
+static DBT master_metadata;
 
 class dbmanager;
 static dbmanager *dbm;
@@ -89,12 +100,36 @@ dbt_to_id (const DBT &dbt)
  *   1. chordID -> data.  20 bytes -> potentially large bytes
  *   2. chordID -> metadata: 20 bytes -> ...
  *        auxdata (e.g. noauth hash) 4 + 4*n bytes
+ *        expiration time
+ *        size
  *
  * The goal is to support the following operations:
  *   A. Read/write of data objects
  *   B. Merkle tree updates (shared with maintd via BDB)
  */ 
 
+// {{{ getexpire: Secondary key extractor for metadata
+static int
+getexpire (DB *sdb, const DBT *pkey, const DBT *pdata, DBT *skey)
+{
+  u_int32_t *expire = (u_int32_t *) malloc(sizeof(u_int32_t));
+
+  adb_metadata_t md;
+  if (!buf2xdr (md, pdata->data, pdata->size)) {
+    hexdump hd (pdata->data, pdata->size);
+    warn << "getexpire: unable to unmarshal pdata.\n" << hd << "\n";
+    return -1;
+  }
+  // Ensure big-endian for proper BDB sorting.
+  *expire = htonl (md.expiration);
+  // this flag should mean that berkeley db will free this memory when it's
+  // done with it.
+  skey->flags = DB_DBT_APPMALLOC;
+  skey->data = expire;
+  skey->size = sizeof (*expire);
+  return 0;
+}
+// }}}
 // {{{ dbns declarations
 class dbns {
   friend class dbmanager;
@@ -106,10 +141,12 @@ class dbns {
 
   DB *datadb;
   DB *auxdatadb;
+  DB *metadatadb;
+  DB *byexpiredb;
 
-  merkle_tree *mtree;
+  merkle_tree_bdb *mtree;
 
-  // XXX should have a instance-level lock that governs datadb/auxdatadb.
+  int update_metadata (int32_t sz, DB_TXN *t = NULL);
 
 public:
   dbns (const str &dbpath, const str &name, bool aux);
@@ -122,8 +159,7 @@ public:
   bool hasaux () { return auxdatadb != NULL; };
 
   // Primary data management
-  bool kinsert (const chordID &key, u_int32_t auxdata);
-  int insert (const chordID &key, DBT &data, DBT &auxdata);
+  int insert (const chordID &key, DBT &data, u_int32_t auxdata = 0);
   int lookup (const chordID &key, str &data);
   int lookup_nextkey (const chordID &key, chordID &nextkey);
   int del (const chordID &key, u_int32_t auxdata);
@@ -136,7 +172,10 @@ dbns::dbns (const str &dbpath, const str &name, bool aux) :
   name (name),
   dbe (NULL),
   datadb (NULL),
-  auxdatadb (NULL)
+  auxdatadb (NULL),
+  metadatadb (NULL),
+  byexpiredb (NULL),
+  mtree (NULL)
 {
 #define DBNS_ERRCHECK(desc) \
   if (r) {		  \
@@ -159,6 +198,13 @@ dbns::dbns (const str &dbpath, const str &name, bool aux) :
 
   mtree = New merkle_tree_bdb (dbe, /* ro = */ false);
 
+  r = dbfe_opendb (dbe, &metadatadb, "metadatadb", DB_CREATE, 0);
+  DBNS_ERRCHECK ("metadatadb->open");
+  r = dbfe_opendb (dbe, &byexpiredb, "byexpiredb", DB_CREATE, 0, /* dups = */ true);
+  DBNS_ERRCHECK ("byexpiredb->open");
+  r = metadatadb->associate (metadatadb, NULL, byexpiredb, getexpire, DB_AUTO_COMMIT);
+  DBNS_ERRCHECK ("metadatdb->associate (byexpiredb)");
+
   warn << "dbns::dbns (" << dbpath << ", " << name << ", " << aux << ")\n";
 }
 // }}}
@@ -178,6 +224,9 @@ dbns::~dbns ()
   // Close out the merkle tree which shares our db environment
   delete mtree;
   mtree = NULL;
+  // Close secondary before the primary for metadata
+  DBNS_DBCLOSE(byexpiredb);
+  DBNS_DBCLOSE(metadatadb);
   // Shut down the environment
   DBNS_DBCLOSE(dbe);
 #undef DBNS_DBCLOSE
@@ -209,57 +258,106 @@ dbns::sync (bool force)
 #endif
 }
 // }}}
-// {{{ dbns::kinsert (chordID, u_int32_t)
-bool
-dbns::kinsert (const chordID &key, u_int32_t auxdata)
+// {{{ dbns::update_metadata (int32_t, DB_TXN *)
+int
+dbns::update_metadata (int32_t sz, DB_TXN *t)
 {
-  // We don't really deal well with updating these auxiliary
-  // databases yet, so just ignore them for now.  The auxdatadb
-  // should iterate much faster than the full database anyway.
-  // if (!auxdatadb)
-  if (hasaux ()) {
-    mtree->insert (key, auxdata);
-  } else {
-    if (mtree->key_exists (key)) {
-      return false;
-    }
-    mtree->insert (key);
+  DBT md; bzero (&md, sizeof (md));
+  adb_master_metadata_t rmd;
+  int r = metadatadb->get (metadatadb, t, &master_metadata, &md, DB_RMW);
+  switch (r) {
+    case 0:
+      if (!buf2xdr (rmd, md.data, md.size))
+	return -1;
+      break;
+    case DB_NOTFOUND:
+      bzero (&rmd, sizeof (rmd));
+      break;
+    default:
+      return r;
+      break;
   }
-  return true;
+  if (sz < 0 && rmd.size < u_int64_t (-sz)) {
+    fatal << "dbns::update_metadata: small size: "
+          << rmd.size << " < " << sz << "\n";
+  }
+  rmd.size += sz;
+  if (quota && rmd.size > quota)
+    return ENOSPC;
+  str md_str = xdr2str (rmd);
+  str_to_dbt (md_str, &md);
+  r = metadatadb->put (metadatadb, t, &master_metadata, &md, 0);
+  return r;
 }
 // }}}
 // {{{ dbns::insert (chordID, DBT, DBT)
 int
-dbns::insert (const chordID &key, DBT &data, DBT &auxdata)
+dbns::insert (const chordID &key, DBT &data, u_int32_t auxdata)
 {
   int r = 0;
+  DB_TXN *t = NULL;
+  r = dbfe_txn_begin (dbe, &t);
+  assert (r == 0);
+
+  // Make sure we have space for this object.
+  r = update_metadata (data.size, t);
+  if (r) {
+    dbfe_txn_abort (dbe, t);
+    return r;
+  }
+
+  // Prep BDB objects.
   DBT skey;
   id_to_dbt (key, &skey);
 
-  if (auxdatadb) {
-    // To keep auxdata in sync, use an explicit transaction
-    DB_TXN *t = NULL;
-    r = dbfe_txn_begin (dbe, &t);
-    r = datadb->put (datadb, t, &skey, &data, 0);
-    if (r) {
-      warner ("dbns::insert", "data put error", r);
-      r = dbfe_txn_abort (dbe, t);
-    } 
-    r = auxdatadb->put (auxdatadb, t, &skey, &auxdata, 0);
-    if (r) {
-      warner ("dbns::insert", "auxdata put error", r);
-      r = dbfe_txn_abort (dbe, t);
+  adb_metadata_t md;
+  md.size = data.size;
+  md.expiration = 0;
+  str md_str = xdr2str (md);
+  DBT metadata;
+  str_to_dbt (md_str, &metadata);
+
+  char *err = "";
+  do {
+    if (hasaux ()) {
+      err = "mtree->insert aux";
+      r = mtree->insert (key, auxdata, t);
+      if (r) break;
+
+      DBT auxdatadbt;
+      bzero (&auxdatadbt, sizeof (auxdatadbt));
+      auxdatadbt.size = sizeof (u_int32_t);
+      u_int32_t nauxdata = htonl (auxdata);
+      auxdatadbt.data = &nauxdata; 
+
+      err = "auxdatadb->put";
+      r = auxdatadb->put (auxdatadb, t, &skey, &auxdatadbt, 0);
+      if (r) break;
     } else {
-      r = dbfe_txn_commit (dbe, t);
+      err = "mtree->insert";
+      r = mtree->insert (key, t);
+      // insert may return DB_KEYEXIST in which case we need
+      // not do any more work here.
+      if (r) break;
     }
-    if (r)
-      warner ("dbns::insert", "abort/commit error", r);
+    err = "metadatadb->put";
+    r = metadatadb->put (metadatadb, t, &skey, &metadata, 0);
+    if (r) break;
+
+    err = "datadb->put";
+    r = datadb->put (datadb, t, &skey, &data, 0);
+    if (r) break;
+  } while (0);
+  int ret = 0;
+  if (r) {
+    if (r != DB_KEYEXIST)
+      warner ("dbns::insert", err, r);
+    ret = dbfe_txn_abort (dbe, t);
   } else {
-    // Use implicit transaction
-    r = datadb->put (datadb, NULL, &skey, &data, DB_AUTO_COMMIT);
-    if (r)
-      warner ("dbns::insert", "put error", r);
+    ret = dbfe_txn_commit (dbe, t);
   }
+  if (ret)
+    warner ("dbns::insert", "abort/commit error", ret);
   return r;
 }
 // }}}
@@ -334,17 +432,63 @@ dbns::del (const chordID &key, u_int32_t auxdata)
   DBT skey;
   id_to_dbt (key, &skey);
 
-  // Implicit transaction
-  r = datadb->del (datadb, NULL, &skey, DB_AUTO_COMMIT);
+  // Read the old size in separate transaction
+  DBT md;
+  bzero (&md, sizeof (md));
+  r = metadatadb->get (metadatadb, NULL, &skey, &md, 0);
+  if (r) {
+    if (r != DB_NOTFOUND)
+      warner ("dbns::remove", "metadatadb->get", r);
+    return r;
+  }
+  adb_metadata_t metadata;
+  if (!buf2xdr (metadata, md.data, md.size))
+    return -1;
 
-  if (hasaux ()) {
-    mtree->remove (key, auxdata);
-  } else {
-    mtree->remove (key);
+  DB_TXN *t = NULL;
+  r = dbfe_txn_begin (dbe, &t);
+  assert (r == 0);
+
+  r = update_metadata (-metadata.size, t);
+  if (r) {
+    dbfe_txn_abort (dbe, t);
+    return r;
   }
 
-  if (r && r != DB_NOTFOUND)
-    warner ("dbns::del", "del error", r);
+  char *err = "";
+  do {
+    if (hasaux ()) {
+      err = "mtree->remove aux";
+      r = mtree->remove (key, auxdata, t);
+      if (r) break;
+
+      err = "auxdatadb->del";
+      r = auxdatadb->del (auxdatadb, t, &skey, 0);
+      if (r) break;
+    } else {
+      err = "mtree->remove";
+      r = mtree->remove (key, t);
+      if (r) break;
+    }
+    err = "metadatadb->del";
+    r = metadatadb->del (metadatadb, t, &skey, 0);
+    if (r) break;
+
+    err = "datadb->del";
+    r = datadb->del (datadb, t, &skey, 0);
+    if (r) break;
+  } while (0);
+
+  int ret = 0;
+  if (r) {
+    if (r != DB_NOTFOUND)
+      warner ("dbns::remove", err, r);
+    ret = dbfe_txn_abort (dbe, t);
+  } else {
+    ret = dbfe_txn_commit (dbe, t);
+  }
+  if (ret)
+    warner ("dbns::remove", "abort/commit error", ret);
   return r;
 }
 // }}}
@@ -546,28 +690,25 @@ do_store (dbmanager *dbm, svccb *sbp)
 
   u_int64_t t = io_start ();
 
-  // implicit policy: don't insert the same key twice for non-aux dbs.
-  bool inserted_new_key = db->kinsert (arg->key, arg->auxdata);
-  if (!inserted_new_key) {
-    io_finish (t, strbuf("store %s", arg->name.cstr ()));
-    sbp->replyref (ADB_OK);
-    return;
-  }
-
   DBT data;
   bzero (&data, sizeof (data));
   data.data = arg->data.base ();
   data.size = arg->data.size ();
 
-  DBT auxdatadbt;
-  bzero (&auxdatadbt, sizeof (auxdatadbt));
-  auxdatadbt.size = sizeof (u_int32_t);
-  u_int32_t nauxdata = htonl (arg->auxdata);
-  auxdatadbt.data = &nauxdata; 
-
-  int r = db->insert (arg->key, data, auxdatadbt);
+  int r = db->insert (arg->key, data, arg->auxdata);
   io_finish (t, strbuf("store %s", arg->name.cstr ()));
-  sbp->replyref ((r == 0) ? ADB_OK : ADB_ERR);
+  adb_status stat = ADB_OK;
+  switch (r) {
+    case 0:
+      break;
+    case ENOSPC:
+      stat = ADB_DISKFULL;
+      break;
+    default:
+      stat = ADB_ERR;
+      break;
+  }
+  sbp->replyref (stat);
 }
 // }}}
 // {{{ do_fetch
@@ -765,7 +906,7 @@ accept_cb (int lfd, dbmanager *dbm)
 void
 usage ()
 {
-  warnx << "Usage: adbd -d db -S sock [-D]\n";
+  warnx << "Usage: adbd -d db -S sock [-D] [-q quota_in_GB or 0]\n";
   exit (0);
 }
 
@@ -782,13 +923,21 @@ main (int argc, char **argv)
 
   bool do_daemonize (false);
 
-  while ((ch = getopt (argc, argv, "Dd:S:"))!=-1)
+  while ((ch = getopt (argc, argv, "Dd:q:S:"))!=-1)
     switch (ch) {
     case 'D':
       do_daemonize = true;
       break;
     case 'd':
       db_name = optarg;
+      break;
+    case 'q':
+      {
+	bool ok = convertint (optarg, &quota);
+	if (!ok)
+	  usage ();
+	quota *= 1024 * 1024 * 1024;
+      }
       break;
     case 'S':
       dbsock = optarg;
@@ -811,6 +960,10 @@ main (int argc, char **argv)
   sigcb (SIGTERM, wrap (&halt));
 
   sigcb (SIGUSR1, wrap (&toggle_iotime));
+
+  bzero (&master_metadata, sizeof (master_metadata));
+  master_metadata.data = strdup ("MASTER_INFO");
+  master_metadata.size = strlen ("MASTER_INFO");
 
   //setup the asrv
   listen_unix (dbsock, dbm);

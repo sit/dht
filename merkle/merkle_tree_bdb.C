@@ -537,11 +537,36 @@ merkle_tree_bdb::get_root ()
 }
 // }}}
 // {{{ merkle_tree_bdb::insert
+// Duplicates code more or less from merkle_tree.C
 int
-merkle_tree_bdb::insert (merkle_hash &key)
+merkle_tree_bdb::insert (const chordID &id, DB_TXN *t)
 {
+  merkle_hash mkey (id);
+  return insert (mkey, t);
+}
+
+int
+merkle_tree_bdb::insert (const chordID &id, const u_int32_t aux, DB_TXN *t)
+{
+  // When there is auxiliary information, we use the low-order bytes
+  // of the key to hold the information.  This is used mostly for mutable
+  // data that needs to distinguish whether or not the remote node has
+  // the same version as the local node.
+  chordID key = id;
+  key >>= 32;
+  key <<= 32;
+  assert (key > 0);
+  key |= aux;
+  merkle_hash mkey (key);
+  return insert (mkey, t);
+}
+
+int
+merkle_tree_bdb::insert (merkle_hash &key, DB_TXN *parent)
+{
+  // Run this (potentially) in a nested transaction
   DB_TXN *t = NULL;
-  dbfe_txn_begin (dbe, &t);
+  dbe->txn_begin (dbe, parent, &t, 0);
 
   merkle_hash last_h;
   // Find the nodes that will need to be rehashed.
@@ -615,10 +640,28 @@ insert_cleanup:
 // }}}
 // {{{ merkle_tree_bdb::remove
 int
-merkle_tree_bdb::remove (merkle_hash &key)
+merkle_tree_bdb::remove (const chordID &id, DB_TXN *t)
+{
+  merkle_hash mkey (id);
+  return remove (mkey, t);
+}
+
+int
+merkle_tree_bdb::remove (const chordID &id, const u_int32_t aux, DB_TXN *t)
+{
+  chordID key = id;
+  key >>= 32;
+  key <<= 32;
+  assert (key > 0);
+  key |= aux;
+  merkle_hash mkey (key);
+  return remove (mkey, t);
+}
+int
+merkle_tree_bdb::remove (merkle_hash &key, DB_TXN *parent)
 {
   DB_TXN *t = NULL;
-  dbfe_txn_begin (dbe, &t);
+  dbe->txn_begin (dbe, parent, &t, 0);
 
   int r = remove_key (key, t);
   if (r) {

@@ -140,11 +140,14 @@ void
 dhblock_srv::adbcb (cb_dhstat cb, adb_status astat)
 {
   switch (astat) {
+  case ADB_OK:
+    cb (DHASH_OK);
+    break;
   case ADB_ERR:
     cb (DHASH_DBERR);
     break;
-  case ADB_OK:
-    cb (DHASH_OK);
+  case ADB_DISKFULL:
+    cb (DHASH_DISKFULL);
     break;
   default:
     // Don't expect adb::store and adb::remove to have other return codes.
