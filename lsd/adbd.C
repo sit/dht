@@ -51,17 +51,18 @@ toggle_iotime ()
 }
 // }}}
 // {{{ DB key conversion
-str
-id_to_str (const chordID &key)
+inline void
+id_to_dbt (const chordID &key, DBT *d)
 {
-  // pad out all keys to 20 bytes so that they sort correctly
-  str keystr = strbuf () << key;
-  strbuf padkeystr;
-  for (int pad = 2*sha1::hashsize - keystr.len (); pad > 0; pad--)
-    padkeystr << "0";
-  padkeystr << keystr;
-  assert (padkeystr.tosuio ()->resid () == 2*sha1::hashsize);
-  return padkeystr;
+  static char buf[sha1::hashsize]; // XXX bug waiting to happen?
+
+  bzero (d, sizeof (*d));
+  bzero (buf, sizeof (buf)); // XXX unnecessary; handled by rawmag.
+
+  // We want big-endian for BTree mapping efficiency
+  mpz_get_rawmag_be (buf, sizeof (buf), &key);
+  d->size = sizeof (buf);
+  d->data = (void *) buf;
 }
 
 inline void
@@ -75,10 +76,9 @@ str_to_dbt (const str &s, DBT *d)
 inline chordID
 dbt_to_id (const DBT &dbt)
 {
-  str c (static_cast<char *> (dbt.data), dbt.size);
   chordID id;
-  if (!str2chordID (c, id))
-    fatal << "Invalid chordID as database key: " << c << "\n";
+  assert (dbt.size == sha1::hashsize);
+  mpz_set_rawmag_be (&id, static_cast<char *> (dbt.data), dbt.size);
   return id;
 }
 // }}}
@@ -236,9 +236,8 @@ int
 dbns::insert (const chordID &key, DBT &data, DBT &auxdata)
 {
   int r = 0;
-  str key_str = id_to_str (key);
   DBT skey;
-  str_to_dbt (key_str, &skey);
+  id_to_dbt (key, &skey);
 
   if (auxdatadb) {
     // To keep auxdata in sync, use an explicit transaction
@@ -273,9 +272,8 @@ dbns::lookup (const chordID &key, str &data)
 {
   int r = 0;
 
-  str key_str = id_to_str (key);
   DBT skey;
-  str_to_dbt (key_str, &skey);
+  id_to_dbt (key, &skey);
 
   DBT content;
   bzero (&content, sizeof (content));
@@ -297,9 +295,8 @@ dbns::lookup_nextkey (const chordID &key, chordID &nextkey)
 {
   int r = 0;
 
-  str key_str = id_to_str (key);
   DBT skey;
-  str_to_dbt (key_str, &skey);
+  id_to_dbt (key, &skey);
 
   DBT content;
   bzero (&content, sizeof (content));
@@ -337,9 +334,9 @@ int
 dbns::del (const chordID &key, u_int32_t auxdata)
 {
   int r = 0;
-  str key_str = id_to_str (key);
   DBT skey;
-  str_to_dbt (key_str, &skey);
+  id_to_dbt (key, &skey);
+
   // Implicit transaction
   r = datadb->del (datadb, NULL, &skey, DB_AUTO_COMMIT);
 
@@ -373,9 +370,8 @@ dbns::getkeys (const chordID &start, size_t count, bool getaux, rpc_vec<adb_keya
   }
 
   // Could possibly improve efficiency here by using SleepyCat's bulk reads
-  str key_str = id_to_str (start);
   DBT key;
-  str_to_dbt (key_str, &key);
+  id_to_dbt (start, &key);
   DBT data_template;
   bzero (&data_template, sizeof (data_template));
   // If DB_DBT_PARTIAL and data.dlen == 0, no data is read.
