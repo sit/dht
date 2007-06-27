@@ -257,8 +257,9 @@ merkle_node_bdb::dump (u_int d)
 // }}}
 // }}}
 // {{{ merkle_tree_bdb
-// {{{ merkle_tree_bdb::merkle_tree_bdb
+// {{{ merkle_tree_bdb::merkle_tree_bdb (const char *, bool, bool)
 merkle_tree_bdb::merkle_tree_bdb (const char *path, bool join, bool ro) :
+  dbe_closable (true),
   dbe (NULL),
   nodedb (NULL),
   keydb (NULL)
@@ -273,30 +274,79 @@ merkle_tree_bdb::merkle_tree_bdb (const char *path, bool join, bool ro) :
   int r = dbfe_initialize_dbenv (&dbe, path, join, 5*1024);
   DB_ERRCHECK ("dbe->open");
 
+  r = init_db (ro);
+  DB_ERRCHECK ("init_db");
+}
+// }}}
+// {{{ merkle_tree_bdb:;merkle_tree_bdb (DB_ENV *, bool)
+merkle_tree_bdb::merkle_tree_bdb (DB_ENV *parentdbe, bool ro) :
+  dbe_closable (false),
+  dbe (parentdbe),
+  nodedb (NULL),
+  keydb (NULL)
+{
+  int r = init_db (ro);
+  DB_ERRCHECK ("init_db");
+}
+// }}}
+// {{{ merkle_tree_bdb::init_db
+int
+merkle_tree_bdb::init_db (bool ro)
+{
+  assert (dbe != NULL);
+  int r = 0;
+
   int flags = DB_CREATE;
   if (ro)
     flags = DB_RDONLY;
-  flags |= DB_AUTO_COMMIT;
+
+  DB_TXN *t = NULL;
+  r = dbfe_txn_begin (dbe, &t);
 
   // BTree makes the most sense for a tree structure.
-  r = db_create (&nodedb, dbe, 0);
-  DB_ERRCHECK ("nodedb->create");
-  r = nodedb->open (nodedb, NULL, "node.db", NULL, DB_BTREE, flags, 0);
-  DB_ERRCHECK ("nodedb->open");
+  char *err = "";
+  do {
+    err = "nodedb->create";
+    r = db_create (&nodedb, dbe, 0);
+    if (r) break;
 
-  r = db_create (&keydb, dbe, 0);
-  DB_ERRCHECK ("keydb->create");
-  r = keydb->open (keydb, NULL, "key.db", NULL, DB_BTREE, flags, 0);
-  DB_ERRCHECK ("keydb->open");
+    err = "nodedb->open";
+    r = nodedb->open (nodedb, t, "node.db", NULL, DB_BTREE, flags, 0);
+    if (r) break;
 
-  merkle_node_bdb *root = read_node (0, 0);
+    err = "keydb->create";
+    r = db_create (&keydb, dbe, 0);
+    if (r) break;
+
+    err = "keydb->open";
+    r = keydb->open (keydb, t, "key.db", NULL, DB_BTREE, flags, 0);
+    if (r) break;
+  } while (0);
+  if (r) {
+    warnx << "merkle_tree_bdb::init_db: " << err << ": "
+          << db_strerror (r) << " (" << r << ")\n";
+    dbfe_txn_abort (dbe, t);
+    return r;
+  } else {
+    dbfe_txn_commit (dbe, t);
+  }
+
+  r = dbfe_txn_begin (dbe, &t);
+  merkle_node_bdb *root = read_node (0, 0, t);
   if (!root) {
     // No old root, make up a new one.
     root = New merkle_node_bdb ();
     root->tree = this;
-    write_node (root);
+    err = "root write";
+    r = write_node (root, t);
   }
   delete root;
+  if (r)
+    dbfe_txn_abort (dbe, t);
+  else
+    dbfe_txn_commit (dbe, t);
+
+  return r;
 }
 // }}}
 // {{{ merkle_tree_bdb::tree_exists
@@ -336,7 +386,9 @@ merkle_tree_bdb::~merkle_tree_bdb ()
   }
   DBCLOSE(nodedb);
   DBCLOSE(keydb);
-  DBCLOSE(dbe);
+  if (dbe_closable) {
+    DBCLOSE(dbe);
+  }
 }
 // }}}
 // {{{ merkle_tree_bdb::sync

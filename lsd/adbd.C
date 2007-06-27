@@ -157,12 +157,9 @@ dbns::dbns (const str &dbpath, const str &name, bool aux) :
     DBNS_ERRCHECK ("auxdatadb->open");
   }
 
-  warn << "dbns::dbns (" << dbpath << ", " << name << ", " << aux << ")\n";
+  mtree = New merkle_tree_bdb (dbe, /* ro = */ false);
 
-  str mpath = strbuf () << fullpath << "/mtree";
-  mtree = New merkle_tree_bdb (mpath.cstr (),
-      /* join = */ false,
-      /* ro = */ false);
+  warn << "dbns::dbns (" << dbpath << ", " << name << ", " << aux << ")\n";
 }
 // }}}
 // {{{ dbns::~dbns
@@ -178,11 +175,12 @@ dbns::~dbns ()
   // Start with main databases
   DBNS_DBCLOSE(datadb);
   DBNS_DBCLOSE(auxdatadb);
+  // Close out the merkle tree which shares our db environment
+  delete mtree;
+  mtree = NULL;
   // Shut down the environment
   DBNS_DBCLOSE(dbe);
 #undef DBNS_DBCLOSE
-  delete mtree;
-  mtree = NULL;
   warn << "dbns::~dbns (" << name << ")\n";
 }
 // }}}
@@ -209,7 +207,6 @@ dbns::sync (bool force)
 #else
   dbe->txn_checkpoint (dbe, 30*1024, 10, flags);
 #endif
-  mtree->sync ();
 }
 // }}}
 // {{{ dbns::kinsert (chordID, u_int32_t)

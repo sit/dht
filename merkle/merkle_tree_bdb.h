@@ -5,11 +5,15 @@ class merkle_node_bdb;
 class merkle_tree_bdb : public merkle_tree
 {
   friend class merkle_node_bdb;
+  const bool dbe_closable;
   DB_ENV *dbe;
   DB *nodedb;
   DB *keydb;
 
   void warner (const char *method, const char *desc, int r) const;
+
+  // Database initialization
+  int init_db (bool ro);
 
   // Berkeley DB access methods
   merkle_node_bdb *read_node (u_int depth, const merkle_hash &key, DB_TXN *t = NULL, int flags = 0);
@@ -35,6 +39,7 @@ class merkle_tree_bdb : public merkle_tree
 
 public:
   merkle_tree_bdb (const char *path, bool join, bool ro);
+  merkle_tree_bdb (DB_ENV *dbe, bool ro);
   virtual ~merkle_tree_bdb ();
 
   static bool tree_exists (const char *path);
