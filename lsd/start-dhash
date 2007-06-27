@@ -44,12 +44,14 @@ my $help = 0;
 my $root = "dhash-$ENV{USER}";
 my $userbindir = "";
 my $maintmode = "carbonite";
+my $quota = 0;
 my $daemonize = 0;
 GetOptions (
     "help|?"      => \$help,
     "root|r=s"    => \$root,
     "bindir=s"      => \$userbindir,
     "maintmode=s" => \$maintmode,
+    "quota=i"	  => \$quota,
     "daemonize"   => \$daemonize,
 );
 pod2usage(0) if $help;
@@ -107,7 +109,7 @@ push @daemonizearg, "-D" if $daemonize;
 my %PID = ();
 $PID{adbd}  = spawn ($root, $ADBD, "adbd",
 		     "-d", "./db",
-		     "-S", "./adbd-sock", @daemonizearg);
+		     "-S", "./adbd-sock", "-q", $quota, @daemonizearg);
 $PID{maintd} = spawn ($root, $MAINTD, "maintd",
 		     "-d", "./maintdata",
 		     "-m", $maintmode,
@@ -178,6 +180,7 @@ start-dhash [start-dhash options] [lsd options]
     --root dir		Sandbox Chord/DHash into <dir>
     --bindir dir	Directory of where to find binaries 
     --maintmode mode	Maintenance mode used by maintd.
+    --quota quota	Quota (in GB) for adbd.
     --daemonize		Run all kids as daemons.
 
 =head1 OPTIONS
@@ -204,6 +207,11 @@ the path for binaries.
 
 Use the specified maintenance mode.  This mode is passed directly
 to the -m option of maintd; validity checking is also done by maintd.
+
+=item B<--quota> quota
+
+Set the quota used by adbd.  This should be a small-ish positive integer
+and is interpreted as GB by adbd.
 
 =item B<--daemonize>
 
