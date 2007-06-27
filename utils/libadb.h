@@ -47,8 +47,6 @@ class adb {
 
   qhash<u_int32_t, chordID> getkeystab;
 
-  vec<adb_updatearg *> batched_updates;
-  timecb_t *next_batch;
   enum {
     UPDATE_BATCH_SECS = 1,
     UPDATE_BATCH_MAX_SIZE = 128
@@ -62,9 +60,6 @@ class adb {
   void generic_cb (adb_status *res, cb_adbstat cb, clnt_stat err);
   void fetch_cb (adb_fetchres *res, chordID key, cb_fetch cb, clnt_stat err);
   void getkeys_cb (bool getaux, adb_getkeysres *res, cb_getkeys cb, clnt_stat err);
-  void getkeyson_cb (bool getaux, adb_getkeysres *res, cb_getkeyson cb, clnt_stat err);
-  void getblockrangecb (ptr<adb_getblockrangeres> res, cbvblock_info_t cb, clnt_stat err);
-  void getinfocb (chordID block, ptr<adb_getinfores> res, cbblock_info_t cb, clnt_stat err);
   void getspaceinfocb (ptr<adb_getspaceinfores> res, cb_getspace_t cb, clnt_stat err);
 
   void batch_update ();
@@ -86,15 +81,6 @@ public:
   void getkeys (u_int32_t id, cb_getkeys cb, bool ordered = false, u_int32_t batchsize = 16384, bool getaux = false);
   void sync (cb_adbstat cb);
 
-  void getblockrange (const chordID &start, const chordID &stop,
-      int extant, int count, cbvblock_info_t cb);
-  void getkeyson (const ptr<location> n, const chordID &start,
-      const chordID &stop, cb_getkeyson cb);
-  void update (const chordID &block, const ptr<location> n, bool present, 
-	       bool batchable = false);
-  void update (const chordID &block, const ptr<location> n, u_int32_t auxdata, 
-	       bool present, bool batchable = false);
-  void getinfo (const chordID &block, cbblock_info_t cb);
   void getspaceinfo (cb_getspace_t cb);
 };
 

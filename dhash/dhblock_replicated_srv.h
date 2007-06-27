@@ -38,7 +38,6 @@ class dhblock_replicated_srv : public dhblock_srv
   void store_after_rstore_cb (chordID dbkey, cb_dhstat cb, dhash_stat astat);
   void finish_store (chordID key);
 
-  void localqueue (clnt_stat err, adb_status stat, vec<block_info> blocks);
   void maintqueue (const vec<maint_repair_t> &repairs);
 
 protected:

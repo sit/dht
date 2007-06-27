@@ -15,7 +15,6 @@ class dhblock_chash_srv : public dhblock_srv {
   ptr<adb> cache_db;
 
   void maintqueue (const vec<maint_repair_t> &repairs);
-  void localqueue (u_int32_t frags, clnt_stat err, adb_status stat, vec<block_info> keys);
 
 public:
   dhblock_chash_srv (ptr<vnode> node, ptr<dhashcli> cli,

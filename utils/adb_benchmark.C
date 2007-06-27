@@ -15,36 +15,8 @@ size_t remaining (count);
 
 size_t blocksize (8192);
 
-bool batch (false);
-
 static const int max_out (128);
 static int ops_out (0);
-
-// This is a little unsatisfactory since we don't have a mechanism
-// to be called back after an update...
-void
-bench_update (void)
-{
-  for (size_t i = 0; i < 30; i++) {
-    chord_node_wire n;
-    n.machine_order_ipv4_addr = random_getword ();
-    n.machine_order_port_vnnum = (random_getword () % 65536) << 16;
-    n.machine_order_port_vnnum |= (random_getword () % 1024);
-    
-    ptr<location> v = New refcounted<location> (make_chord_node (n));
-    population.push_back (v);
-  }
-
-  aout << "Sending " << count << " requests " << (batch ? "" : "not ") << "as batch\n";
-  // Throw out a lot of update operations, see how many we can complete.
-  for (size_t i = 0; i < count; i++) {
-    chordID k     = random_getword ();
-    // u_int32_t aux = random_getword ();
-    db->update (k, population[i % population.size ()], random_getword (),
-	        random_getword () % 2,
-	        batch);
-  }
-}
 
 // copied from dhblock.C
 bigint
@@ -134,7 +106,7 @@ bench_getkeys (void)
 void
 usage ()
 {
-  warnx << "Usage: " << progname << " dbsock update|store|getkeys [size=N] [count=N] [batch=0|1]\n";
+  warnx << "Usage: " << progname << " dbsock store|getkeys [size=N] [count=N]\n";
   exit (1);
 }
 
@@ -154,9 +126,6 @@ parse_argv (const vec<str> &argv)
       blocksize = atoi (val.cstr ());
       if (blocksize < 0)
 	return false;
-    } else if (name == "batch") {
-      int x = atoi (val.cstr ());
-      batch = (x > 0);
     }
   }
   return true;
@@ -179,9 +148,7 @@ int main (int argc, char *argv[])
   if (!parse_argv (sargv))
     usage ();
 
-  if (mode == "update") {
-    delaycb (1, wrap (&bench_update));
-  } else if (mode == "store") {
+  if (mode == "store") {
     delaycb (1, wrap (&bench_store));
   } else if (mode == "getkeys") {
     delaycb (1, wrap (&bench_getkeys));

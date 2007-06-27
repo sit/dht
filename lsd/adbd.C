@@ -84,46 +84,17 @@ dbt_to_id (const DBT &dbt)
 // }}}
 
 // {{{ DB for Namespace
-/* For each namespace (e.g. vnode + ctype, and shared cache),
- * we potentially need to store several things:
+/* For each namespace (e.g. vnode + ctype),
+ * we need to store several things:
  *   1. chordID -> data.  20 bytes -> potentially large bytes
- *   2. chordID -> auxdata (e.g. noauth hash). 20 bytes -> 4 bytes-ish
- *   3. BSM data (chordID -> [vnodeid, ...]. 20 bytes -> 6*16 bytes-ish
- *                vnodeid -> [chordID, ...])
- * with potentially the ability to (3) ordered by len([vnodeid...]).
- * This object encapsulates all that stuff.
+ *   2. chordID -> metadata: 20 bytes -> ...
+ *        auxdata (e.g. noauth hash) 4 + 4*n bytes
  *
  * The goal is to support the following operations:
- *   A. lsd merkle tree: fast read, any order key+auxdata, all keys from 1, 2
- *   B. syncd merkle tree: fast read, any order key+auxdata, one vnode, from 3
- *   C. pmaint: slow read ok, find next key in order
- *   D. repair: find $n$ least replicated blocks between (a, b], from 3
- * cursor reads of 1 and 2 will be sorted.
- *
+ *   A. Read/write of data objects
+ *   B. Merkle tree updates (shared with maintd via BDB)
  */ 
 
-// {{{ getnumreplicas: Secondary key extractor for bsm data
-static int
-getnumreplicas (DB *sdb, const DBT *pkey, const DBT *pdata, DBT *skey)
-{
-  u_int32_t *numreps = (u_int32_t *) malloc(sizeof(u_int32_t));
-
-  adb_vbsinfo_t vbs;
-  if (!buf2xdr (vbs, pdata->data, pdata->size)) {
-    hexdump hd (pdata->data, pdata->size);
-    warn << "getnumreplicas: unable to unmarshal pdata.\n" 
-          << hd << "\n";
-    return -1;
-  }
-  *numreps = htonl (vbs.d.size ());
-  // this flag should mean that berkeley db will free this memory when it's
-  // done with it.
-  skey->flags = DB_DBT_APPMALLOC;
-  skey->data = numreps;
-  skey->size = sizeof (*numreps);
-  return 0;
-}
-// }}}
 // {{{ dbns declarations
 class dbns {
   friend class dbmanager;
@@ -135,16 +106,10 @@ class dbns {
 
   DB *datadb;
   DB *auxdatadb;
-  DB *bsdb;
-  DB *bsdx;
 
   merkle_tree *mtree;
 
   // XXX should have a instance-level lock that governs datadb/auxdatadb.
-
-  // Private updater, for different txn handling
-  int updateone (const chordID &key, const adb_bsinfo_t &bsinfo, bool present,
-	         DB_TXN *t);
 
 public:
   dbns (const str &dbpath, const str &name, bool aux);
@@ -164,18 +129,6 @@ public:
   int del (const chordID &key, u_int32_t auxdata);
   int getkeys (const chordID &start, size_t count, bool getaux,
       rpc_vec<adb_keyaux_t, RPC_INFINITY> &out); 
-
-  // Block status information
-  int getblockrange_all (const chordID &start, const chordID &stop,
-    int count, rpc_vec<adb_bsloc_t, RPC_INFINITY> &out);
-  int getblockrange_extant (const chordID &start, const chordID &stop,
-    int extant, int count, rpc_vec<adb_bsloc_t, RPC_INFINITY> &out);
-  int getkeyson (const adb_vnodeid &n, const chordID &start,
-		 const chordID &stop, int count, 
-		 rpc_vec<adb_keyaux_t, RPC_INFINITY> &out);
-  int update (const chordID &block, const adb_bsinfo_t &bsinfo, bool present);
-  int updatebatch (rpc_vec<adb_updatearg, RPC_INFINITY> &uargs);
-  int getinfo (const chordID &block, rpc_vec<adb_vnodeid, RPC_INFINITY> &out);
 };
 // }}}
 // {{{ dbns::dbns
@@ -183,9 +136,7 @@ dbns::dbns (const str &dbpath, const str &name, bool aux) :
   name (name),
   dbe (NULL),
   datadb (NULL),
-  auxdatadb (NULL),
-  bsdb (NULL),
-  bsdx (NULL)
+  auxdatadb (NULL)
 {
 #define DBNS_ERRCHECK(desc) \
   if (r) {		  \
@@ -206,12 +157,6 @@ dbns::dbns (const str &dbpath, const str &name, bool aux) :
     DBNS_ERRCHECK ("auxdatadb->open");
   }
 
-  r = dbfe_opendb (dbe, &bsdb, "bsdb", DB_CREATE, 0);
-  DBNS_ERRCHECK ("bsdb->open");
-  r = dbfe_opendb (dbe, &bsdx, "bsdx", DB_CREATE, 0, /* dups = */ true);
-  DBNS_ERRCHECK ("bsdx->open");
-  r = bsdb->associate (bsdb, NULL, bsdx, getnumreplicas, DB_AUTO_COMMIT);
-  DBNS_ERRCHECK ("bsdb->associate (bsdx)");
   warn << "dbns::dbns (" << dbpath << ", " << name << ", " << aux << ")\n";
 
   str mpath = strbuf () << fullpath << "/mtree";
@@ -233,9 +178,6 @@ dbns::~dbns ()
   // Start with main databases
   DBNS_DBCLOSE(datadb);
   DBNS_DBCLOSE(auxdatadb);
-  // Close secondary before the primary
-  DBNS_DBCLOSE(bsdx);
-  DBNS_DBCLOSE(bsdb);
   // Shut down the environment
   DBNS_DBCLOSE(dbe);
 #undef DBNS_DBCLOSE
@@ -472,387 +414,6 @@ dbns::getkeys (const chordID &start, size_t count, bool getaux, rpc_vec<adb_keya
   return r;
 }
 // }}}
-// {{{ dbns::getblockrange
-int
-dbns::getblockrange_all (const chordID &start, const chordID &stop,
-   int count, rpc_vec<adb_bsloc_t, RPC_INFINITY> &out)
-{
-  int r = 0;
-  DBC *cursor;
-  r = bsdb->cursor (bsdb, NULL, &cursor,0);
-  if (r) {
-    warner ("dbns::getblockrange_all", "cursor open", r);
-    (void) cursor->c_close (cursor);
-    return r;
-  }
-
-  chordID cur = start;
-
-  str key_str = id_to_str (start);
-  DBT key;
-  str_to_dbt (key_str, &key);
-  DBT data;
-  bzero (&data, sizeof (data));
-
-  u_int32_t limit = count;
-  if (count < 0)
-    limit = (asrvbufsize/(sizeof (adb_bsloc_t)/2));
-
-  r = cursor->c_get (cursor, &key, &data, DB_SET_RANGE);
-  // Loop around the ring if at end.
-  if (r == DB_NOTFOUND) {
-    bzero (&key, sizeof (key));
-    r = cursor->c_get (cursor, &key, &data, DB_FIRST);
-  }
-
-  // since we set a limit, we know the maximum amount we have to allocate
-  out.setsize (limit);
-  u_int32_t elements = 0;
-
-  while (!r && elements < limit)
-  {
-    adb_vbsinfo_t vbs;
-    chordID k = dbt_to_id (key);
-    if (!betweenrightincl (cur, stop, k)) {
-      r = DB_NOTFOUND;
-      break;
-    }
-    cur = k;
-    if (buf2xdr (vbs, data.data, data.size)) {
-      out[elements].block = k;
-      out[elements].hosts.setsize (vbs.d.size());
-      // explicit deep copy
-      for (u_int32_t i = 0; i < vbs.d.size(); i++) {
-	out[elements].hosts[i].n = vbs.d[i].n;
-	out[elements].hosts[i].auxdata = vbs.d[i].auxdata;
-      }
-      elements++;
-    } else {
-      warner ("dbns::getblockrange_all", "XDR unmarshalling failed", 0);
-    } 
-    bzero (&key, sizeof (key));
-    bzero (&data, sizeof (data));
-    r = cursor->c_get (cursor, &key, &data, DB_NEXT);
-    if (r == DB_NOTFOUND)
-      r = cursor->c_get (cursor, &key, &data, DB_FIRST);
-  }
-  if (r && r != DB_NOTFOUND)
-    warner ("dbns::getblockrange_all", "cursor get", r);
-
-  if (elements < limit) {
-    out.setsize (elements);
-  }
-
-  (void) cursor->c_close (cursor);
-  return r;
-}
-
-int
-dbns::getblockrange_extant (const chordID &start, const chordID &stop,
-    int extant, int count, rpc_vec<adb_bsloc_t, RPC_INFINITY> &out)
-{
-  // XXX maybe think of a way to improve the degree of abstraction.
-  //     for cursors.
-  int r = 0;
-  DBC *cursor;
-  r = bsdx->cursor (bsdx, NULL, &cursor,0);
-  if (r) {
-    warner ("dbns::getblockrange_extant", "cursor open", r);
-    (void) cursor->c_close (cursor);
-    return r;
-  }
-
-  extant = htonl (extant);
-  DBT ekey;
-  bzero (&ekey, sizeof (ekey));
-  ekey.data = &extant;
-  ekey.size = sizeof (extant);
-
-  str key_str = id_to_str (start);
-  DBT key;
-  str_to_dbt (key_str, &key);
-  chordID cur = start;
-  DBT data;
-  bzero (&data, sizeof (data));
-
-  u_int32_t limit = count;
-  if (count < 0)
-    limit = (asrvbufsize/(sizeof (adb_bsloc_t)/2));
-
-  // Find only those who have extant as requested
-  // find the one with the primary key greater or equal to 
-  // the start key
-  r = cursor->c_pget (cursor, &ekey, &key, &data, DB_GET_BOTH_RANGE);
-  // Also must remember to start to loop around the ring
-  if (r == DB_NOTFOUND) {
-    bzero (&key, sizeof (key));
-    // I guess it didn't work.  Just try any old key with this extant
-    r = cursor->c_pget (cursor, &ekey, &key, &data, DB_SET);
-  }
-
-  // since we set a limit, we know the maximum amount we have to allocate
-  out.setsize (limit);
-  u_int32_t elements = 0;
-
-  while (!r && elements < limit)
-  {
-    adb_vbsinfo_t vbs;
-    chordID k = dbt_to_id (key);
-    // NOTE: this assumes that the keys are stored in order of the
-    // primary keys in the secondary db.  Also assumes the DB_GET_BOTH_RANGE
-    // call above works as expected.
-    if (!betweenrightincl (cur, stop, k)) {
-      r = DB_NOTFOUND;
-      break;
-    }
-    cur = k;
-    if (buf2xdr (vbs, data.data, data.size)) {
-      out[elements].block = k;
-      out[elements].hosts.setsize (vbs.d.size ());
-      // explicit deep copy
-      for (u_int32_t i = 0; i < vbs.d.size(); i++) {
-	out[elements].hosts[i].n = vbs.d[i].n;
-	out[elements].hosts[i].auxdata = vbs.d[i].auxdata;
-      }
-      elements++;
-    } else {
-      warner ("dbns::getblockrange_extant", "XDR unmarshalling failed", 0);
-    } 
-    bzero (&key, sizeof (key));
-    bzero (&data, sizeof (data));
-    r = cursor->c_pget (cursor, &ekey, &key, &data, DB_NEXT_DUP);
-    if (r == DB_NOTFOUND)
-      r = cursor->c_pget (cursor, &ekey, &key, &data, DB_SET);
-  }
-  if (r && r != DB_NOTFOUND)
-    warner ("dbns::getblockrange_extant", "cursor get", r);
-
-  if (elements < limit) {
-    out.setsize (elements);
-  }
-
-  (void) cursor->c_close (cursor);
-  return r;
-}
-// }}}
-// {{{ dbns::getkeyson
-int
-dbns::getkeyson (const adb_vnodeid &n, const chordID &start,
-    const chordID &stop, int count, rpc_vec<adb_keyaux_t, RPC_INFINITY> &out)
-{
-  int r = 0;
-  DBC *cursor;
-
-  // Fully serialized reads of bsdb
-  r = bsdb->cursor (bsdb, NULL, &cursor, 0);
-  if (r) {
-    warner ("dbns::getkeyson", "cursor open", r);
-    (void) cursor->c_close (cursor);
-    return r;
-  }
-
-  chordID cur = start;
-
-  // Could possibly improve efficiency here by using SleepyCat's bulk reads
-  str key_str = id_to_str (start);
-  DBT key;
-  str_to_dbt (key_str, &key);
-  DBT data;
-  bzero (&data, sizeof (data));
-
-  u_int32_t limit = count;
-  if (count < 0)
-    limit = (u_int32_t) (asrvbufsize/(1.5*sizeof (adb_keyaux_t)));
-
-  // Position the cursor if possible
-  r = cursor->c_get (cursor, &key, &data, DB_SET_RANGE);
-  // Also must remember to start to loop around the ring
-  if (r == DB_NOTFOUND) {
-    bzero (&key, sizeof (key));
-    r = cursor->c_get (cursor, &key, &data, DB_FIRST);
-  }
-
-  // since we set a limit, we know the maximum amount we have to allocate
-  out.setsize (limit);
-  u_int32_t elements = 0;
-
-  // Each adb_keyaux_t is 24ish bytes; leave some slack
-  while (!r && elements < limit)
-  {
-    adb_vbsinfo_t vbs;
-    chordID curkey = dbt_to_id (key);
-    if (!betweenrightincl (cur, stop, curkey)) {
-      r = DB_NOTFOUND;
-      break;
-    }
-    cur = curkey;
-    if (buf2xdr (vbs, data.data, data.size)) {
-      size_t dx;
-      for (dx = 0; dx < vbs.d.size (); dx++) {
-	if (memcmp (&vbs.d[dx].n, &n, sizeof (n)) == 0) break;
-      }
-      if (dx < vbs.d.size ()) {
-	out[elements].key = curkey;
-	out[elements].auxdata = vbs.d[dx].auxdata;
-	elements++;
-      }
-    } else {
-      warner ("dbns::getkeyson", "XDR unmarshalling failed", 0);
-    } 
-
-    bzero (&key, sizeof (key));
-    bzero (&data, sizeof (data));
-    r = cursor->c_get (cursor, &key, &data, DB_NEXT);
-    if (r == DB_NOTFOUND)
-      r = cursor->c_get (cursor, &key, &data, DB_FIRST);
-  }
-  if (r && r != DB_NOTFOUND)
-    warner ("dbns::getkeyson", "cursor get", r);
-
-  if (elements < limit) {
-    out.setsize(elements);
-  }
-
-  (void) cursor->c_close (cursor);
-  return r;
-}
-// }}}
-// {{{ dbns::updateone
-int
-dbns::updateone (const chordID &key, const adb_bsinfo_t &bsinfo, bool present,
-	         DB_TXN *t)
-{
-  int r;
-  str key_str = id_to_str (key);
-  DBT skey;
-  str_to_dbt (key_str, &skey);
-  DBT data; 
-  bzero (&data, sizeof (data));
-  adb_vbsinfo_t vbs;
-
-  // get, with a write lock.
-  r = bsdb->get (bsdb, t, &skey, &data, DB_RMW);
-  if (r && r != DB_NOTFOUND) {
-    warner ("dbns::update", "get error", r);
-    return r;
-  }
-  // append/change
-  if (r == DB_NOTFOUND) {
-    if (present) {
-      vbs.d.push_back ();
-      vbs.d.back().n = bsinfo.n;
-      vbs.d.back().auxdata = bsinfo.auxdata;
-    } else {
-      // Nothing to do, go home.
-      return 0;
-    }
-  } else {
-    if (!buf2xdr (vbs, data.data, data.size)) {
-      warner ("dbns::update", "XDR unmarshalling failed", 0);
-      // Nuke the old corrupt, soft state data.
-      vbs.d.clear ();
-    }
-
-    // Find index of bsinfo in vbs.
-    size_t dx; 
-    for (dx = 0; dx < vbs.d.size (); dx++) 
-      if (memcmp (&vbs.d[dx].n, &bsinfo.n, sizeof (bsinfo.n)) == 0) break;
-    if (present) {
-      if (dx < vbs.d.size ())
-	vbs.d[dx].auxdata = bsinfo.auxdata;
-      else {
-	vbs.d.push_back ();
-	vbs.d.back().n = bsinfo.n;
-	vbs.d.back().auxdata = bsinfo.auxdata;
-      }
-    } else {
-      if (dx < vbs.d.size ()) {
-	vbs.d[dx] = vbs.d.back ();
-	vbs.d.pop_back ();
-      } else {
-	// No need to re-write to db; nothing changed.
-	return 0;
-      }
-    }
-  }
-  // put
-  str vbsout = xdr2str (vbs);
-  str_to_dbt (vbsout, &data);
-  r = bsdb->put (bsdb, t, &skey, &data, 0);
-  if (r)
-    warner ("dbns::update", "put error", r);
-  return r;
-}
-// }}}
-// {{{ dbns::update
-int
-dbns::update (const chordID &key, const adb_bsinfo_t &bsinfo, bool present)
-{
-  int r;
-  DB_TXN *t = NULL;
-  dbfe_txn_begin (dbe, &t);
-
-  r = updateone (key, bsinfo, present, t);
-  if (r)
-    dbfe_txn_abort (dbe, t);
-  else
-    dbfe_txn_commit (dbe, t);
-  return r;
-}
-// }}}
-// {{{ dbns::updatebatch
-int
-dbns::updatebatch (rpc_vec<adb_updatearg, RPC_INFINITY> &uargs)
-{
-  int r (0);
-  DB_TXN *t = NULL;
-  dbfe_txn_begin (dbe, &t);
-  for (size_t i = 0; i < uargs.size (); i++) {
-    r = updateone (uargs[i].key, uargs[i].bsinfo, uargs[i].present, t);
-    if (r) {
-      dbfe_txn_abort (dbe, t);
-      break;
-    }
-  }
-  if (!r) {
-    dbfe_txn_commit (dbe, t);
-  }
-  return r;
-}
-// }}}
-// {{{ dbns::getinfo
-int
-dbns::getinfo (const chordID &key, rpc_vec<adb_vnodeid, RPC_INFINITY> &out)
-{
-  int r;
-  str key_str = id_to_str (key);
-  DBT skey;
-  str_to_dbt (key_str, &skey);
-  DBT data; bzero (&data, sizeof (data));
-  adb_vbsinfo_t vbs;
-
-  // get
-  r = bsdb->get (bsdb, NULL, &skey, &data, 0);
-  if (r && r != DB_NOTFOUND) {
-    warner ("dbns::update", "get error", r);
-    return r;
-  }
-  if (r == DB_NOTFOUND) {
-    return 0;
-  } else {
-    if (!buf2xdr (vbs, data.data, data.size)) {
-      warner ("dbns::update", "XDR unmarshalling failed", 0);
-      // Nuke the old corrupt, soft state data.
-      vbs.d.clear ();
-      return 0;
-    }
-    for (size_t i = 0; i < vbs.d.size (); i++)
-      out.push_back (vbs.d[i].n);
-  }
-  return 0;
-}
-// }}}
-
 // }}}
 
 // {{{ DB Manager
@@ -1097,129 +658,6 @@ do_delete (dbmanager *dbm, svccb *sbp)
 }
 
 // }}}
-// {{{ do_getblockrange
-void
-do_getblockrange (dbmanager *dbm, svccb *sbp)
-{
-
-  adb_getblockrangearg *arg = sbp->Xtmpl getarg<adb_getblockrangearg> ();
-  adb_getblockrangeres *res = sbp->Xtmpl getres<adb_getblockrangeres> ();
-  dbns *db = dbm->get (arg->name);
-
-  if (!db) {
-    res->status = ADB_ERR;
-    sbp->reply (res);
-    return;
-  }
-
-  int r (0);
-  res->status = ADB_OK;
-  if (arg->extant >= 0) {
-    r = db->getblockrange_extant (arg->start, arg->stop,
-	  arg->extant, arg->count, res->blocks);
-  } else {
-    r = db->getblockrange_all (arg->start, arg->stop,
-	  arg->count, res->blocks);
-  }
-  if (r) {
-    if (r == DB_NOTFOUND) {
-      res->status = ADB_COMPLETE;
-    } else {
-      res->status = ADB_ERR;
-      res->blocks.clear ();
-    }
-  }
-
-  sbp->reply (res);
-
-}
-// }}}
-// {{{ do_getkeyson
-void
-do_getkeyson (dbmanager *dbm, svccb *sbp)
-{
-  adb_getkeysonarg *arg = sbp->Xtmpl getarg<adb_getkeysonarg> ();
-  adb_getkeysres *res = sbp->Xtmpl getres<adb_getkeysres> ();
-  res->set_status (ADB_OK);
-  dbns *db = dbm->get (arg->name);
-
-  if (!db) {
-    res->set_status (ADB_ERR);
-    sbp->reply (res);
-    return;
-  }
-  res->resok->hasaux = db->hasaux ();
-
-  int r = db->getkeyson (arg->who, arg->start, arg->stop, 128, 
-			 res->resok->keyaux);
-  res->resok->complete = (r == DB_NOTFOUND);
-  if (r && r != DB_NOTFOUND) 
-    res->set_status (ADB_ERR);
-  sbp->reply (res);
-
-}
-// }}}
-// {{{ do_update
-void
-do_update (dbmanager *dbm, svccb *sbp)
-{
-  adb_updatearg *arg = sbp->Xtmpl getarg<adb_updatearg> ();
-  adb_status res (ADB_OK);
-  dbns *db = dbm->get (arg->name);
-  if (!db) {
-    sbp->replyref (ADB_ERR);
-    return;
-  }
-  int r = db->update (arg->key, arg->bsinfo, arg->present);
-  if (r)
-    res = ADB_ERR;
-  sbp->replyref (res);
-}
-// }}}
-// {{{ do_updatebatch
-void
-do_updatebatch (dbmanager *dbm, svccb *sbp)
-{
-  adb_updatebatcharg *args = sbp->Xtmpl getarg<adb_updatebatcharg> ();
-  adb_status res (ADB_OK);
-  if (!args->args.size ()) {
-    sbp->replyref (res);
-    return;
-  }
-  dbns *db = dbm->get (args->args[0].name);
-  // assert: all args have the same namespace because batching
-  //         is done by the adb object in libadb.C and each adb obj
-  //         serves one namespace
-  if (!db) {
-    sbp->replyref (ADB_ERR);
-    return;
-  }
-  int r = db->updatebatch (args->args);
-  if (r)
-    res = ADB_ERR;
-  sbp->replyref (res);
-}
-// }}}
-// {{{ do_getinfo
-void
-do_getinfo (dbmanager *dbm, svccb *sbp)
-{
-  adb_getinfoarg *arg = sbp->Xtmpl getarg<adb_getinfoarg> ();
-  adb_getinfores res;
-  res.status = ADB_OK;
-  dbns *db = dbm->get (arg->name);
-  if (!db) {
-    sbp->replyref (ADB_ERR);
-    return;
-  }
-  int r = db->getinfo (arg->key, res.nlist);
-  if (r) {
-    res.status = ADB_ERR;
-    res.nlist.clear ();
-  }
-  sbp->replyref (res);
-}
-// }}}
 // {{{ do_getspaceinfo
 void
 do_getspaceinfo (dbmanager *dbm, svccb *sbp)
@@ -1282,21 +720,6 @@ dispatch (ref<axprt_stream> s, ptr<asrv> a, dbmanager *dbm, svccb *sbp)
     break;
   case ADBPROC_DELETE:
     do_delete (dbm, sbp);
-    break;
-  case ADBPROC_GETBLOCKRANGE:
-    do_getblockrange (dbm, sbp);
-    break;
-  case ADBPROC_GETKEYSON:
-    do_getkeyson (dbm, sbp);
-    break;
-  case ADBPROC_UPDATE:
-    do_update (dbm, sbp);
-    break;
-  case ADBPROC_UPDATEBATCH:
-    do_updatebatch (dbm, sbp);
-    break;
-  case ADBPROC_GETINFO:
-    do_getinfo (dbm, sbp);
     break;
   case ADBPROC_GETSPACEINFO:
     do_getspaceinfo (dbm, sbp);

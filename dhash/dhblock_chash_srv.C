@@ -92,13 +92,6 @@ dhblock_chash_srv::generate_repair_jobs ()
   maint_getrepairs (frags, REPAIR_QUEUE_MAX - repair_qlength (),
       node->my_pred ()->id (),
       wrap (this, &dhblock_chash_srv::maintqueue));
-#if 0
-  // Use of db's view of repairs is deprecated.
-  u_int32_t frags = dhblock_chash::num_dfrags ();
-  db->getblockrange (node->my_pred ()->id (), node->my_location ()->id (),
-		     frags, REPAIR_QUEUE_MAX - repair_qlength (),
-		     wrap (this, &dhblock_chash_srv::localqueue, frags));
-#endif /* 0 */
 }
 
 void
@@ -120,73 +113,6 @@ dhblock_chash_srv::maintqueue (const vec<maint_repair_t> &repairs)
       job = New refcounted<rjchashsend> (key, w, mkref (this));
     }
     repair_add (job);
-  }
-}
-
-void
-dhblock_chash_srv::localqueue (u_int32_t frags,
-    clnt_stat err, adb_status stat, vec<block_info> blocks)
-{
-  if (err) {
-    return;
-  } else if (stat == ADB_ERR) {
-    warning << "dhblock_chash_srv::localqueue: adb error, failing.\n";
-    return;
-  }
-
-  trace << "chash-localqueue (" << node->my_ID() << "): repairing " 
-	<< blocks.size() << " blocks with " << frags 
-	<< " frags\n";
-  if( blocks.size() > 0 ) {
-    trace << "first block=" << blocks[0].k << "\n";
-  }
-
-  //don't assume we are holding the block
-  // i.e. -> put ourselves on this of nodes to check for the block
-  vec<ptr<location> > nmsuccs = node->succs ();
-  vec<ptr<location> > succs;
-  succs.push_back (node->my_location ());
-  for (size_t j = 0; j < nmsuccs.size (); j++)
-    succs.push_back (nmsuccs[j]);
-
-  bhash<chordID, hashID> holders;
-  for (size_t i = 0; i < blocks.size (); i++) {
-    
-    // Should always be true, but fails occasionally for me. maybe the db
-    // was non transactionally correcting? -- strib, 2/8/06
-    //assert (blocks[i].on.size () == frags);
-
-    holders.clear ();
-    for (size_t j = 0; j < blocks[i].on.size (); j++)
-      holders.insert (blocks[i].on[j].x);
-
-    blockID key (blocks[i].k, DHASH_CONTENTHASH);
-    ptr<location> w = NULL;
-    u_int32_t reps = 0;
-    for (size_t j = 0; j < succs.size (); j++) {
-      w = succs[j];
-      if (!holders[w->id ()] && reps < dhblock_chash::num_efrags () - frags) {
-	ptr<repair_job> job = New refcounted<rjchash> (key, w, mkref (this));
-	repair_add (job);
-	reps++;
-	break;
-      }
-    }
-  }
-
-  if (repair_qlength () < REPAIR_QUEUE_MAX) {
-    // Expect blocks to be sorted (since DB_DUPSORT is set)
-    chordID nstart;
-    if (stat == ADB_COMPLETE) {
-      frags++;
-      nstart = node->my_pred ()->id ();
-    } else {
-      nstart = incID( blocks.back ().k );
-    }
-    if (frags < dhblock_chash::num_efrags ())
-      db->getblockrange (nstart, node->my_location ()->id (),
-	  frags, REPAIR_QUEUE_MAX - repair_qlength (),
-	  wrap (this, &dhblock_chash_srv::localqueue, frags));
   }
 }
 

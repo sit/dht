@@ -127,22 +127,12 @@ void
 dhblock_replicated_srv::generate_repair_jobs ()
 {
   chordID rngmin = id_to_dbkey (node->my_pred ()->id ()) | 0xFFFFFFFF;
-#if 1
   // Get anything that isn't replicated efrags times (if Carbonite).
   // Expect that we'll be told who to fetch from.
   u_int32_t reps = dhblock_replicated::num_replica ();
   maint_getrepairs (reps, REPAIR_QUEUE_MAX - repair_qlength (),
       rngmin, 
       wrap (this, &dhblock_replicated_srv::maintqueue));
-#else
-  chordID rngmax = id_to_dbkey (node->my_location ()-> id ()) | 0xFFFFFFFF;
-  // iterate over all known blocks in bsm, if we aren't in the list,
-  // must fetch.  then, for the ones where we are in the list, compare
-  // with everyone else and update them.
-  db->getblockrange (rngmin, rngmax,
-		     -1, REPAIR_QUEUE_MAX - repair_qlength (),
-		     wrap (this, &dhblock_replicated_srv::localqueue));
-#endif
 }
 
 void
@@ -173,55 +163,6 @@ dhblock_replicated_srv::maintqueue (const vec<maint_repair_t> &repairs)
       job = New refcounted<rjrep> (key, f, w, mkref (this));
     }
     repair_add (job);
-  }
-}
-
-void
-dhblock_replicated_srv::localqueue (clnt_stat err, adb_status stat, vec<block_info> blocks)
-{
-  if (err) {
-    return;
-  } else if (stat == ADB_ERR) {
-    return;
-  }
-
-  trace << "rep-localqueue: repairing " << blocks.size() << " blocks\n";
-
-  vec<ptr<location> > succs = node->succs ();
-  ptr<location> me = node->my_location ();
-
-  qhash<chordID, u_int32_t, hashID> holders;
-  for (size_t i = 0; i < blocks.size (); i++) {
-    holders.clear ();
-    for (size_t j = 0; j < blocks[i].on.size (); j++) {
-      holders.insert (blocks[i].on[j].x, blocks[i].aux[j]);
-    }
-
-    ptr<repair_job> job = NULL;
-    blockID key (blocks[i].k, ctype);
-    u_int32_t *myaux = holders[me->id ()];
-    if (!myaux) {
-      real_repair (key, me, NULL, NULL, NULL);
-    } else {
-      // num_replica - 1 since me is handled separately
-      for (size_t j = 0; 
-	   j < dhblock_replicated::num_replica () - 1 && j < succs.size ();
-	   j++) 
-      {
-	u_int32_t *theiraux = holders[succs[j]->id ()];
-	real_repair (key, me, myaux, succs[j], theiraux);
-      }
-    }
-  }
-
-  if (repair_qlength () < REPAIR_QUEUE_MAX &&
-      stat != ADB_COMPLETE)
-  {
-    // Expect blocks to be sorted (since DB_DUPSORT is set)
-    chordID nstart = incID( blocks.back ().k );
-    db->getblockrange (nstart, node->my_location ()->id (),
-	-1, REPAIR_QUEUE_MAX - repair_qlength (),
-	wrap (this, &dhblock_replicated_srv::localqueue));
   }
 }
 

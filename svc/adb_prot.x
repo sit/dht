@@ -19,21 +19,6 @@ struct adb_keyaux_t {
   chordID key;
   u_int32_t auxdata;
 };
-
-struct adb_bsinfo_t {
-  adb_vnodeid n;
-  u_int32_t auxdata;
-};
-
-struct adb_bsloc_t {
-  chordID block;
-  adb_bsinfo_t hosts<>;
-};
-
-/* Used for storing to database */
-struct adb_vbsinfo_t {
-  adb_bsinfo_t d<>;
-};
 /* }}} */
 
 /* {{{ ADBPROC_INITSPACE */
@@ -76,7 +61,7 @@ struct adb_deletearg {
   u_int32_t auxdata;
 };
 /* }}} */
-/* {{{ ADBPROC_GETKEYS (and ADBPROC_GETKEYSON) */
+/* {{{ ADBPROC_GETKEYS */
 struct adb_getkeysarg {
   str name;
   bool getaux;
@@ -98,50 +83,6 @@ union adb_getkeysres switch (adb_status status) {
    adb_getkeysresok resok;
  default:
    void;
-};
-/* }}} */
-/* {{{ ADBPROC_GETBLOCKRANGE */
-struct adb_getblockrangearg {
-  str name;
-  chordID start;
-  chordID stop;
-  int extant;
-  int count;
-};
-struct adb_getblockrangeres {
-  adb_status status;
-  adb_bsloc_t blocks<>;
-};
-/* }}} */
-/* {{{ ADBPROC_GETKEYSON (arg only) */
-struct adb_getkeysonarg {
-  str name;
-  adb_vnodeid who;
-  chordID start;
-  chordID stop;
-};
-/* }}} */
-/* {{{ ADBPROC_UPDATE */
-struct adb_updatearg {
-  str name;
-  chordID key;
-  adb_bsinfo_t bsinfo;
-  bool present;
-};
-/* }}} */
-/* {{{ ADBPROC_UPDATE_BATCH */
-struct adb_updatebatcharg {
-  adb_updatearg args<>;
-};
-/* }}} */
-/* {{{ ADBPROC_GETINFO */
-struct adb_getinfoarg {
-  str name;
-  chordID key;
-};
-struct adb_getinfores {
-  adb_status status;
-  adb_vnodeid nlist<>;
 };
 /* }}} */
 /* {{{ ADBPROC_GETSPACEINFO */
@@ -176,28 +117,6 @@ program ADB_PROGRAM {
 
 		adb_status
 		ADBPROC_DELETE (adb_deletearg) = 5;
-
-		adb_getblockrangeres
-		ADBPROC_GETBLOCKRANGE (adb_getblockrangearg) = 6;
-		/* Return count chordIDs of blocks between start and stop that have extant extant fragments */
-		/* If count == -1, return as many as you want. */
-		/* If extant == -1, return all blocks */
-		/* XXX how to deal with live/dead nodes? */
-
-		adb_getkeysres
-		ADBPROC_GETKEYSON (adb_getkeysonarg) = 7;
-
-		adb_status
-		ADBPROC_UPDATE (adb_updatearg) = 8;
-		/* Update b to be present on n */
-
-		adb_status
-		ADBPROC_UPDATEBATCH (adb_updatebatcharg) = 9;
-		/* Update b<> to be present on n<> */
-
-		adb_getinfores
-		ADBPROC_GETINFO (adb_getinfoarg) = 10;
-		/* Get list of nodes that have b */
 
 		adb_getspaceinfores
 		ADBPROC_GETSPACEINFO (adb_dbnamearg) = 11;
