@@ -14,15 +14,15 @@
 
 typedef bhash<chordID, hashID> keys_t;
 
-static char *indexpath = "/tmp/index.mrk";
-static char *internalpath = "/tmp/internal.mrk";
-static char *leafpath  = "/tmp/leaf.mrk";
-static char *indexpathro = "/tmp/index.mrk.ro";
-static char *internalpathro = "/tmp/internal.mrk.ro";
-static char *leafpathro  = "/tmp/leaf.mrk.ro";
+static char *indexpath = "./index.mrk";
+static char *internalpath = "./internal.mrk";
+static char *leafpath  = "./leaf.mrk";
+static char *indexpathro = "./index.mrk.ro";
+static char *internalpathro = "./internal.mrk.ro";
+static char *leafpathro  = "./leaf.mrk.ro";
 
 // Better be careful here!  We call rm -rf on this later.
-static char *bdbpath = "/tmp/mtree.bdb";
+static char *bdbpath = "./mtree.bdb";
 
 typedef callback<merkle_tree *, bool>::ref merkle_allocator_t;
 
@@ -91,7 +91,9 @@ insert_blocks (merkle_tree *mtree, int upto, bool random,
 
     if (keys)
       keys->insert (static_cast<bigint> (key));
-    mtree->insert (key);
+    int r = mtree->insert (key);
+    if (r)
+      fatal << "Unexpected Merkle tree error: " << r << " (" << strerror (r) << ")\n";
   }
 }
 
@@ -218,7 +220,9 @@ test (str msg, merkle_tree *mtree, uint nkeys, bool rand = true)
     // warnx << "  " << i+1 << "/" << limit << ".\n";
     uint j = i + random() % (nkeys-i);
     uint key = order[j]; order[j] = order[i]; order[i] = key;
-    mtree->remove (intree[key]);
+    int r = mtree->remove (intree[key]);
+    if (r)
+      fatal << "Unexpected Merkle tree error: " << r << " (" << strerror (r) << ")\n";
     keys.remove (intree[key]);
     test_numkeys (mtree, nkeys - (i + 1));
     assert (keys.size () == (nkeys - (i + 1)));

@@ -568,7 +568,7 @@ merkle_tree_disk::switch_root (merkle_node_disk *n)
   write_metadata ();
 }
 
-void
+int
 merkle_tree_disk::remove (u_int depth, merkle_hash& key, 
 			  merkle_node *n)
 {
@@ -630,15 +630,18 @@ merkle_tree_disk::remove (u_int depth, merkle_hash& key,
   free_block (nd->get_block_no(), old_type);
   nd->set_block_no (block_no);
   nd->write_out ();
+
+  return 0;
 }
 
-void
+int
 merkle_tree_disk::remove (merkle_hash &key)
 {
   merkle_node_disk *curr_root = (merkle_node_disk *) get_root();
-  remove (0, key, curr_root);
+  int r = remove (0, key, curr_root);
   switch_root (curr_root);
   delete curr_root;
+  return r;
 }
 
 void

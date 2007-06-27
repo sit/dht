@@ -57,7 +57,7 @@ protected:
 		       const merkle_hash &key, merkle_node *n);
 
   // Internal functions that sub-classes must implement.
-  virtual void remove (u_int depth, merkle_hash &key, merkle_node *n) = 0;
+  virtual int remove (u_int depth, merkle_hash &key, merkle_node *n) = 0;
   virtual int insert (u_int depth, merkle_hash &key, merkle_node *n) = 0;
 
 public:
@@ -70,7 +70,7 @@ public:
   // Sub-classes must implement the following methods
   virtual merkle_node *get_root () = 0;
   virtual int insert (merkle_hash &key) = 0;
-  virtual void remove (merkle_hash &key) = 0;
+  virtual int remove (merkle_hash &key) = 0;
   virtual bool key_exists (chordID key) = 0;
   virtual vec<merkle_hash> database_get_keys (u_int depth,
       const merkle_hash &prefix) = 0;
@@ -100,8 +100,8 @@ public:
   // Sub-classes should not override the following methods
   int insert (const chordID &id);
   int insert (const chordID &id, const u_int32_t aux);
-  void remove (const chordID &id);
-  void remove (const chordID &id, const u_int32_t aux);
+  int remove (const chordID &id);
+  int remove (const chordID &id, const u_int32_t aux);
   merkle_node *lookup (const merkle_hash &key);
 
   bool key_exists (chordID key, uint aux);
@@ -128,7 +128,7 @@ protected:
 		     array<u_int64_t, 64> &nblocks);
   void leaf2internal (u_int depth, const merkle_hash &key, merkle_node *n);
 
-  virtual void remove (u_int depth, merkle_hash &key, merkle_node *n);
+  virtual int remove (u_int depth, merkle_hash &key, merkle_node *n);
   virtual int insert (u_int depth, merkle_hash &key, merkle_node *n);
 
 public:
@@ -138,7 +138,7 @@ public:
   virtual merkle_node *get_root ();
 
   virtual int insert (merkle_hash &key);
-  virtual void remove (merkle_hash &key);
+  virtual int remove (merkle_hash &key);
   virtual bool key_exists (chordID key) {
     return keylist[key] != NULL;
   }
