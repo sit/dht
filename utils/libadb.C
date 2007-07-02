@@ -1,22 +1,8 @@
 #include <arpc.h>
 #include <crypt.h>
 
-#include <location.h>
-#include <misc_utils.h>
 #include "libadb.h"
 #include <adb_prot.h>
-
-static chord_node
-make_chord_node (const adb_vnodeid &n)
-{
-  chord_node_wire x;
-  bzero (&x, sizeof (chord_node_wire));
-  // XXX Will it be a problem to have zero coordinates and
-  //     zero accordion data?
-  x.machine_order_ipv4_addr  = n.machine_order_ipv4_addr;
-  x.machine_order_port_vnnum = n.machine_order_port_vnnum;
-  return make_chord_node (x);
-}
 
 adb::adb (str sock_name, str name, bool hasaux, ptr<chord_trigger_t> t) :
   c (NULL),

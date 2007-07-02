@@ -5,7 +5,6 @@
 
 class dhblock_noauth_srv : public dhblock_replicated_srv
 {
-  void localqueue (clnt_stat err, adb_status stat, vec<block_info> blocks);
   void after_delete (chordID key, str data, cb_dhstat cb, adb_status err);
 
   void real_store (chordID key, str od, str nd, cb_dhstat cb);

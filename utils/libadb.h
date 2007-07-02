@@ -7,37 +7,14 @@
 #include <qhash.h>
 
 class aclnt;
-class location;
 class chord_trigger_t;
-struct block_info;
 
 typedef callback<void, adb_status, chordID, str>::ptr cb_fetch;
 typedef callback<void, adb_status>::ptr cb_adbstat;
 typedef callback<void, adb_status, u_int32_t, vec<adb_keyaux_t> >::ptr cb_getkeys;
 typedef callback<void, adb_status, vec<chordID>, vec<u_int32_t> >::ptr cb_getkeyson;
 
-typedef callback<void, clnt_stat, adb_status, vec<block_info> >::ref cbvblock_info_t;
-typedef callback<void, clnt_stat, adb_status, block_info>::ref cbblock_info_t;
-
 typedef callback<void, adb_status, str, bool>::ptr cb_getspace_t;
-
-struct block_info {
-  chordID k;
-  vec<chord_node> on;
-  vec<u_int32_t> aux;
-  block_info () {};
-  block_info (chordID k) : k (k) {};
-  block_info (const block_info &b) : k (b.k), on (b.on), aux (b.aux) {};
-
-  block_info& operator= (const block_info &b) {
-    if( this != &b ) {
-      k = b.k;
-      on = b.on;
-      aux = b.aux;
-    }
-    return *this;
-  }
-};
 
 class adb {
   ptr<aclnt> c;
@@ -46,11 +23,6 @@ class adb {
   bool hasaux_;
 
   qhash<u_int32_t, chordID> getkeystab;
-
-  enum {
-    UPDATE_BATCH_SECS = 1,
-    UPDATE_BATCH_MAX_SIZE = 128
-  };
 
   bool connecting;
   void connect (ptr<chord_trigger_t> t = NULL);
@@ -61,8 +33,6 @@ class adb {
   void fetch_cb (adb_fetchres *res, chordID key, cb_fetch cb, clnt_stat err);
   void getkeys_cb (bool getaux, adb_getkeysres *res, cb_getkeys cb, clnt_stat err);
   void getspaceinfocb (ptr<adb_getspaceinfores> res, cb_getspace_t cb, clnt_stat err);
-
-  void batch_update ();
 
 public:
   adb (str sock_name, str name = "default", bool hasaux = false,
