@@ -49,6 +49,8 @@ bench_store_cb (u_int64_t start, adb_status stat)
   static u_int32_t progress (0);
   remaining--;
   ops_out--;
+  if (stat != ADB_OK)
+    warnx << "status = " << stat << "\n";
   if (remaining == 0) {
     u_int64_t finish = getusec ();
     aout << "Finished " << count << " operations in " 
@@ -69,7 +71,7 @@ bench_store (void)
   remaining = count;
   for (size_t i = 0; i < count; i++, ops_out++) {
     chordID k = make_block (buf, blocksize);
-    db->store (k, str (buf, blocksize), wrap (&bench_store_cb, start));
+    db->store (k, str (buf, blocksize), 0, timenow + 10, wrap (&bench_store_cb, start));
     while (ops_out > max_out) 
       acheck ();
   }
@@ -104,9 +106,26 @@ bench_getkeys (void)
 }
 
 void
+bench_expire_cb (u_int64_t start, adb_status stat)
+{
+  u_int64_t finish = getusec ();
+  if (stat)
+    warnx << "Expiration error: " << stat << "\n";
+  aout << "Expiration in "
+       << (finish-start)/1000 << "ms.\n";
+  exit (0);
+}
+
+void
+bench_expire (void)
+{
+  db->expire (wrap (&bench_expire_cb, getusec (true)));
+}
+
+void
 usage ()
 {
-  warnx << "Usage: " << progname << " dbsock store|getkeys [size=N] [count=N]\n";
+  warnx << "Usage: " << progname << " dbsock store|getkeys|expire [size=N] [count=N]\n";
   exit (1);
 }
 
@@ -152,6 +171,8 @@ int main (int argc, char *argv[])
     delaycb (1, wrap (&bench_store));
   } else if (mode == "getkeys") {
     delaycb (1, wrap (&bench_getkeys));
+  } else if (mode == "expire") {
+    delaycb (0, wrap (&bench_expire));
   } else {
     usage ();
   }

@@ -21,6 +21,10 @@ dbfe_generate_config (str path, unsigned int cachesize)
 
   db_config << "# Ensure log can handle large I/Os (log buffer size in bytes)\n";
   db_config << "set_lg_bsize " << 4*1024*1024 << "\n";
+
+  db_config << "# Just in case there are a lot of transactions (e.g., expiration)\n";
+  db_config << "set_lk_max_locks 5000\n";
+  db_config << "set_lk_max_objects 5000\n";
   
 #if 0
   /* This should be the default */

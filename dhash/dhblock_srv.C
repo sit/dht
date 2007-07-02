@@ -131,9 +131,9 @@ dhblock_srv::db_store (chordID k, str d, cb_dhstat cb)
   db->store (k, d, wrap (this, &dhblock_srv::adbcb, cb));
 }
 void 
-dhblock_srv::db_store (chordID k, str d, u_int32_t aux, cb_dhstat cb)
+dhblock_srv::db_store (chordID k, str d, u_int32_t aux, u_int32_t expire, cb_dhstat cb)
 {
-  db->store (k, d, aux, wrap (this, &dhblock_srv::adbcb, cb));
+  db->store (k, d, aux, expire, wrap (this, &dhblock_srv::adbcb, cb));
 }
 
 void

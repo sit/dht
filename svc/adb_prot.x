@@ -45,6 +45,7 @@ struct adb_storearg {
   chordID key;
   opaque data<>;
   u_int32_t auxdata;
+  u_int32_t expiration;
 };
 /* }}} */
 /* {{{ ADBPROC_FETCH */
@@ -107,6 +108,13 @@ struct adb_getspaceinfores {
   bool hasaux;
 };
 /* }}} */
+/* {{{ ADBPROC_EXPIRE */
+struct adb_expirearg {
+  str name;
+  u_int32_t limit;
+  u_int32_t deadline;
+};
+/* }}} */
 
 program ADB_PROGRAM {
 	version ADB_VERSION {
@@ -136,6 +144,10 @@ program ADB_PROGRAM {
 		adb_status
 		ADBPROC_SYNC (adb_dbnamearg) = 12;
 		/* Sync databases etc to disk */
+
+		adb_status
+		ADBPROC_EXPIRE (adb_expirearg) = 13;
+		/* May expire some objects */
 	} = 1;
 } = 344501;
 

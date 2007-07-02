@@ -76,14 +76,17 @@ adb::handle_eof ()
 }
 
 void
-adb::store (chordID key, str data, u_int32_t auxdata, cb_adbstat cb)
+adb::store (chordID key, str data, u_int32_t auxdata, u_int32_t expire, cb_adbstat cb)
 {
-  assert (hasaux_);
   adb_storearg arg;
   arg.key = key;
   arg.name = name_space;
   arg.data = data;
-  arg.auxdata = auxdata;
+  if (hasaux_)
+    arg.auxdata = auxdata;
+  else
+    arg.auxdata = 0;
+  arg.expiration = expire;
 
   adb_status *res = New adb_status ();
 
@@ -101,6 +104,7 @@ adb::store (chordID key, str data, cb_adbstat cb)
   arg.name = name_space;
   arg.data = data;
   arg.auxdata = 0;
+  arg.expiration = 0;
 
   adb_status *res = New adb_status ();
 
@@ -263,5 +267,19 @@ adb::sync (cb_adbstat cb)
   adb_status *res = New adb_status ();
   // Throw away the return value here.
   c->call (ADBPROC_SYNC, &arg, res,
+      wrap (this, &adb::generic_cb, res, cb));
+}
+
+void
+adb::expire (cb_adbstat cb, u_int32_t l, u_int32_t t)
+{
+  adb_expirearg arg;
+  arg.name = name_space;
+  arg.limit = l;
+  arg.deadline = t;
+
+  adb_status *res = New adb_status ();
+  // Throw away the return value here.
+  c->call (ADBPROC_EXPIRE, &arg, res,
       wrap (this, &adb::generic_cb, res, cb));
 }
