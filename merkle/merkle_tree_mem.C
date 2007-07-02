@@ -241,7 +241,7 @@ merkle_tree_mem::leaf2internal (u_int depth, const merkle_hash &key,
   }
 }
 
-void
+int
 merkle_tree_mem::remove (u_int depth, merkle_hash& key, merkle_node *n)
 {
   if (n->isleaf ()) {
@@ -260,6 +260,8 @@ merkle_tree_mem::remove (u_int depth, merkle_hash& key, merkle_node *n)
   if (!n->isleaf () && n->count <= 64)
     n->internal2leaf ();
   rehash (depth, key, n);
+
+  return 0;
 }
 
 
@@ -294,15 +296,17 @@ merkle_tree_mem::insert (merkle_hash &key)
   return insert (0, key, get_root());
 }
 
-void
+int
 merkle_tree_mem::remove (merkle_hash &key)
 {
   // assert block must exist..
   str foo;
-  if (!keylist[static_cast<bigint> (key)])
-    fatal << (u_int) this << " merkle_tree_mem::remove: key does not exist " << key << "\n";
+  if (!keylist[static_cast<bigint> (key)]) {
+    warn << (u_int) this << " merkle_tree_mem::remove: key does not exist " << key << "\n";
+    return -1; // XXX Use ENOENT?  DB_NOTFOUND?
+  }
 
-  remove (0, key, get_root());
+  return remove (0, key, get_root());
 }
 
 vec<merkle_hash>

@@ -167,7 +167,7 @@ merkle_node_bdb::~merkle_node_bdb ()
 }
 // }}}
 // {{{ merkle_node_bdb::internal2leaf
-void
+int
 merkle_node_bdb::internal2leaf (DB_TXN *t)
 {
   // warnx << "internal2leaf " << depth << " / " << prefix << "\n";
@@ -183,12 +183,14 @@ merkle_node_bdb::internal2leaf (DB_TXN *t)
   merkle_hash x (prefix);
   for (u_int32_t i = 0; i < 64; i++) {
     x.write_slot (depth, i);
-    if (!tree->del_node (depth + 1, x, t))
-      fatal << "merkle_node_bdb::internal2leaf: del failed!\n";
+    int r = tree->del_node (depth + 1, x, t);
+    // Whole operation will abort if any error.
+    if (r)
+      return r;
   }
 
   leaf = true;
-  tree->write_node (this, t);
+  return tree->write_node (this, t);
 }
 
 void
@@ -199,7 +201,7 @@ merkle_node_bdb::internal2leaf ()
 }
 // }}}
 // {{{ merkle_node_bdb::leaf2internal
-void
+int
 merkle_node_bdb::leaf2internal (DB_TXN *t)
 {
   // warnx << "leaf2internal " << depth << " / " << prefix << "\n";
@@ -228,12 +230,14 @@ merkle_node_bdb::leaf2internal (DB_TXN *t)
     if (newnodes[i]->count)
       hashes[i].final (newnodes[i]->hash.bytes);
     _child_hash[i] = newnodes[i]->hash;
-    tree->write_node (newnodes[i], t);
+    int r = tree->write_node (newnodes[i], t);
     delete newnodes[i];
     newnodes[i] = NULL;
+    if (r)
+      return r;
   }
   leaf = false;
-  tree->write_node (this, t);
+  return tree->write_node (this, t);
 }
 
 void
@@ -253,8 +257,9 @@ merkle_node_bdb::dump (u_int d)
 // }}}
 // }}}
 // {{{ merkle_tree_bdb
-// {{{ merkle_tree_bdb::merkle_tree_bdb
+// {{{ merkle_tree_bdb::merkle_tree_bdb (const char *, bool, bool)
 merkle_tree_bdb::merkle_tree_bdb (const char *path, bool join, bool ro) :
+  dbe_closable (true),
   dbe (NULL),
   nodedb (NULL),
   keydb (NULL)
@@ -269,30 +274,79 @@ merkle_tree_bdb::merkle_tree_bdb (const char *path, bool join, bool ro) :
   int r = dbfe_initialize_dbenv (&dbe, path, join, 5*1024);
   DB_ERRCHECK ("dbe->open");
 
+  r = init_db (ro);
+  DB_ERRCHECK ("init_db");
+}
+// }}}
+// {{{ merkle_tree_bdb:;merkle_tree_bdb (DB_ENV *, bool)
+merkle_tree_bdb::merkle_tree_bdb (DB_ENV *parentdbe, bool ro) :
+  dbe_closable (false),
+  dbe (parentdbe),
+  nodedb (NULL),
+  keydb (NULL)
+{
+  int r = init_db (ro);
+  DB_ERRCHECK ("init_db");
+}
+// }}}
+// {{{ merkle_tree_bdb::init_db
+int
+merkle_tree_bdb::init_db (bool ro)
+{
+  assert (dbe != NULL);
+  int r = 0;
+
   int flags = DB_CREATE;
   if (ro)
     flags = DB_RDONLY;
-  flags |= DB_AUTO_COMMIT;
+
+  DB_TXN *t = NULL;
+  r = dbfe_txn_begin (dbe, &t);
 
   // BTree makes the most sense for a tree structure.
-  r = db_create (&nodedb, dbe, 0);
-  DB_ERRCHECK ("nodedb->create");
-  r = nodedb->open (nodedb, NULL, "node.db", NULL, DB_BTREE, flags, 0);
-  DB_ERRCHECK ("nodedb->open");
+  char *err = "";
+  do {
+    err = "nodedb->create";
+    r = db_create (&nodedb, dbe, 0);
+    if (r) break;
 
-  r = db_create (&keydb, dbe, 0);
-  DB_ERRCHECK ("keydb->create");
-  r = keydb->open (keydb, NULL, "key.db", NULL, DB_BTREE, flags, 0);
-  DB_ERRCHECK ("keydb->open");
+    err = "nodedb->open";
+    r = nodedb->open (nodedb, t, "node.db", NULL, DB_BTREE, flags, 0);
+    if (r) break;
 
-  merkle_node_bdb *root = read_node (0, 0);
+    err = "keydb->create";
+    r = db_create (&keydb, dbe, 0);
+    if (r) break;
+
+    err = "keydb->open";
+    r = keydb->open (keydb, t, "key.db", NULL, DB_BTREE, flags, 0);
+    if (r) break;
+  } while (0);
+  if (r) {
+    warnx << "merkle_tree_bdb::init_db: " << err << ": "
+          << db_strerror (r) << " (" << r << ")\n";
+    dbfe_txn_abort (dbe, t);
+    return r;
+  } else {
+    dbfe_txn_commit (dbe, t);
+  }
+
+  r = dbfe_txn_begin (dbe, &t);
+  merkle_node_bdb *root = read_node (0, 0, t);
   if (!root) {
     // No old root, make up a new one.
     root = New merkle_node_bdb ();
     root->tree = this;
-    write_node (root);
+    err = "root write";
+    r = write_node (root, t);
   }
   delete root;
+  if (r)
+    dbfe_txn_abort (dbe, t);
+  else
+    dbfe_txn_commit (dbe, t);
+
+  return r;
 }
 // }}}
 // {{{ merkle_tree_bdb::tree_exists
@@ -332,7 +386,9 @@ merkle_tree_bdb::~merkle_tree_bdb ()
   }
   DBCLOSE(nodedb);
   DBCLOSE(keydb);
-  DBCLOSE(dbe);
+  if (dbe_closable) {
+    DBCLOSE(dbe);
+  }
 }
 // }}}
 // {{{ merkle_tree_bdb::sync
@@ -381,7 +437,7 @@ merkle_tree_bdb::read_node (u_int depth, const merkle_hash &key,
 }
 // }}}
 // {{{ merkle_tree_bdb::write_node
-bool
+int
 merkle_tree_bdb::write_node (const merkle_node_bdb *node, DB_TXN *t)
 {
   merkle_hash prefix = node->prefix;
@@ -400,11 +456,11 @@ merkle_tree_bdb::write_node (const merkle_node_bdb *node, DB_TXN *t)
   if (r)
     warner ("merkle_tree_bdb::write_node", "nodedb->put", r);
 
-  return (r == 0);
+  return r;
 }
 // }}}
 // {{{ merkle_tree_bdb::del_node
-bool
+int
 merkle_tree_bdb::del_node (u_int depth, const merkle_hash &key, DB_TXN *t)
 {
   merkle_hash prefix (key);
@@ -420,7 +476,7 @@ merkle_tree_bdb::del_node (u_int depth, const merkle_hash &key, DB_TXN *t)
   if (r && r != DB_NOTFOUND)
     warner ("merkle_tree_bdb::del_node", "nodedb->del", r);
 
-  return (r == 0);
+  return r;
 }
 // }}}
 // {{{ merkle_tree_bdb::check_key
@@ -466,7 +522,7 @@ merkle_tree_bdb::remove_key (const merkle_hash &key, DB_TXN *t)
   if (!t)
     flags = DB_AUTO_COMMIT;
   int r = keydb->del (keydb, t, &dkey, flags);
-  if (r)
+  if (r && r != DB_NOTFOUND)
     warner ("merkle_tree_bdb::remove_key", "keydb->del", r);
   return r;
 }
@@ -481,12 +537,38 @@ merkle_tree_bdb::get_root ()
 }
 // }}}
 // {{{ merkle_tree_bdb::insert
+// Duplicates code more or less from merkle_tree.C
 int
-merkle_tree_bdb::insert (merkle_hash &key)
+merkle_tree_bdb::insert (const chordID &id, DB_TXN *t)
 {
-  DB_TXN *t = NULL;
-  dbfe_txn_begin (dbe, &t);
+  merkle_hash mkey (id);
+  return insert (mkey, t);
+}
 
+int
+merkle_tree_bdb::insert (const chordID &id, const u_int32_t aux, DB_TXN *t)
+{
+  // When there is auxiliary information, we use the low-order bytes
+  // of the key to hold the information.  This is used mostly for mutable
+  // data that needs to distinguish whether or not the remote node has
+  // the same version as the local node.
+  chordID key = id;
+  key >>= 32;
+  key <<= 32;
+  assert (key > 0);
+  key |= aux;
+  merkle_hash mkey (key);
+  return insert (mkey, t);
+}
+
+int
+merkle_tree_bdb::insert (merkle_hash &key, DB_TXN *parent)
+{
+  // Run this (potentially) in a nested transaction
+  DB_TXN *t = NULL;
+  dbe->txn_begin (dbe, parent, &t, 0);
+
+  merkle_hash last_h;
   // Find the nodes that will need to be rehashed.
   vec<merkle_node_bdb *> nodes;
   u_int depth = 0;
@@ -501,24 +583,25 @@ merkle_tree_bdb::insert (merkle_hash &key)
     dbfe_txn_abort (dbe, t);
     fatal << "merkle_tree_bdb::insert: bottom of tree is not a leaf?\n";
   }
+  int r = 0;
   while (n->leaf_is_full ()) {
-    n->leaf2internal (t); // Creates all the children
+    r = n->leaf2internal (t); // Creates all the children
+    if (r)
+      goto insert_cleanup;
     n = read_node (n->depth + 1, key, t, DB_RMW);
     nodes.push_back (n);
     assert (n->isleaf ());
   }
   // n is a leaf with enough room for another key
 
-  int r = insert_key (key, t);
+  r = insert_key (key, t);
   if (r) {
-    dbfe_txn_abort (dbe, t);
-    if (r != DB_KEYEXIST)
+    if (r != DB_KEYEXIST && r != ENOSPC)
       fatal << "merkle_tree_bdb::insert: unexpected error.\n";
-    return r;
+    goto insert_cleanup;
   }
 
   // Rehash this path and return to disk.
-  merkle_hash last_h;
   while (nodes.size ()) {
     n = nodes.pop_back ();
     assert (n->depth == nodes.size ());
@@ -539,28 +622,51 @@ merkle_tree_bdb::insert (merkle_hash &key)
     sc.final (n->hash.bytes);
     last_h = n->hash;
 
-    write_node (n, t);
+    r = write_node (n, t);
     delete n;
+    if (r)
+      goto insert_cleanup;
   }
-
+  assert (!r);
   dbfe_txn_commit (dbe, t);
+  return r;
 
-  return 0;
+insert_cleanup:
+  while (nodes.size ())
+    delete nodes.pop_back ();
+  dbfe_txn_abort (dbe, t);
+  return r;
 }
 // }}}
 // {{{ merkle_tree_bdb::remove
-void
-merkle_tree_bdb::remove (merkle_hash &key)
+int
+merkle_tree_bdb::remove (const chordID &id, DB_TXN *t)
+{
+  merkle_hash mkey (id);
+  return remove (mkey, t);
+}
+
+int
+merkle_tree_bdb::remove (const chordID &id, const u_int32_t aux, DB_TXN *t)
+{
+  chordID key = id;
+  key >>= 32;
+  key <<= 32;
+  assert (key > 0);
+  key |= aux;
+  merkle_hash mkey (key);
+  return remove (mkey, t);
+}
+int
+merkle_tree_bdb::remove (merkle_hash &key, DB_TXN *parent)
 {
   DB_TXN *t = NULL;
-  dbfe_txn_begin (dbe, &t);
+  dbe->txn_begin (dbe, parent, &t, 0);
 
   int r = remove_key (key, t);
   if (r) {
     dbfe_txn_abort (dbe, t);
-    if (r != DB_NOTFOUND)
-      fatal << "merkle_tree_bdb::remove: unexpected error.\n";
-    return;
+    return r;
   }
 
   // Find the nodes that will need to be rehashed.
@@ -579,15 +685,20 @@ merkle_tree_bdb::remove (merkle_hash &key)
   }
 
   // Rehash this path and return to disk.
+  r = 0;
   merkle_hash last_h;
   while (nodes.size ()) {
     n = nodes.pop_back ();
     assert (n->depth == nodes.size ());
     assert (n->count != 0);
     n->count -= 1;
-
-    if (!n->isleaf () && n->count <= 64)
-      n->internal2leaf (t);
+    if (!n->isleaf () && n->count <= 64) {
+      r = n->internal2leaf (t);
+    }
+    if (r) {
+      delete n;
+      goto remove_cleanup;
+    }
 
     sha1ctx sc;
     if (n->isleaf ()) {
@@ -611,13 +722,19 @@ merkle_tree_bdb::remove (merkle_hash &key)
     }
     last_h = n->hash;
 
-    write_node (n, t);
+    r = write_node (n, t);
     delete n;
+    if (r)
+      goto remove_cleanup;
   }
-
+  assert (!r);
   dbfe_txn_commit (dbe, t);
-
-  return;
+  return r;
+remove_cleanup:
+  while (nodes.size ())
+    delete nodes.pop_back ();
+  dbfe_txn_abort (dbe, t);
+  return r;
 }
 // }}}
 // {{{ merkle_tree_bdb::key_exists

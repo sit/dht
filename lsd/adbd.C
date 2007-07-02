@@ -3,6 +3,7 @@
 #include <wmstr.h>
 #include <ihash.h>
 #include <sha1.h>
+#include <parseopt.h>
 
 #include <adb_prot.h>
 #include <id_utils.h>
@@ -15,6 +16,22 @@ static str dbsock;
 static int clntfd (-1);
 
 static const u_int32_t asrvbufsize (1024*1025);
+
+// Total disk allowed for data per dbns, in bytes.
+// Default: unlimited
+static u_int64_t quota (0);
+
+// How many keys to try and expire at a time between stores.
+static u_int32_t expire_batch_size (24);
+
+// Threshold percentage for expiring on insert
+static u_int32_t expire_threshold (90);
+
+// This is the key used to access the master metadata record.
+// The master metadata record contains:
+//   Total size of objects put into a dbns,
+//   The next expiration time for an object.
+static DBT master_metadata;
 
 class dbmanager;
 static dbmanager *dbm;
@@ -51,17 +68,18 @@ toggle_iotime ()
 }
 // }}}
 // {{{ DB key conversion
-str
-id_to_str (const chordID &key)
+inline void
+id_to_dbt (const chordID &key, DBT *d)
 {
-  // pad out all keys to 20 bytes so that they sort correctly
-  str keystr = strbuf () << key;
-  strbuf padkeystr;
-  for (int pad = 2*sha1::hashsize - keystr.len (); pad > 0; pad--)
-    padkeystr << "0";
-  padkeystr << keystr;
-  assert (padkeystr.tosuio ()->resid () == 2*sha1::hashsize);
-  return padkeystr;
+  static char buf[sha1::hashsize]; // XXX bug waiting to happen?
+
+  bzero (d, sizeof (*d));
+  bzero (buf, sizeof (buf)); // XXX unnecessary; handled by rawmag.
+
+  // We want big-endian for BTree mapping efficiency
+  mpz_get_rawmag_be (buf, sizeof (buf), &key);
+  d->size = sizeof (buf);
+  d->data = (void *) buf;
 }
 
 inline void
@@ -75,10 +93,9 @@ str_to_dbt (const str &s, DBT *d)
 inline chordID
 dbt_to_id (const DBT &dbt)
 {
-  str c (static_cast<char *> (dbt.data), dbt.size);
   chordID id;
-  if (!str2chordID (c, id))
-    fatal << "Invalid chordID as database key: " << c << "\n";
+  assert (dbt.size == sha1::hashsize);
+  mpz_set_rawmag_be (&id, static_cast<char *> (dbt.data), dbt.size);
   return id;
 }
 // }}}
@@ -89,12 +106,36 @@ dbt_to_id (const DBT &dbt)
  *   1. chordID -> data.  20 bytes -> potentially large bytes
  *   2. chordID -> metadata: 20 bytes -> ...
  *        auxdata (e.g. noauth hash) 4 + 4*n bytes
+ *        expiration time
+ *        size
  *
  * The goal is to support the following operations:
  *   A. Read/write of data objects
  *   B. Merkle tree updates (shared with maintd via BDB)
  */ 
 
+// {{{ getexpire: Secondary key extractor for metadata
+static int
+getexpire (DB *sdb, const DBT *pkey, const DBT *pdata, DBT *skey)
+{
+  u_int32_t *expire = (u_int32_t *) malloc(sizeof(u_int32_t));
+
+  adb_metadata_t md;
+  if (!buf2xdr (md, pdata->data, pdata->size)) {
+    hexdump hd (pdata->data, pdata->size);
+    warn << "getexpire: unable to unmarshal pdata.\n" << hd << "\n";
+    return -1;
+  }
+  // Ensure big-endian for proper BDB sorting.
+  *expire = htonl (md.expiration);
+  // this flag should mean that berkeley db will free this memory when it's
+  // done with it.
+  skey->flags = DB_DBT_APPMALLOC;
+  skey->data = expire;
+  skey->size = sizeof (*expire);
+  return 0;
+}
+// }}}
 // {{{ dbns declarations
 class dbns {
   friend class dbmanager;
@@ -102,14 +143,18 @@ class dbns {
   str name;
   ihash_entry<dbns> hlink;
 
+  const bool aux;
   DB_ENV *dbe;
 
   DB *datadb;
-  DB *auxdatadb;
+  DB *metadatadb;
+  DB *byexpiredb;
 
-  merkle_tree *mtree;
+  merkle_tree_bdb *mtree;
 
-  // XXX should have a instance-level lock that governs datadb/auxdatadb.
+  adb_master_metadata_t mmd;
+
+  int update_metadata (int32_t sz, u_int32_t expiration, DB_TXN *t = NULL);
 
 public:
   dbns (const str &dbpath, const str &name, bool aux);
@@ -119,25 +164,37 @@ public:
 
   void sync (bool force = false);
 
-  bool hasaux () { return auxdatadb != NULL; };
+  bool hasaux () { return aux; };
+  str getname () { return name; }
 
   // Primary data management
-  bool kinsert (const chordID &key, u_int32_t auxdata);
-  int insert (const chordID &key, DBT &data, DBT &auxdata);
+  int insert (const chordID &key, DBT &data, u_int32_t auxdata = 0, u_int32_t exptime = 0);
   int lookup (const chordID &key, str &data);
   int lookup_nextkey (const chordID &key, chordID &nextkey);
   int del (const chordID &key, u_int32_t auxdata);
   int getkeys (const chordID &start, size_t count, bool getaux,
       rpc_vec<adb_keyaux_t, RPC_INFINITY> &out); 
+
+  u_int32_t quotacheck (u_int64_t q) {
+    // Returns percentage between 0 and 100
+    if (q == 0) return 0;
+    if (q < mmd.size) return 100;
+    return u_int64_t (100) * mmd.size / q;
+  }
+  int expire (u_int32_t limit = 0, u_int32_t t = 0);
 };
 // }}}
 // {{{ dbns::dbns
 dbns::dbns (const str &dbpath, const str &name, bool aux) :
   name (name),
+  aux (aux),
   dbe (NULL),
   datadb (NULL),
-  auxdatadb (NULL)
+  metadatadb (NULL),
+  byexpiredb (NULL),
+  mtree (NULL)
 {
+  bzero (&mmd, sizeof (mmd));
 #define DBNS_ERRCHECK(desc) \
   if (r) {		  \
     fatal << desc << " returned " << r << ": " << db_strerror (r) << "\n"; \
@@ -152,17 +209,17 @@ dbns::dbns (const str &dbpath, const str &name, bool aux) :
 
   r = dbfe_opendb (dbe, &datadb, "db", DB_CREATE, 0);
   DBNS_ERRCHECK ("datadb->open");
-  if (aux) {
-    r = dbfe_opendb (dbe, &auxdatadb, "auxdb", DB_CREATE, 0);
-    DBNS_ERRCHECK ("auxdatadb->open");
-  }
+
+  mtree = New merkle_tree_bdb (dbe, /* ro = */ false);
+
+  r = dbfe_opendb (dbe, &metadatadb, "metadatadb", DB_CREATE, 0);
+  DBNS_ERRCHECK ("metadatadb->open");
+  r = dbfe_opendb (dbe, &byexpiredb, "byexpiredb", DB_CREATE, 0, /* dups = */ true);
+  DBNS_ERRCHECK ("byexpiredb->open");
+  r = metadatadb->associate (metadatadb, NULL, byexpiredb, getexpire, DB_AUTO_COMMIT);
+  DBNS_ERRCHECK ("metadatdb->associate (byexpiredb)");
 
   warn << "dbns::dbns (" << dbpath << ", " << name << ", " << aux << ")\n";
-
-  str mpath = strbuf () << fullpath << "/mtree";
-  mtree = New merkle_tree_bdb (mpath.cstr (),
-      /* join = */ false,
-      /* ro = */ false);
 }
 // }}}
 // {{{ dbns::~dbns
@@ -177,12 +234,15 @@ dbns::~dbns ()
 
   // Start with main databases
   DBNS_DBCLOSE(datadb);
-  DBNS_DBCLOSE(auxdatadb);
+  // Close out the merkle tree which shares our db environment
+  delete mtree;
+  mtree = NULL;
+  // Close secondary before the primary for metadata
+  DBNS_DBCLOSE(byexpiredb);
+  DBNS_DBCLOSE(metadatadb);
   // Shut down the environment
   DBNS_DBCLOSE(dbe);
 #undef DBNS_DBCLOSE
-  delete mtree;
-  mtree = NULL;
   warn << "dbns::~dbns (" << name << ")\n";
 }
 // }}}
@@ -209,61 +269,108 @@ dbns::sync (bool force)
 #else
   dbe->txn_checkpoint (dbe, 30*1024, 10, flags);
 #endif
-  mtree->sync ();
 }
 // }}}
-// {{{ dbns::kinsert (chordID, u_int32_t)
-bool
-dbns::kinsert (const chordID &key, u_int32_t auxdata)
+// {{{ dbns::update_metadata (int32_t, u_int32_t, DB_TXN *)
+int
+dbns::update_metadata (int32_t sz, u_int32_t expiration, DB_TXN *t)
 {
-  // We don't really deal well with updating these auxiliary
-  // databases yet, so just ignore them for now.  The auxdatadb
-  // should iterate much faster than the full database anyway.
-  // if (!auxdatadb)
-  if (hasaux ()) {
-    mtree->insert (key, auxdata);
-  } else {
-    if (mtree->key_exists (key)) {
-      return false;
-    }
-    mtree->insert (key);
+  DBT md; bzero (&md, sizeof (md));
+  int r = metadatadb->get (metadatadb, t, &master_metadata, &md, DB_RMW);
+  switch (r) {
+    case 0:
+      if (!buf2xdr (mmd, md.data, md.size))
+	return -1;
+      break;
+    case DB_NOTFOUND:
+      bzero (&mmd, sizeof (mmd));
+      break;
+    default:
+      return r;
+      break;
   }
-  return true;
+  if (sz < 0 && mmd.size < u_int64_t (-sz)) {
+    fatal << "dbns::update_metadata: small size: "
+          << mmd.size << " < " << sz << "\n";
+  }
+  mmd.size += sz;
+  if (quota && mmd.size > quota)
+    return ENOSPC;
+  if (mmd.expiration == 0 && expiration > 0) {
+    if (sz > 0 && expiration < mmd.expiration)
+      mmd.expiration = expiration;
+    else if (sz < 0) {
+      assert (expiration >= mmd.expiration);
+      mmd.expiration = expiration;
+    }
+  }
+
+  str md_str = xdr2str (mmd);
+  str_to_dbt (md_str, &md);
+  r = metadatadb->put (metadatadb, t, &master_metadata, &md, 0);
+  return r;
 }
 // }}}
 // {{{ dbns::insert (chordID, DBT, DBT)
 int
-dbns::insert (const chordID &key, DBT &data, DBT &auxdata)
+dbns::insert (const chordID &key, DBT &data, u_int32_t auxdata, u_int32_t exptime)
 {
   int r = 0;
-  str key_str = id_to_str (key);
-  DBT skey;
-  str_to_dbt (key_str, &skey);
+  DB_TXN *t = NULL;
+  r = dbfe_txn_begin (dbe, &t);
+  assert (r == 0);
 
-  if (auxdatadb) {
-    // To keep auxdata in sync, use an explicit transaction
-    DB_TXN *t = NULL;
-    r = dbfe_txn_begin (dbe, &t);
-    r = datadb->put (datadb, t, &skey, &data, 0);
-    if (r) {
-      warner ("dbns::insert", "data put error", r);
-      r = dbfe_txn_abort (dbe, t);
-    } 
-    r = auxdatadb->put (auxdatadb, t, &skey, &auxdata, 0);
-    if (r) {
-      warner ("dbns::insert", "auxdata put error", r);
-      r = dbfe_txn_abort (dbe, t);
-    } else {
-      r = dbfe_txn_commit (dbe, t);
-    }
-    if (r)
-      warner ("dbns::insert", "abort/commit error", r);
-  } else {
-    // Use implicit transaction
-    r = datadb->put (datadb, NULL, &skey, &data, DB_AUTO_COMMIT);
-    if (r)
-      warner ("dbns::insert", "put error", r);
+  r = update_metadata (data.size, exptime, t);
+  if (r) {
+    dbfe_txn_abort (dbe, t);
+    // Even if r == ENOSPC, we can't afford to blow a lot of time
+    // here doing expiration.
+    return r;
   }
+
+  // Prep BDB objects.
+  DBT skey;
+  id_to_dbt (key, &skey);
+
+  adb_metadata_t md;
+  md.size = data.size;
+  md.auxdata = auxdata;
+  md.expiration = exptime;
+  str md_str = xdr2str (md);
+  DBT metadata;
+  str_to_dbt (md_str, &metadata);
+
+  char *err = "";
+  do {
+    if (hasaux ()) {
+      err = "mtree->insert aux";
+      r = mtree->insert (key, auxdata, t);
+      if (r) break;
+    } else {
+      err = "mtree->insert";
+      r = mtree->insert (key, t);
+      // insert may return DB_KEYEXIST in which case we need
+      // not do any more work here.
+      if (r) break;
+    }
+    err = "metadatadb->put";
+    r = metadatadb->put (metadatadb, t, &skey, &metadata, 0);
+    if (r) break;
+
+    err = "datadb->put";
+    r = datadb->put (datadb, t, &skey, &data, 0);
+    if (r) break;
+  } while (0);
+  int ret = 0;
+  if (r) {
+    if (r != DB_KEYEXIST)
+      warner ("dbns::insert", err, r);
+    ret = dbfe_txn_abort (dbe, t);
+  } else {
+    ret = dbfe_txn_commit (dbe, t);
+  }
+  if (ret)
+    warner ("dbns::insert", "abort/commit error", ret);
   return r;
 }
 // }}}
@@ -273,9 +380,8 @@ dbns::lookup (const chordID &key, str &data)
 {
   int r = 0;
 
-  str key_str = id_to_str (key);
   DBT skey;
-  str_to_dbt (key_str, &skey);
+  id_to_dbt (key, &skey);
 
   DBT content;
   bzero (&content, sizeof (content));
@@ -297,9 +403,8 @@ dbns::lookup_nextkey (const chordID &key, chordID &nextkey)
 {
   int r = 0;
 
-  str key_str = id_to_str (key);
   DBT skey;
-  str_to_dbt (key_str, &skey);
+  id_to_dbt (key, &skey);
 
   DBT content;
   bzero (&content, sizeof (content));
@@ -337,20 +442,64 @@ int
 dbns::del (const chordID &key, u_int32_t auxdata)
 {
   int r = 0;
-  str key_str = id_to_str (key);
   DBT skey;
-  str_to_dbt (key_str, &skey);
-  // Implicit transaction
-  r = datadb->del (datadb, NULL, &skey, DB_AUTO_COMMIT);
+  id_to_dbt (key, &skey);
 
-  if (hasaux ()) {
-    mtree->remove (key, auxdata);
-  } else {
-    mtree->remove (key);
+  // Read the old size in separate transaction
+  DBT md;
+  bzero (&md, sizeof (md));
+  r = metadatadb->get (metadatadb, NULL, &skey, &md, 0);
+  if (r) {
+    if (r != DB_NOTFOUND)
+      warner ("dbns::remove", "metadatadb->get", r);
+    return r;
+  }
+  adb_metadata_t metadata;
+  if (!buf2xdr (metadata, md.data, md.size))
+    return -1;
+
+  DB_TXN *t = NULL;
+  r = dbfe_txn_begin (dbe, &t);
+  assert (r == 0);
+
+  // Update min expiration lazily; we can't know if this is the
+  // last object with a particular expiration time.
+  r = update_metadata (-metadata.size, 0, t);
+  if (r) {
+    dbfe_txn_abort (dbe, t);
+    return r;
   }
 
-  if (r && r != DB_NOTFOUND)
-    warner ("dbns::del", "del error", r);
+  char *err = "";
+  do {
+    if (hasaux ()) {
+      err = "mtree->remove aux";
+      r = mtree->remove (key, auxdata, t);
+      if (r) break;
+    } else {
+      err = "mtree->remove";
+      r = mtree->remove (key, t);
+      if (r) break;
+    }
+    err = "metadatadb->del";
+    r = metadatadb->del (metadatadb, t, &skey, 0);
+    if (r) break;
+
+    err = "datadb->del";
+    r = datadb->del (datadb, t, &skey, 0);
+    if (r) break;
+  } while (0);
+
+  int ret = 0;
+  if (r) {
+    if (r != DB_NOTFOUND)
+      warner ("dbns::remove", err, r);
+    ret = dbfe_txn_abort (dbe, t);
+  } else {
+    ret = dbfe_txn_commit (dbe, t);
+  }
+  if (ret)
+    warner ("dbns::remove", "abort/commit error", ret);
   return r;
 }
 // }}}
@@ -360,12 +509,7 @@ dbns::getkeys (const chordID &start, size_t count, bool getaux, rpc_vec<adb_keya
 {
   int r = 0;
   DBC *cursor;
-  if (auxdatadb) {
-    r = auxdatadb->cursor (auxdatadb, NULL, &cursor, 0);
-  } else {
-    r = datadb->cursor (datadb, NULL, &cursor, 0);
-  }
-
+  r = metadatadb->cursor (metadatadb, NULL, &cursor, 0);
   if (r) {
     warner ("dbns::getkeys", "cursor open", r);
     (void) cursor->c_close (cursor);
@@ -373,14 +517,10 @@ dbns::getkeys (const chordID &start, size_t count, bool getaux, rpc_vec<adb_keya
   }
 
   // Could possibly improve efficiency here by using SleepyCat's bulk reads
-  str key_str = id_to_str (start);
   DBT key;
-  str_to_dbt (key_str, &key);
+  id_to_dbt (start, &key);
   DBT data_template;
   bzero (&data_template, sizeof (data_template));
-  // If DB_DBT_PARTIAL and data.dlen == 0, no data is read.
-  if (!auxdatadb || !getaux)
-    data_template.flags = DB_DBT_PARTIAL;
   DBT data = data_template;
 
   u_int32_t limit = count;
@@ -393,11 +533,21 @@ dbns::getkeys (const chordID &start, size_t count, bool getaux, rpc_vec<adb_keya
 
   r = cursor->c_get (cursor, &key, &data, DB_SET_RANGE);
   while (elements < limit && !r) {
+    if (key.size == master_metadata.size && 
+	!memcmp (key.data, master_metadata.data, key.size))
+      goto getkeys_nextkey;
     out[elements].key = dbt_to_id (key);
-    if (getaux)
-      out[elements].auxdata = ntohl (*(u_int32_t *)data.data);
+    if (getaux) {
+      adb_metadata_t md;
+      if (!buf2xdr (md, data.data, data.size)) {
+	warnx << name << ": Bad metadata for " << out[elements].key << "\n";
+	goto getkeys_nextkey;
+      }
+      out[elements].auxdata = md.auxdata;
+    }
     elements++;
 
+getkeys_nextkey:
     bzero (&key, sizeof (key));
     data = data_template;
     r = cursor->c_get (cursor, &key, &data, DB_NEXT);
@@ -411,6 +561,110 @@ dbns::getkeys (const chordID &start, size_t count, bool getaux, rpc_vec<adb_keya
     warner ("dbns::getkeys", "cursor get", r);
   (void) cursor->c_close (cursor);
 
+  return r;
+}
+// }}}
+// {{{ dbns::expire (u_int32_t, u_int32_t)
+int
+dbns::expire (u_int32_t limit, u_int32_t deadline)
+{
+  if (deadline == 0)
+    deadline = time (NULL);
+
+  u_int64_t victim_size = 0;
+  u_int32_t last_expire = 0;
+  vec<DBT> victims;
+  vec<adb_metadata_t> victim_metadata;
+
+  // XXX Would it be okay to modify the database (and its
+  //     sibling databases) while the cursor is open?
+
+  // Open a cursor in secondary database.
+  // Make sure it points to the first thing after 0.
+  // Keep reading and deleting until the thing's key is > t.
+  //   Accumulate entries into a vec, including the object size.
+  u_int32_t begin_time_data = htonl (1);
+  DBT begin_time; bzero (&begin_time, sizeof (begin_time));
+  begin_time.data = &begin_time_data;
+  begin_time.size = sizeof (begin_time_data);
+  DBT key; bzero (&key, sizeof (key));
+  key.flags = DB_DBT_MALLOC;
+  DBT content; bzero (&content, sizeof (content));
+  DBC *cursor = NULL;
+  int r = byexpiredb->cursor (byexpiredb, NULL, &cursor, 0);
+  if (r) {
+    warner ("dbns::expire", "byexpiredb->cursor", r);
+    if (cursor)
+      cursor->c_close (cursor);
+    return r;
+  }
+  r = cursor->c_pget (cursor, &begin_time, &key, &content, DB_SET_RANGE);
+  while (!r && (limit == 0 || victims.size () < limit)) {
+    if (key.size == master_metadata.size && 
+	!memcmp (key.data, master_metadata.data, key.size))
+    {
+      free (key.data);
+      goto expire_nextkey;
+    }
+    adb_metadata_t md;
+    buf2xdr (md, content.data, content.size);
+    if (md.expiration < deadline) {
+      victims.push_back (key);
+      victim_metadata.push_back (md);
+    } else {
+      free (key.data);
+      break;
+    }
+expire_nextkey:
+    bzero (&key, sizeof (key));
+    key.flags = DB_DBT_MALLOC;
+    r = cursor->c_pget (cursor, &begin_time, &key, &content, DB_NEXT);
+  }
+  if (r && r != DB_NOTFOUND)
+    warner ("dbns::expire", "byexpiredb cursor->c_pget", r);
+  (void) cursor->c_close (cursor);
+
+  // start a transaction
+  DB_TXN *parent = NULL;
+  dbfe_txn_begin (dbe, &parent);
+  // Iterate over objects to be expired:
+  while (victims.size ()) {
+    DB_TXN *t = NULL;
+    dbe->txn_begin (dbe, parent, &t, 0);
+    DBT key = victims.pop_back ();
+    adb_metadata_t md = victim_metadata.pop_back ();
+    chordID id = dbt_to_id (key);
+    warnx << name << ": Expiring " << id << "\n";
+    char *err = "";
+    do {
+      err = "mtree->remove";
+      if (hasaux ()) {
+	r = mtree->remove (id, md.auxdata, t);
+      } else {
+	r = mtree->remove (id, t);
+      }
+      if (r) break;
+      err = "metadatadb->del";
+      r = metadatadb->del (metadatadb, t, &key, 0);
+      if (r) break;
+      err = "datadb->del";
+      r = datadb->del (datadb, t, &key, 0);
+      if (r) break;
+    } while (0);
+    free (key.data);
+    if (r) {
+      warner ("dbns::expire", err, r);
+      dbfe_txn_abort (dbe, t);
+    } else {
+      victim_size += md.size;
+      if (md.expiration > last_expire)
+	last_expire = md.expiration;
+      dbfe_txn_commit (dbe, t);
+    }
+  }
+  // Update the metadata with size/time difference
+  r = update_metadata (-victim_size, last_expire, parent);
+  dbfe_txn_commit (dbe, parent);
   return r;
 }
 // }}}
@@ -553,28 +807,31 @@ do_store (dbmanager *dbm, svccb *sbp)
 
   u_int64_t t = io_start ();
 
-  // implicit policy: don't insert the same key twice for non-aux dbs.
-  bool inserted_new_key = db->kinsert (arg->key, arg->auxdata);
-  if (!inserted_new_key) {
-    io_finish (t, strbuf("store %s", arg->name.cstr ()));
-    sbp->replyref (ADB_OK);
-    return;
-  }
-
   DBT data;
   bzero (&data, sizeof (data));
   data.data = arg->data.base ();
   data.size = arg->data.size ();
 
-  DBT auxdatadbt;
-  bzero (&auxdatadbt, sizeof (auxdatadbt));
-  auxdatadbt.size = sizeof (u_int32_t);
-  u_int32_t nauxdata = htonl (arg->auxdata);
-  auxdatadbt.data = &nauxdata; 
-
-  int r = db->insert (arg->key, data, auxdatadbt);
+  int r = db->insert (arg->key, data, arg->auxdata, arg->expiration);
   io_finish (t, strbuf("store %s", arg->name.cstr ()));
-  sbp->replyref ((r == 0) ? ADB_OK : ADB_ERR);
+  adb_status stat = ADB_OK;
+  switch (r) {
+    case 0:
+      break;
+    case ENOSPC:
+      stat = ADB_DISKFULL;
+      break;
+    default:
+      stat = ADB_ERR;
+      break;
+  }
+  sbp->replyref (stat);
+
+  if (db->quotacheck (quota) > expire_threshold) {
+    u_int64_t t = io_start ();
+    db->expire (expire_batch_size);
+    io_finish (t, strbuf ("expire %s", db->getname ().cstr ()));
+  }
 }
 // }}}
 // {{{ do_fetch
@@ -693,6 +950,23 @@ do_sync (dbmanager *dbm, svccb *sbp)
   sbp->replyref (res);
 }
 // }}}
+// {{{ do_expire
+void
+do_expire (dbmanager *dbm, svccb *sbp)
+{
+  adb_expirearg *arg = sbp->Xtmpl getarg<adb_expirearg> ();
+  adb_status res (ADB_OK);
+  dbns *db = dbm->get (arg->name);
+  if (!db) {
+    res = ADB_ERR;
+  } else {
+    u_int64_t t = io_start ();
+    db->expire (arg->limit, arg->deadline);
+    io_finish (t, strbuf ("expire %s", arg->name.cstr ()));
+  }
+  sbp->replyref (res);
+}
+// }}}
 // }}}
 
 // {{{ RPC accept and dispatch
@@ -726,6 +1000,9 @@ dispatch (ref<axprt_stream> s, ptr<asrv> a, dbmanager *dbm, svccb *sbp)
     break;
   case ADBPROC_SYNC:
     do_sync (dbm, sbp);
+    break;
+  case ADBPROC_EXPIRE:
+    do_expire (dbm, sbp);
     break;
   default:
     fatal << "unknown procedure: " << sbp->proc () << "\n";
@@ -772,7 +1049,7 @@ accept_cb (int lfd, dbmanager *dbm)
 void
 usage ()
 {
-  warnx << "Usage: adbd -d db -S sock [-D]\n";
+  warnx << "Usage: adbd -d db -S sock [-D] [-q quota_in_GB or 0]\n";
   exit (0);
 }
 
@@ -789,13 +1066,21 @@ main (int argc, char **argv)
 
   bool do_daemonize (false);
 
-  while ((ch = getopt (argc, argv, "Dd:S:"))!=-1)
+  while ((ch = getopt (argc, argv, "Dd:q:S:"))!=-1)
     switch (ch) {
     case 'D':
       do_daemonize = true;
       break;
     case 'd':
       db_name = optarg;
+      break;
+    case 'q':
+      {
+	bool ok = convertint (optarg, &quota);
+	if (!ok)
+	  usage ();
+	quota *= 1024 * 1024 * 1024;
+      }
       break;
     case 'S':
       dbsock = optarg;
@@ -818,6 +1103,10 @@ main (int argc, char **argv)
   sigcb (SIGTERM, wrap (&halt));
 
   sigcb (SIGUSR1, wrap (&toggle_iotime));
+
+  bzero (&master_metadata, sizeof (master_metadata));
+  master_metadata.data = strdup ("MASTER_INFO");
+  master_metadata.size = strlen ("MASTER_INFO");
 
   //setup the asrv
   listen_unix (dbsock, dbm);

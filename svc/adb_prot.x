@@ -5,7 +5,8 @@ enum adb_status {
   ADB_OK = 0,
   ADB_ERR = 1,
   ADB_NOTFOUND = 2,
-  ADB_COMPLETE = 3
+  ADB_COMPLETE = 3,
+  ADB_DISKFULL = 4
 };
 
 struct adb_vnodeid {
@@ -18,6 +19,17 @@ struct adb_vnodeid {
 struct adb_keyaux_t {
   chordID key;
   u_int32_t auxdata;
+};
+
+struct adb_master_metadata_t {
+  u_int64_t size;
+  u_int32_t expiration;
+};
+
+struct adb_metadata_t {
+  u_int32_t size;       /* Object size in bytes */
+  u_int32_t expiration; /* Seconds since epoch */
+  u_int32_t auxdata;	/* Optional: for distinguishing versions */
 };
 /* }}} */
 
@@ -33,6 +45,7 @@ struct adb_storearg {
   chordID key;
   opaque data<>;
   u_int32_t auxdata;
+  u_int32_t expiration;
 };
 /* }}} */
 /* {{{ ADBPROC_FETCH */
@@ -95,6 +108,13 @@ struct adb_getspaceinfores {
   bool hasaux;
 };
 /* }}} */
+/* {{{ ADBPROC_EXPIRE */
+struct adb_expirearg {
+  str name;
+  u_int32_t limit;
+  u_int32_t deadline;
+};
+/* }}} */
 
 program ADB_PROGRAM {
 	version ADB_VERSION {
@@ -124,6 +144,10 @@ program ADB_PROGRAM {
 		adb_status
 		ADBPROC_SYNC (adb_dbnamearg) = 12;
 		/* Sync databases etc to disk */
+
+		adb_status
+		ADBPROC_EXPIRE (adb_expirearg) = 13;
+		/* May expire some objects */
 	} = 1;
 } = 344501;
 

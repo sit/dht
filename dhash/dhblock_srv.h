@@ -77,7 +77,8 @@ class dhblock_srv : virtual public refcount {
 
   virtual void generate_repair_jobs () = 0;
   virtual void db_store (chordID k, str d, cb_dhstat cb);
-  virtual void db_store (chordID k, str d, u_int32_t aux, cb_dhstat cb);
+  virtual void db_store (chordID k, str d,
+      u_int32_t aux, u_int32_t expire, cb_dhstat cb);
 
   // Maint RPC helpers and stubs 
   static ptr<aclnt> get_maint_aclnt (str msock);

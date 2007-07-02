@@ -42,7 +42,7 @@ public:
   str dbsock () const { return dbsock_; } 
   bool hasaux () const { return hasaux_; }
 
-  void store (chordID key, str data, u_int32_t auxdata, cb_adbstat cb);
+  void store (chordID key, str data, u_int32_t aux, u_int32_t expire, cb_adbstat cb);
   void store (chordID key, str data, cb_adbstat cb);
   void fetch (chordID key, cb_fetch cb);
   void fetch (chordID key, bool nextkey, cb_fetch cb);
@@ -50,6 +50,7 @@ public:
   void remove (chordID key, u_int32_t auxdata, cb_adbstat cb);
   void getkeys (u_int32_t id, cb_getkeys cb, bool ordered = false, u_int32_t batchsize = 16384, bool getaux = false);
   void sync (cb_adbstat cb);
+  void expire (cb_adbstat cb, u_int32_t limit = 0, u_int32_t t = 0);
 
   void getspaceinfo (cb_getspace_t cb);
 };

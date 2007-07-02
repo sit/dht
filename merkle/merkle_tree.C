@@ -142,14 +142,14 @@ merkle_tree::insert (const chordID &id, const u_int32_t aux)
   return insert (mkey);
 }
 
-void
+int
 merkle_tree::remove (const chordID &id)
 {
   merkle_hash mkey (id);
-  remove (mkey);
+  return remove (mkey);
 }
 
-void
+int
 merkle_tree::remove (const chordID &id, const u_int32_t aux)
 {
   chordID key = id;
@@ -158,7 +158,7 @@ merkle_tree::remove (const chordID &id, const u_int32_t aux)
   assert (key > 0);
   key |= aux;
   merkle_hash mkey (key);
-  remove (mkey);
+  return remove (mkey);
 }
 
 merkle_node *

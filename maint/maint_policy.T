@@ -389,8 +389,7 @@ carbonite::init_ltree (cbv cb, adb_status err, str path, bool hasaux)
     warn << "carbonite::init_ltree: Unexpected adbd error: " << err << "\n";
     return;
   }
-  str mpath = strbuf () << path << "/mtree";
-  ltree = New refcounted<merkle_tree_bdb> (mpath.cstr (),
+  ltree = New refcounted<merkle_tree_bdb> (path.cstr (),
       /* join = */ true,
       /* ro = */ true);
   cb ();
@@ -654,8 +653,7 @@ passingtone::init_ltree (cbv cb, adb_status err, str path, bool hasaux)
     warn << "passingtone::init_ltree: Unexpected adbd error: " << err << "\n";
     return;
   }
-  str mpath = strbuf () << path << "/mtree";
-  ltree = New refcounted<merkle_tree_bdb> (mpath.cstr (),
+  ltree = New refcounted<merkle_tree_bdb> (path.cstr (),
       /* join = */ true,
       /* ro = */ true);
   cb ();

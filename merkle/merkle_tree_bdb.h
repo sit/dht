@@ -5,16 +5,20 @@ class merkle_node_bdb;
 class merkle_tree_bdb : public merkle_tree
 {
   friend class merkle_node_bdb;
+  const bool dbe_closable;
   DB_ENV *dbe;
   DB *nodedb;
   DB *keydb;
 
   void warner (const char *method, const char *desc, int r) const;
 
+  // Database initialization
+  int init_db (bool ro);
+
   // Berkeley DB access methods
   merkle_node_bdb *read_node (u_int depth, const merkle_hash &key, DB_TXN *t = NULL, int flags = 0);
-  bool write_node (const merkle_node_bdb *node, DB_TXN *t = NULL);
-  bool del_node (u_int depth, const merkle_hash &key, DB_TXN *t = NULL);
+  int write_node (const merkle_node_bdb *node, DB_TXN *t = NULL);
+  int del_node (u_int depth, const merkle_hash &key, DB_TXN *t = NULL);
   bool check_key (const merkle_hash &key, DB_TXN *t = NULL);
   int insert_key (const merkle_hash &key, DB_TXN *t = NULL);
   int remove_key (const merkle_hash &key, DB_TXN *t = NULL);
@@ -29,18 +33,29 @@ class merkle_tree_bdb : public merkle_tree
   int insert (u_int depth, merkle_hash &key, merkle_node *n) {
     return 0;
   }
-  void remove (u_int depth, merkle_hash &key, merkle_node *n) {}
+  int remove (u_int depth, merkle_hash &key, merkle_node *n) {
+    return 0;
+  }
 
 public:
   merkle_tree_bdb (const char *path, bool join, bool ro);
+  merkle_tree_bdb (DB_ENV *dbe, bool ro);
   virtual ~merkle_tree_bdb ();
 
   static bool tree_exists (const char *path);
 
+  // Special functions for BDB insert/remove.
+  int insert (merkle_hash &key, DB_TXN *t = NULL);
+  int insert (const chordID &key, DB_TXN *t = NULL);
+  int insert (const chordID &key, const u_int32_t aux, DB_TXN *t = NULL);
+  int remove (merkle_hash &key, DB_TXN *t = NULL);
+  int remove (const chordID &key, DB_TXN *t = NULL);
+  int remove (const chordID &key, const u_int32_t aux, DB_TXN *t = NULL);
+
   // Sub-classes must implement the following methods
   merkle_node *get_root ();
-  int insert (merkle_hash &key);
-  void remove (merkle_hash &key);
+  int insert (merkle_hash &key) { return insert (key, NULL); }
+  int remove (merkle_hash &key) { return remove (key, NULL); }
   bool key_exists (chordID key);
   vec<merkle_hash> database_get_keys (u_int depth,
       const merkle_hash &prefix);
@@ -82,9 +97,9 @@ struct merkle_node_bdb : public merkle_node
   merkle_node *child (u_int i);
   bool isleaf () const { return leaf; }
   void internal2leaf ();
-  void internal2leaf (DB_TXN *t);
+  int internal2leaf (DB_TXN *t);
   void leaf2internal ();
-  void leaf2internal (DB_TXN *t);
+  int leaf2internal (DB_TXN *t);
   void dump (u_int depth);
 
   operator str () const;

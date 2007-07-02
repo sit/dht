@@ -49,7 +49,7 @@ dhblock_keyhash_srv::real_store (chordID key, str od, str nd, cb_dhstat cb)
   } else {
     info << "db write: " << node->my_ID ()
 	 << " N " << key << " " << nd.len () << "\n";
-    db_store (key, nd, v1, cb);
+    db_store (key, nd, v1, 0, cb);
   }
 }
 
@@ -60,7 +60,7 @@ dhblock_keyhash_srv::delete_cb (chordID k, str d, u_int32_t v, cb_dhstat cb, adb
   info << "db write: " << node->my_ID ()
        << " U " << k << " " << d.len () << "\n";
   
-  db_store (k, d, v, cb);
+  db_store (k, d, v, 0, cb);
 }
 
 // XXX could ideally try to find the newest version over

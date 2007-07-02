@@ -89,7 +89,7 @@ private:
 
   bool _writer;
 
-  void remove (u_int depth, merkle_hash &key, merkle_node *n);
+  int remove (u_int depth, merkle_hash &key, merkle_node *n);
   int insert (u_int depth, merkle_hash &key, merkle_node *n);
   merkle_node *make_node (u_int32_t pointer);
   merkle_node *make_node (u_int32_t block_no, MERKLE_DISK_TYPE type);
@@ -117,7 +117,7 @@ public:
   merkle_node *lookup (u_int depth, const merkle_hash &key);
   merkle_node *lookup (u_int *depth, u_int max_depth, const merkle_hash &key);
   void lookup_release (merkle_node *n);
-  void remove (merkle_hash &key);
+  int remove (merkle_hash &key);
   void sync (bool reopen);
 };
 
