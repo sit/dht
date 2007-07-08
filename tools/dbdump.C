@@ -1,56 +1,26 @@
 #include <async.h>
 #include <aios.h>
+#include <crypt.h>
 #include <dbfe.h>
+#include <adb_prot.h>
 
-enum dumpmode_t {
-    MODE_ENV = 1,
-    MODE_OLD = 2
-} modes;
-
-static char *usage = "usage: dbdump [-k] <-e|-o> <dbfile>\n";
+static char *usage = "usage: dbdump dbhome\n";
 
 int
 main (int argc, char *argv[])
 {
-  dumpmode_t mode = MODE_ENV;
-  bool keytranslate = false;
-
-  int ch;
-  while ((ch = getopt (argc, argv, "eok")) != -1)
-    switch (ch) {
-      case 'e':
-	mode = MODE_ENV;
-	break;
-      case 'o':
-	mode = MODE_OLD;
-	break;
-      case 'k':
-	keytranslate = true;
-	break;
-      default:
-	fatal << usage;
-	break;
-    }
-
-  argc -= optind;
-  argv += optind;
-
-  if (argc != 1)
+  if (argc != 2)
     fatal << usage;
   
   int r;
-  DB *db = NULL;
   DB_ENV* dbe = NULL;
+  DB *db = NULL;
 
-  if (mode == MODE_ENV) {
-    r = dbfe_initialize_dbenv (&dbe, argv[0], /* join = */ true);
-    if (r)
-      fatal << "couldn't open dbenv: " << db_strerror (r) << "\n";
+  r = dbfe_initialize_dbenv (&dbe, argv[1], /* join = */ true);
+  if (r)
+    fatal << "couldn't open dbenv: " << db_strerror (r) << "\n";
 
-    r = dbfe_opendb (dbe, &db, "db", DB_RDONLY);
-  } else {
-    r = dbfe_opendb (dbe, &db, argv[0], DB_RDONLY);
-  }
+  r = dbfe_opendb (dbe, &db, "metadatadb", DB_RDONLY);
   if (r)
     fatal << "couldn't open db: " << db_strerror (r) << "\n";
     
@@ -67,10 +37,12 @@ main (int argc, char *argv[])
 #  define DB_BUFFER_SMALL ENOMEM
 #endif /* DB_BUFFER_SMALL */
 
+  adb_master_metadata_t mmd;
+  bzero (&mmd, sizeof (mmd));
+
   for (int i = 0; ; i++) {
     bzero (&key, sizeof (key));
     bzero (&data, sizeof (data));
-    data.flags = DB_DBT_PARTIAL; // request 0 bytes
     int err = cursor->c_get (cursor, &key, &data, DB_NEXT);
     if (err == DB_NOTFOUND) {
       aout << "EOF.\n";
@@ -78,22 +50,21 @@ main (int argc, char *argv[])
     } else if (err) {
       fatal << "err: " << err << " " << strerror (err) << "\n";
     }
+    if (key.size != sha1::hashsize) {
+      buf2xdr (mmd, data.data, data.size);
+      continue;
+    }
 
-    strbuf k;
-    if (keytranslate)
-      k << str ((char *) key.data, key.size);
-    else
-      k << hexdump (key.data, key.size);
+    chordID k;
+    mpz_set_rawmag_be (&k, static_cast<char *> (key.data), key.size);
 
-    aout << "key[" << i << "] " << k << " ";
-    data.flags = DB_DBT_USERMEM;
-    err = cursor->c_get (cursor, &key, &data, DB_CURRENT);
-    if (err == DB_BUFFER_SMALL) { 
-      aout << data.size << "\n"; 
-    } 
+    adb_metadata_t md;
+    buf2xdr (md, data.data, data.size);
+
+    aout << "key[" << i << "] " << k << " " << md.size << " " << md.expiration << "\n";
 
     keys++;
-    totalsz += data.size;
+    totalsz += md.size;
     
     aout->flush ();
   }
@@ -103,5 +74,7 @@ main (int argc, char *argv[])
   dbe->close (dbe, 0);
   aout << "total keys: " << keys << "\n";
   aout << "total bytes: " << totalsz << "\n";
+  if (totalsz != mmd.size)
+    fatal << "Master metadata total bytes error: " << mmd.size << "\n";
 }
 
