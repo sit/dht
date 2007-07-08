@@ -72,7 +72,10 @@ dhblock_chash_srv::store (chordID key, str d, cb_dhstat cb)
 
   if (1) {  // without maintaining our own merkle tree, we can't know
     action = "N"; // New
-    db_store (key, d, cb);
+    if (default_lifetime < 0)
+      db_store (key, d, cb);
+    else
+      db_store (key, d, 0, timenow + default_lifetime, cb);
   } else {
     action = "R";
     cb (DHASH_OK);

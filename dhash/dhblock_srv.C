@@ -9,6 +9,7 @@
 
 #include <dhblock_srv.h>
 
+#include <configurator.h>
 #include <modlogger.h>
 #define info    modlogger ("dbhlock_srv", modlogger::INFO)
 #define trace   modlogger ("dhblock_srv", modlogger::TRACE)
@@ -27,8 +28,11 @@ dhblock_srv::dhblock_srv (ptr<vnode> node,
   db (New refcounted<adb> (dbsock, dbname, hasaux, t)),
   maint (get_maint_aclnt (msock)),
   node (node),
-  cli (cli)
+  cli (cli),
+  default_lifetime (-1)
 {
+  (void) Configurator::only ().get_int ("dhash.default_lifetime",
+      default_lifetime);
   warn << "opened " << dbsock << " with space " << dbname 
        << (hasaux ? " (hasaux)\n" : "\n");
   delaycb (dhash::reptm (), wrap (this, &dhblock_srv::sync_timer));

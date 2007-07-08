@@ -103,7 +103,9 @@ dhblock_noauth_srv::after_delete (chordID key, str data, cb_dhstat cb,
 
   warn << node->my_ID () << " db write: " 
        << "U " << key << " " << data.len ()  << "\n";
-  db_store (key, data, hash, 0, cb); 
+  db_store (key, data, hash,
+      (default_lifetime < 0) ? 0 : (timenow + default_lifetime),
+      cb); 
 }
 
 

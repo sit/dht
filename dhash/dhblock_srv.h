@@ -62,6 +62,9 @@ class dhblock_srv : virtual public refcount {
 
   ptr<dhashcli> cli;
 
+  // If no expiration is provided as an RPC arg, use this.
+  int default_lifetime;
+
   enum {
     REPAIR_OUTSTANDING_MAX = 16,
     REPAIR_QUEUE_MAX = 64
