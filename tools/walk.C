@@ -14,6 +14,7 @@ chordID wellknown_ID = -1;
 int succproc (CHORDPROC_GETSUCC_EXT);
 
 bool verify = false;
+bool verify_errors = false;
 // Sequential is what we believe is the correct sequencing of nodes
 vec<chord_node> sequential;
 
@@ -87,8 +88,10 @@ verify_succlist (const vec<chord_node> &zs)
       format (s << "|'R ", sequential[j]) << "\n";
       newseq.push_back (sequential[j++]);
     }
-    if (bad)
+    if (bad) {
+      verify_errors = true;
       aout << s;
+    }
     sequential.clear ();
     sequential = newseq;
   }
@@ -150,13 +153,13 @@ getsucc_cb (u_int64_t start, chord_node curr, chord_nodelistextres *res, clnt_st
   }
   // Out of nodes, done.
   if (!sequential.size ())
-    exit (0);
+    exit (verify_errors == true ? 1 : 0);
 
   next = sequential[0];
 
   // wrapped around ring. done.
   if (next.x == wellknown_ID)
-    exit (0);
+    exit (verify_errors == true ? 1 : 0);
   
   getsucc (next);
 }
