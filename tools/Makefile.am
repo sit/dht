@@ -7,7 +7,7 @@ if GTK_AVAILABLE
 VIS = vis
 endif
 
-bin_PROGRAMS = dbm walk findroute filestore nodeq dbdump merkledump lsdping maintwalk $(VIS) 
+bin_PROGRAMS = dbm dbmsink walk findroute filestore nodeq dbdump merkledump lsdping maintwalk $(VIS) 
 bin_SCRIPTS = dbm.py nodeq-filter
 chorddata_DATA =  RPC.py RPCProto.py vischat.py
 
@@ -15,7 +15,7 @@ EXTRA_DIST = $(bin_SCRIPTS) $(chorddata_DATA)
 CLEANFILES = core *.core *~ *.rpo
 MAINTAINERCLEANFILES = Makefile.in
 
-noinst_PROGRAMS = coords kdb_stats 
+noinst_PROGRAMS = coords kdb_stats
 
 lsdping_SOURCES = lsdping.C
 lsdping_LDADD =  ../utils/libutil.a ../svc/libsvc.la $(LDADD)
@@ -34,6 +34,9 @@ maintwalk_LDADD = ../merkle/libmerkle.a ../chord/libchord.a ../utils/libutil.a .
 
 dbm_SOURCES = dbm.C
 dbm_LDADD = ../dhash/libdhashclient.a ../utils/libutil.a ../svc/libsvc.la $(LDADD)
+
+dbmsink_SOURCES = dbmsink.C
+dbmsink_LDADD = ../svc/libsvc.la $(LDADD)
 
 dbdump_SOURCES = dbdump.C
 dbdump_LDADD = $(DBLIB) ../utils/dbfe_sleepycat.o $(LDADD)
