@@ -1049,7 +1049,7 @@ accept_cb (int lfd, dbmanager *dbm)
 void
 usage ()
 {
-  warnx << "Usage: adbd -d db -S sock [-D] [-q quota_in_GB or 0]\n";
+  warnx << "Usage: adbd -d db -S sock [-D] [-q quota]\n";
   exit (0);
 }
 
@@ -1076,10 +1076,31 @@ main (int argc, char **argv)
       break;
     case 'q':
       {
+	u_int64_t factor = u_int64_t (1024) * 1024 * 1024;
+	char f = optarg[strlen (optarg) - 1];
+	if (!isdigit (f))
+	  optarg[strlen (optarg) - 1] = 0;
 	bool ok = convertint (optarg, &quota);
 	if (!ok)
 	  usage ();
-	quota *= 1024 * 1024 * 1024;
+	switch (f) {
+	  case 'b':
+	    factor = 1;
+	    break;
+	  case 'K':
+	    factor = 1024;
+	    break;
+	  case 'M':
+	    factor = 1024 * 1024;
+	    break;
+	  case 'G':
+	    factor = u_int64_t (1024) * 1024 * 1024;
+	    break;
+	  default:
+	    if (!isdigit (f))
+	      fatal ("Unknown conversion factor '%c'\n", f);
+	}
+	quota *= factor;
       }
       break;
     case 'S':

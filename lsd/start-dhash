@@ -180,7 +180,7 @@ start-dhash [start-dhash options] [lsd options]
     --root dir		Sandbox Chord/DHash into <dir>
     --bindir dir	Directory of where to find binaries 
     --maintmode mode	Maintenance mode used by maintd.
-    --quota quota	Quota (in GB) for adbd.
+    --quota quota	Quota for adbd.
     --daemonize		Run all kids as daemons.
 
 =head1 OPTIONS
@@ -210,8 +210,9 @@ to the -m option of maintd; validity checking is also done by maintd.
 
 =item B<--quota> quota
 
-Set the quota used by adbd.  This should be a small-ish positive integer
-and is interpreted as GB by adbd.
+Set the quota used by adbd.  If no unit is specified, defaults to
+number of GB.   Otherwise, add suffix of 'G' for GB, 'M' for
+MB, 'K' for KB, or 'b' for bytes directly.
 
 =item B<--daemonize>
 
