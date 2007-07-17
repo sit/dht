@@ -51,7 +51,7 @@ GetOptions (
     "root|r=s"    => \$root,
     "bindir=s"      => \$userbindir,
     "maintmode=s" => \$maintmode,
-    "quota=i"	  => \$quota,
+    "quota=s"	  => \$quota,
     "daemonize"   => \$daemonize,
 );
 pod2usage(0) if $help;
