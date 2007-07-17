@@ -9,6 +9,12 @@
 class aclnt;
 class chord_trigger_t;
 
+inline const strbuf &
+strbuf_cat (const strbuf &sb, adb_status status)
+{
+  return rpc_print (sb, status, 0, NULL, NULL);
+}
+
 typedef callback<void, adb_status, chordID, str>::ptr cb_fetch;
 typedef callback<void, adb_status>::ptr cb_adbstat;
 typedef callback<void, adb_status, u_int32_t, vec<adb_keyaux_t> >::ptr cb_getkeys;
