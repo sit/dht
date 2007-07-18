@@ -385,7 +385,6 @@ harness_t::storecb (int iter, unsigned int dx, u_int64_t start,
 {
   out--;
   nundone--;
-  bps++;
   done[dx] = true;
 
   strbuf s;
@@ -412,7 +411,6 @@ harness_t::fetchcb (int iter, unsigned int i, u_int64_t start,
 {
   out--;
   nundone--;
-  bps++;
   done[i] = true;
 
   if (stat || !blk) {
@@ -423,6 +421,7 @@ harness_t::fetchcb (int iter, unsigned int i, u_int64_t start,
   else if (!verify_one (iter, i, blk))
     warnx << "verification failed for block " << IDs[i] << "\n";
   else {
+    bps++;
     strbuf buf;
     buf << (IDs[i]>>144) << " " << (getusec () - start)/1000 << " /";
     for (u_int i = 0; i < blk->times.size (); i++)
