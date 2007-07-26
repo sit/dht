@@ -36,7 +36,7 @@ make_block (void *data, size_t datasize)
 {
   char *rd = (char *)data;
   for (unsigned int i = 0; i < datasize; i++) 
-    rd[i] = random_getword ();
+    rd[i] = random ();
   rd[datasize - 1] = 0;
 
   return compute_hash (rd, datasize);
@@ -65,17 +65,28 @@ bench_store_cb (u_int64_t start, adb_status stat)
 void
 bench_store (void)
 {
-  u_int64_t start = getusec ();
+  vec<str> blocks;
+  vec<chordID> IDs;
+  aout << "Generating/hashing bulk data...";
+  aout->flush ();
+  srandom (0); // XXX allow seed on command line
   char *buf = New char[blocksize];
+  for (size_t i = 0; i < count; i++) {
+    chordID k = make_block (buf, blocksize);
+    IDs.push_back (k);
+    blocks.push_back (str (buf, blocksize));
+  }
+  delete[] buf;
+  aout << "done\n";
   aout << "Sending " << count << " requests.\n";
+  aout->flush ();
+  u_int64_t start = getusec ();
   remaining = count;
   for (size_t i = 0; i < count; i++, ops_out++) {
-    chordID k = make_block (buf, blocksize);
-    db->store (k, str (buf, blocksize), 0, timenow + 10, wrap (&bench_store_cb, start));
+    db->store (IDs[i], blocks[i], 0, timenow + 10, wrap (&bench_store_cb, start));
     while (ops_out > max_out) 
       acheck ();
   }
-  delete[] buf;
 }
 
 void
