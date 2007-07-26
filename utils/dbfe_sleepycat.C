@@ -3,7 +3,7 @@
 
 /* Generate a configuration file for other processes to use */
 static bool
-dbfe_generate_config (str path, unsigned int cachesize)
+dbfe_generate_config (str path, unsigned int cachesize, str extraconf)
 {
   strbuf db_config;
   db_config << "# MIT lsd db configuration\n\n";
@@ -26,6 +26,9 @@ dbfe_generate_config (str path, unsigned int cachesize)
   db_config << "set_lk_max_locks 5000\n";
   db_config << "set_lk_max_objects 5000\n";
   
+  if (extraconf)
+    db_config << "\n# App-provided extra config\n" << extraconf;
+
 #if 0
   /* This should be the default */
   char cpath[MAXPATHLEN];
@@ -40,7 +43,7 @@ dbfe_generate_config (str path, unsigned int cachesize)
 }
 
 int
-dbfe_initialize_dbenv (DB_ENV **dbep, str filename, bool join, unsigned int cachesize = 1024)
+dbfe_initialize_dbenv (DB_ENV **dbep, str filename, bool join, unsigned int cachesize, str extraconf)
 {
   int r (-1);
 
@@ -64,7 +67,7 @@ dbfe_initialize_dbenv (DB_ENV **dbep, str filename, bool join, unsigned int cach
   if (!join) {
     // Force the latest parameters 
     strbuf db_config_path ("%s/DB_CONFIG", filename.cstr ());
-    dbfe_generate_config (db_config_path, cachesize);
+    dbfe_generate_config (db_config_path, cachesize, extraconf);
 
     // We use all the fixings
     r = dbe->open (dbe, filename, DB_CREATE |
