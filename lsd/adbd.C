@@ -157,7 +157,7 @@ class dbns {
   int update_metadata (int32_t sz, u_int32_t expiration, DB_TXN *t = NULL);
 
 public:
-  dbns (const str &dbpath, const str &name, bool aux);
+  dbns (const str &dbpath, const str &name, bool aux, str logpath = NULL);
   ~dbns ();
 
   void warner (const char *method, const char *desc, int r);
@@ -185,7 +185,7 @@ public:
 };
 // }}}
 // {{{ dbns::dbns
-dbns::dbns (const str &dbpath, const str &name, bool aux) :
+dbns::dbns (const str &dbpath, const str &name, bool aux, str logpath) :
   name (name),
   aux (aux),
   dbe (NULL),
@@ -203,8 +203,12 @@ dbns::dbns (const str &dbpath, const str &name, bool aux) :
   assert (dbpath[dbpath.len () - 1] == '/');
   strbuf fullpath ("%s%s", dbpath.cstr (), name.cstr ());
 
+  str logconf = NULL;
+  if (logpath)
+    logconf = strbuf ("set_lg_dir %s/%s\n", logpath.cstr (), name.cstr ());
+
   int r = -1;
-  r = dbfe_initialize_dbenv (&dbe, fullpath, false, 30*1024);
+  r = dbfe_initialize_dbenv (&dbe, fullpath, false, 30*1024, logconf);
   DBNS_ERRCHECK ("dbe->open");
 
   r = dbfe_opendb (dbe, &datadb, "db", DB_CREATE, 0);
@@ -673,10 +677,11 @@ expire_nextkey:
 // {{{ DB Manager
 class dbmanager {
   str dbpath;
+  str logpath;
   ihash<str, dbns, &dbns::name, &dbns::hlink> dbs;
   void dbcloser (dbns *db);
 public:
-  dbmanager (str);
+  dbmanager (str, str);
   ~dbmanager ();
   const str &getdbpath () { return dbpath; };
 
@@ -684,30 +689,34 @@ public:
   dbns *createdb (const str &n, bool aux);
 };
 
-dbmanager::dbmanager (str p) :
-  dbpath (p)
+void
+mkdir_wrapper (str path)
 {
   // Make path if necessary
   struct stat sb;
-  if (stat (dbpath, &sb) < 0) {
+  if (stat (path, &sb) < 0) {
     if (errno == ENOENT) {
-      if (mkdir (dbpath, 0755) < 0)
-	fatal ("dbmanager::dbmanager: mkdir (%s): %m\n", dbpath.cstr ());
+      if (mkdir (path, 0755) < 0)
+	fatal ("mkdir (%s): %m\n", path.cstr ());
     } else {
-      fatal ("dbmanager::dbmanager: stat (%s): %m\n", dbpath.cstr ());
+      fatal ("stat (%s): %m\n", path.cstr ());
     }
   } else {
     if (!S_ISDIR (sb.st_mode)) 
-      fatal ("dbmanager::dbmanager: %s is not a directory\n", dbpath.cstr ());
-    if (access (dbpath, W_OK) < 0)
-      fatal ("dbmanager::manager: access (%s, W_OK): %m\n", dbpath.cstr ());
+      fatal ("%s is not a directory\n", path.cstr ());
+    if (access (path, W_OK) < 0)
+      fatal ("access (%s, W_OK): %m\n", path.cstr ());
   }
+}
 
+static str
+canonicalize_path (str path)
+{
   // Convert path to full path
   char realpath[MAXPATHLEN];
   int fd = -1;
   if (((fd = open (".", O_RDONLY)) >= 0)
-     && chdir (dbpath) >= 0)
+     && chdir (path) >= 0)
   {
     if (getcwd (realpath, sizeof (realpath)))
       errno = 0;
@@ -716,13 +725,24 @@ dbmanager::dbmanager (str p) :
     if (fchdir (fd))
       warn ("fchdir: %m\n");
   }
+  return str (realpath);
+}
+
+dbmanager::dbmanager (str p, str lp = NULL) :
+  dbpath (p),
+  logpath (lp)
+{
+  mkdir_wrapper (dbpath);
+  if (logpath)
+    mkdir_wrapper (logpath);
 
   // Add trailing slash if necessary
-  str x (realpath);
+  str x = canonicalize_path (dbpath);
   if (x[x.len () - 1] != '/')
     dbpath = strbuf () << x << "/";
   else 
     dbpath = x;
+  logpath = canonicalize_path (logpath);
 }
 
 dbmanager::~dbmanager ()
@@ -746,7 +766,9 @@ dbmanager::createdb (const str &n, bool aux)
 {
   dbns *db = dbs[n];
   if (!db) {
-    db = New dbns (dbpath, n, aux);
+    if (logpath)
+      mkdir_wrapper (strbuf() << logpath << "/" << n);
+    db = New dbns (dbpath, n, aux, logpath);
     dbs.insert (db);
   }
   return db;
@@ -1062,17 +1084,21 @@ main (int argc, char **argv)
 
   char ch;
   str db_name = "/var/tmp/db";
+  str log_path = NULL;
   dbsock = "/tmp/db-sock";
 
   bool do_daemonize (false);
 
-  while ((ch = getopt (argc, argv, "Dd:q:S:"))!=-1)
+  while ((ch = getopt (argc, argv, "Dd:l:q:S:"))!=-1)
     switch (ch) {
     case 'D':
       do_daemonize = true;
       break;
     case 'd':
       db_name = optarg;
+      break;
+    case 'l':
+      log_path = optarg;
       break;
     case 'q':
       {
@@ -1115,9 +1141,11 @@ main (int argc, char **argv)
     daemonize ();
   }
   warn << "db path: " << db_name << "\n";
+  if (log_path)
+    warn << "log path: " << log_path << "\n";
   warn << "db socket: " << dbsock << "\n";
 
-  dbm = New dbmanager(db_name);
+  dbm = New dbmanager (db_name, log_path);
 
   sigcb (SIGHUP, wrap (&halt));
   sigcb (SIGINT, wrap (&halt));

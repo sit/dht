@@ -46,9 +46,11 @@ my $userbindir = "";
 my $maintmode = "carbonite";
 my $quota = 0;
 my $daemonize = 0;
+my $logdir = undef;
 GetOptions (
     "help|?"      => \$help,
     "root|r=s"    => \$root,
+    "logdir=s"	=> \$logdir,
     "bindir=s"      => \$userbindir,
     "maintmode=s" => \$maintmode,
     "quota=s"	  => \$quota,
@@ -107,9 +109,16 @@ eval "use BSD::Resource; setrlimit (RLIMIT_CORE, -1, -1);";
 my @daemonizearg = ();
 push @daemonizearg, "-D" if $daemonize;
 my %PID = ();
-$PID{adbd}  = spawn ($root, $ADBD, "adbd",
-		     "-d", "./db",
-		     "-S", "./adbd-sock", "-q", $quota, @daemonizearg);
+if (defined ($logdir)) {
+    $PID{adbd}  = spawn ($root, $ADBD, "adbd",
+			 "-d", "./db",
+			 "-l", $logdir,
+			 "-S", "./adbd-sock", "-q", $quota, @daemonizearg);
+} else {
+    $PID{adbd}  = spawn ($root, $ADBD, "adbd",
+			 "-d", "./db",
+			 "-S", "./adbd-sock", "-q", $quota, @daemonizearg);
+}
 $PID{maintd} = spawn ($root, $MAINTD, "maintd",
 		     "-d", "./maintdata",
 		     "-m", $maintmode,
@@ -195,6 +204,11 @@ Print a brief help message and exit.
 
 Place databases, control sockets (and log files) inside the specified
 directory dir.  For best performance, this should be on a local filesystem.
+
+=item B<--logdir> dir
+
+Place database log files in dir.  Ideally, this would be on a separate
+physical device from the --root directory.
 
 =item B<--bindir> dir
 
