@@ -349,9 +349,9 @@ harness_t::connected ()
   assert (dhash);
   dhash->seteofcb (wrap (this, &harness_t::eofhandler));
 
-  gettimeofday (&start, NULL);
   prepare_test_data ();
   init_iter ();
+  gettimeofday (&start, NULL);
   go (0);
 }
 
