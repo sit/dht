@@ -30,6 +30,7 @@ struct adb_metadata_t {
   u_int32_t size;       /* Object size in bytes */
   u_int32_t expiration; /* Seconds since epoch */
   u_int32_t auxdata;	/* Optional: for distinguishing versions */
+  u_int32_t offset;	/* Offset in per-expiration file */
 };
 /* }}} */
 

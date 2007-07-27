@@ -10,6 +10,9 @@
 #include <dbfe.h>
 #include <merkle_tree_bdb.h>
 
+#include <sys/types.h>
+#include <dirent.h>
+
 // {{{ Globals
 static bool dbstarted (false);
 static str dbsock;
@@ -119,6 +122,18 @@ static int
 getexpire (DB *sdb, const DBT *pkey, const DBT *pdata, DBT *skey)
 {
   u_int32_t *expire = (u_int32_t *) malloc(sizeof(u_int32_t));
+  // this flag should mean that berkeley db will free this memory when it's
+  // done with it.
+  skey->flags = DB_DBT_APPMALLOC;
+  skey->data = expire;
+  skey->size = sizeof (*expire);
+
+  if (pkey->size == master_metadata.size && 
+      !memcmp (pkey->data, master_metadata.data, pkey->size))
+  {
+    *expire = 0;
+    return 0;
+  }
 
   adb_metadata_t md;
   if (!buf2xdr (md, pdata->data, pdata->size)) {
@@ -128,11 +143,6 @@ getexpire (DB *sdb, const DBT *pkey, const DBT *pdata, DBT *skey)
   }
   // Ensure big-endian for proper BDB sorting.
   *expire = htonl (md.expiration);
-  // this flag should mean that berkeley db will free this memory when it's
-  // done with it.
-  skey->flags = DB_DBT_APPMALLOC;
-  skey->data = expire;
-  skey->size = sizeof (*expire);
   return 0;
 }
 // }}}
@@ -146,7 +156,8 @@ class dbns {
   const bool aux;
   DB_ENV *dbe;
 
-  DB *datadb;
+  str datapath;
+
   DB *metadatadb;
   DB *byexpiredb;
 
@@ -167,6 +178,8 @@ public:
   bool hasaux () { return aux; };
   str getname () { return name; }
 
+  int get_metadata (const chordID &key, adb_metadata_t &metadata, DB_TXN *t = NULL);
+
   // Primary data management
   int insert (const chordID &key, DBT &data, u_int32_t auxdata = 0, u_int32_t exptime = 0);
   int lookup (const chordID &key, str &data);
@@ -182,6 +195,11 @@ public:
     return u_int64_t (100) * mmd.size / q;
   }
   int expire (u_int32_t limit = 0, u_int32_t t = 0);
+
+  str time2fn (u_int32_t exptime);
+  int write_object (const chordID &key, DBT &data, u_int32_t t);
+  int read_object (const chordID &key, str &data);
+  int expire_objects (u_int32_t exptime);
 };
 // }}}
 // {{{ dbns::dbns
@@ -189,7 +207,6 @@ dbns::dbns (const str &dbpath, const str &name, bool aux, str logpath) :
   name (name),
   aux (aux),
   dbe (NULL),
-  datadb (NULL),
   metadatadb (NULL),
   byexpiredb (NULL),
   mtree (NULL)
@@ -211,8 +228,8 @@ dbns::dbns (const str &dbpath, const str &name, bool aux, str logpath) :
   r = dbfe_initialize_dbenv (&dbe, fullpath, false, 30*1024, logconf);
   DBNS_ERRCHECK ("dbe->open");
 
-  r = dbfe_opendb (dbe, &datadb, "db", DB_CREATE, 0);
-  DBNS_ERRCHECK ("datadb->open");
+  datapath = fullpath << "/data";
+  mkdir (datapath, 0755);
 
   mtree = New merkle_tree_bdb (dbe, /* ro = */ false);
 
@@ -236,8 +253,6 @@ dbns::~dbns ()
     (void) x->close (x, 0); x = NULL;	\
   }
 
-  // Start with main databases
-  DBNS_DBCLOSE(datadb);
   // Close out the merkle tree which shares our db environment
   delete mtree;
   mtree = NULL;
@@ -315,6 +330,25 @@ dbns::update_metadata (int32_t sz, u_int32_t expiration, DB_TXN *t)
   return r;
 }
 // }}}
+// {{{ dbns::get_metadata
+int
+dbns::get_metadata (const chordID &key, adb_metadata_t &metadata, DB_TXN *t)
+{
+  DBT skey;
+  id_to_dbt (key, &skey);
+  DBT md;
+  bzero (&md, sizeof (md));
+  int r = metadatadb->get (metadatadb, t, &skey, &md, 0);
+  if (r) {
+    if (r != DB_NOTFOUND)
+      warner ("dbns::get_metadata", "metadatadb->get", r);
+    return r;
+  }
+  if (!buf2xdr (metadata, md.data, md.size))
+    return -1;
+  return 0;
+}
+// }}}
 // {{{ dbns::insert (chordID, DBT, DBT)
 int
 dbns::insert (const chordID &key, DBT &data, u_int32_t auxdata, u_int32_t exptime)
@@ -336,39 +370,49 @@ dbns::insert (const chordID &key, DBT &data, u_int32_t auxdata, u_int32_t exptim
   DBT skey;
   id_to_dbt (key, &skey);
 
+  char *err = "";
+  if (hasaux ()) {
+    err = "mtree->insert aux";
+    r = mtree->insert (key, auxdata, t);
+  } else {
+    err = "mtree->insert";
+    r = mtree->insert (key, t);
+    // insert may return DB_KEYEXIST in which case we need
+    // not do any more work here.
+  }
+  int ret;
+  if (r) {
+    if (r != DB_KEYEXIST)
+      warner ("dbns::insert", err, r);
+    ret = dbfe_txn_abort (dbe, t);
+    if (ret)
+      warner ("dbns::insert", "abort/commit error", ret);
+    return r;
+  }
+
+  u_int32_t offset = write_object (key, data, exptime);
+  if (offset < 0) {
+    int saved_errno = errno;
+    warn ("dbns::insert: write_object failed: %m\n");
+    ret = dbfe_txn_abort (dbe, t);
+    if (ret)
+      warner ("dbns::insert", "abort/commit error", ret);
+    return saved_errno;
+  }
+
   adb_metadata_t md;
   md.size = data.size;
   md.auxdata = auxdata;
   md.expiration = exptime;
+  md.offset = offset;
+
   str md_str = xdr2str (md);
   DBT metadata;
   str_to_dbt (md_str, &metadata);
-
-  char *err = "";
-  do {
-    if (hasaux ()) {
-      err = "mtree->insert aux";
-      r = mtree->insert (key, auxdata, t);
-      if (r) break;
-    } else {
-      err = "mtree->insert";
-      r = mtree->insert (key, t);
-      // insert may return DB_KEYEXIST in which case we need
-      // not do any more work here.
-      if (r) break;
-    }
-    err = "metadatadb->put";
-    r = metadatadb->put (metadatadb, t, &skey, &metadata, 0);
-    if (r) break;
-
-    err = "datadb->put";
-    r = datadb->put (datadb, t, &skey, &data, 0);
-    if (r) break;
-  } while (0);
-  int ret = 0;
+  err = "metadatadb->put";
+  r = metadatadb->put (metadatadb, t, &skey, &metadata, 0);
   if (r) {
-    if (r != DB_KEYEXIST)
-      warner ("dbns::insert", err, r);
+    assert (r != DB_KEYEXIST); // mtree already checked.
     ret = dbfe_txn_abort (dbe, t);
   } else {
     ret = dbfe_txn_commit (dbe, t);
@@ -384,20 +428,12 @@ dbns::lookup (const chordID &key, str &data)
 {
   int r = 0;
 
-  DBT skey;
-  id_to_dbt (key, &skey);
-
-  DBT content;
-  bzero (&content, sizeof (content));
-
-  // Implicit transaction
-  r = datadb->get (datadb, NULL, &skey, &content, 0);
+  r = read_object (key, data);
+  // read_object returns -1 on error, 0 otherwise.
   if (r) {
-    if (r != DB_NOTFOUND)
-      warner ("dbns::fetch", "get error", r);
-    return r;
+    // Treat all errors as not found.
+    return DB_NOTFOUND;
   }
-  data.setbuf ((const char *) (content.data), content.size);
   return 0;
 }
 // }}}
@@ -414,7 +450,7 @@ dbns::lookup_nextkey (const chordID &key, chordID &nextkey)
   bzero (&content, sizeof (content));
 
   DBC *cursor;
-  r = datadb->cursor (datadb, NULL, &cursor, 0);
+  r = metadatadb->cursor (metadatadb, NULL, &cursor, 0);
 
   if (r) {
     warner ("dbns::lookup_nextkey", "cursor open", r);
@@ -445,22 +481,15 @@ dbns::lookup_nextkey (const chordID &key, chordID &nextkey)
 int
 dbns::del (const chordID &key, u_int32_t auxdata)
 {
+  // NB! This does not remove any actual data.
   int r = 0;
+  adb_metadata_t metadata;
+  r = get_metadata (key, metadata);
+  if (r)
+    return r;
+
   DBT skey;
   id_to_dbt (key, &skey);
-
-  // Read the old size in separate transaction
-  DBT md;
-  bzero (&md, sizeof (md));
-  r = metadatadb->get (metadatadb, NULL, &skey, &md, 0);
-  if (r) {
-    if (r != DB_NOTFOUND)
-      warner ("dbns::remove", "metadatadb->get", r);
-    return r;
-  }
-  adb_metadata_t metadata;
-  if (!buf2xdr (metadata, md.data, md.size))
-    return -1;
 
   DB_TXN *t = NULL;
   r = dbfe_txn_begin (dbe, &t);
@@ -487,10 +516,6 @@ dbns::del (const chordID &key, u_int32_t auxdata)
     }
     err = "metadatadb->del";
     r = metadatadb->del (metadatadb, t, &skey, 0);
-    if (r) break;
-
-    err = "datadb->del";
-    r = datadb->del (datadb, t, &skey, 0);
     if (r) break;
   } while (0);
 
@@ -651,9 +676,6 @@ expire_nextkey:
       err = "metadatadb->del";
       r = metadatadb->del (metadatadb, t, &key, 0);
       if (r) break;
-      err = "datadb->del";
-      r = datadb->del (datadb, t, &key, 0);
-      if (r) break;
     } while (0);
     free (key.data);
     if (r) {
@@ -669,7 +691,173 @@ expire_nextkey:
   // Update the metadata with size/time difference
   r = update_metadata (-victim_size, last_expire, parent);
   dbfe_txn_commit (dbe, parent);
+
+  // Metadata is gone, now remove data.
+  expire_objects (last_expire);
+
   return r;
+}
+// }}}
+// {{{ dbns::time2fn
+str
+dbns::time2fn (u_int32_t exptime)
+{
+  // Each bin holds 256 seconds worth of writes.
+  // The Dell PowerEdge SC1425s with Maxtor 6Y160M0 SATA disks 
+  // write at 6MB/s with write caching disabled, for about 1.5GB files.
+  // The name of the file is the expiration time rounded up to the nearest
+  // multiple of 0xFF so the filename's time has past, the file can be unlinked.
+  static char subpath[20];
+  sprintf (subpath, "%04x/%08x",
+      ((exptime & 0xFFFF0000) >> 16), ((exptime + 0xFF) & 0xFFFFFF00));
+  str path = datapath << "/" << subpath; 
+  return path;
+}
+// }}}
+// {{{ dbns::write_object
+void
+mkpath (const char *path)
+{
+  int len = strlen (path);
+  char *buf = New char[len];
+  const char *slash = path;
+
+  while ((slash = strchr(slash+1, '/')) != NULL) {
+    len = slash - path;
+    memcpy(buf, path, len);
+    buf[len] = 0;
+    if (mkdir(buf, 0777)) {
+      if (errno == EEXIST) {
+	struct stat st;
+	if (!stat(buf, &st) && S_ISDIR(st.st_mode))
+	  continue;
+      }
+      fatal ("mkpath at %s: %m", buf);
+    }
+  }
+  delete[] buf;
+}
+
+int
+dbns::write_object (const chordID &key, DBT &data, u_int32_t exptime)
+{
+  // Cache file descriptors for commonly used files.
+  str fn = time2fn (exptime);
+
+  mkpath (fn);
+  int fd = open (fn, O_CREAT|O_WRONLY|O_APPEND, 0666);
+  if (fd < 0)
+    return fd;
+  struct stat sb;
+  if (fstat (fd, &sb) < 0)
+    return -1;
+  if (write (fd, data.data, data.size) != (int) data.size) {
+    int saved_errno = errno;
+    close (fd);
+    errno = saved_errno;
+    return -1;
+  }
+  close (fd);
+  return sb.st_size;
+}
+// }}}
+// {{{ dbns::read_object
+int
+dbns::read_object (const chordID &key, str &data)
+{
+  // Get the metadata necessary to do the read.
+  adb_metadata_t metadata;
+  int r = get_metadata (key, metadata);
+  if (r) {
+    if (r != DB_NOTFOUND)
+      warner ("dbns::read_object", "get_metadata", r);
+    return -1;
+  }
+
+  str fn = time2fn (metadata.expiration);
+  int fd = open (fn, O_RDONLY);
+  if (fd < 0) {
+    if (errno != ENOENT)
+      warn ("open: %m\n");
+    return -1;
+  }
+  if (lseek (fd, metadata.offset, SEEK_SET) < 0) {
+    warn ("lseek: %m\n");
+    close (fd);
+    return -1;
+  }
+  mstr raw (metadata.size);
+  char *buf = raw.cstr ();
+  u_int32_t left = metadata.size;
+  while (left > 0) {
+    int nread = read (fd, buf, left);
+    if (nread < 0) {
+      warn ("read: %m\n");
+      break;
+    } else if (nread == 0) {
+      warn << "EOF reading " << key << " from " << fn << "\n";
+      break;
+    } else {
+      left -= nread;
+      buf  += nread;
+    }
+  }
+  close (fd);
+  if (left == 0) {
+    data = raw;
+    return 0;
+  }
+  return -1;
+}
+// }}}
+// {{{ dbns::expire_objects
+int
+dbns::expire_objects (u_int32_t exptime)
+{
+  u_int32_t hightime = exptime >> 16;
+  DIR *datadir = opendir (datapath);
+  if (!datadir) {
+    warn ("opendir: %s %m\n", datapath.cstr ());
+    return -1;
+  }
+  struct dirent *dp = NULL;
+  // This code relies on file names making sense according to time2fn.
+  // If it were a little more suspicious, it might stat the files.
+  while ((dp = readdir (datadir)) != NULL) {
+    if (strlen (dp->d_name) != 4)
+      continue;
+    char *ep = NULL;
+    u_int32_t t = strtoul (dp->d_name, &ep, 16);
+    if (!ep || *ep != '\0')
+      continue;
+    assert ((t & 0xFFFF0000) == 0);
+    if (t > 0 && t <= hightime) {
+      str subdirpath = datapath << "/" << dp->d_name;
+      DIR *subdir = opendir (subdirpath);
+      if (!subdir) {
+	warn ("opendir: %s: %m\n", subdirpath.cstr ());
+	continue;
+      }
+      struct dirent *sdp = NULL;
+      while ((sdp = readdir (subdir)) != NULL) {
+	if (strlen (sdp->d_name) != 8)
+	  continue;
+	char *ep = NULL;
+	u_int32_t rt = strtoul (sdp->d_name, &ep, 16);
+	if (!ep || *ep != '\0')
+	  continue;
+	if (rt < exptime) {
+	  str filepath = subdirpath << "/" << sdp->d_name;
+	  if (unlink (filepath) < 0)
+	    warn ("unlink: %s: %m\n", filepath.cstr ());
+	}
+      }
+      closedir (subdir);
+      rmdir (subdirpath);
+    }
+  }
+  closedir (datadir);
+  return 0;
 }
 // }}}
 // }}}
