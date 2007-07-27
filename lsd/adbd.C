@@ -225,7 +225,7 @@ dbns::dbns (const str &dbpath, const str &name, bool aux, str logpath) :
     logconf = strbuf ("set_lg_dir %s/%s\n", logpath.cstr (), name.cstr ());
 
   int r = -1;
-  r = dbfe_initialize_dbenv (&dbe, fullpath, false, 30*1024, logconf);
+  r = dbfe_initialize_dbenv (&dbe, fullpath, false, 10*1024, logconf);
   DBNS_ERRCHECK ("dbe->open");
 
   datapath = fullpath << "/data";
