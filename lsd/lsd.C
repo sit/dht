@@ -767,7 +767,9 @@ void start_maint ()
 
   maint_setmaintarg arg;
   arg.enable = true;
-  arg.delay = 300;
+  int timer = 300;
+  Configurator::only ().get_int ("dhash.repair_timer", timer);
+  arg.delay = timer;
   bool res;
   c->scall (MAINTPROC_SETMAINT, &arg, &res);
 }
