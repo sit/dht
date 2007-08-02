@@ -14,6 +14,7 @@
 #include "maint_policy.h"
 
 // {{{ Globals
+static char *ctlsock;
 static char *logfname;
 static char *localdatapath;
 
@@ -77,6 +78,13 @@ halt ()
     maintainers.pop_back ();
   }
   exit (0);
+}
+
+EXITFN (cleanup);
+static void
+cleanup ()
+{
+  unlink (ctlsock);
 }
 
 void
@@ -408,7 +416,6 @@ dispatch_maint (ref<axprt_stream> s, ptr<asrv> a, svccb *sbp)
 int 
 main (int argc, char **argv) 
 {
-  str ctlsock = "/tmp/maint-sock";
   char ch;
 
   setprogname (argv[0]);
@@ -416,6 +423,7 @@ main (int argc, char **argv)
 
   bool do_daemonize = false;
   localdatapath = "./maintdata/";
+  ctlsock = "/tmp/maint-sock";
   maint_mode = MAINT_CARBONITE;
   sync_mode = SYNC_MERKLE;
   
