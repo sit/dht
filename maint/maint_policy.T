@@ -702,7 +702,7 @@ passingtone::process_neighbors (
   // Our range starts before our efrag-th predecessor.
   // Unless there are so few nodes that all objects are fully replicated.
   if (preds.size() > efrags) 
-    rngmin = preds[efrags]->id ();
+    rngmin = preds[efrags-1]->id ();
   else
     rngmin = incID (host.x);
   rngmax = host.x;
