@@ -1027,6 +1027,7 @@ do_store (dbmanager *dbm, svccb *sbp)
   adb_status stat = ADB_OK;
   switch (r) {
     case 0:
+    case DB_KEYEXIST:
       break;
     case ENOSPC:
       stat = ADB_DISKFULL;
