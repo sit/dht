@@ -108,6 +108,7 @@ public:
 // }}}
 // {{{ maintainers
 class maintainer : public virtual refcount {
+  friend class maint_global;
   maintainer (const maintainer &m);
 
 public:

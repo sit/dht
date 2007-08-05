@@ -104,6 +104,13 @@ maint_global::next (cbv donecb)
     goto nextOUT;
   } else {
     // warn << m->host.x << " maint_global: succ is " << succ->id () << "\n";
+
+    // Anything in the range of our predecessor list should be handled by
+    // regular maintenance.
+    for (size_t i = 0; i < m->preds.size (); i++) {
+      if (succ->id () == m->preds[i]->id ())
+	goto nextOUT;
+    }
   }
 
   //   sync_with (successor) ... for its primary range
