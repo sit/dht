@@ -513,6 +513,12 @@ carbonite::getrepairs (chordID start, int thresh, int count,
     return;
   }
 
+  // No point in doing any work if there are no successors.
+  // (The code below should return nothing anyway but it may
+  // be expensive to run.)
+  if (!succs.size ())
+    return;
+
   vec<ptr<merkle_tree> > trees;
   vec<chordID> lastread;
   vec<bool> treedone;

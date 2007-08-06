@@ -100,9 +100,6 @@ dhblock_chash_srv::generate_repair_jobs ()
 void
 dhblock_chash_srv::maintqueue (const vec<maint_repair_t> &repairs)
 {
-  vec<ptr<location> > preds = node->preds ();
-  if (preds.size () < dhblock_chash::num_efrags())
-    return;
   for (size_t i = 0; i < repairs.size (); i++) {
     blockID key (repairs[i].id, DHASH_CONTENTHASH);
     ptr<location> w = maintloc2location (

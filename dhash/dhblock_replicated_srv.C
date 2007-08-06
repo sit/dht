@@ -138,9 +138,6 @@ dhblock_replicated_srv::generate_repair_jobs ()
 void
 dhblock_replicated_srv::maintqueue (const vec<maint_repair_t> &repairs)
 {
-  vec<ptr<location> > preds = node->preds ();
-  if (preds.size () < dhblock_replicated::num_replica ())
-    return;
   for (size_t i = 0; i < repairs.size (); i++) {
     ptr<location> f = maintloc2location (
 	repairs[i].src_ipv4_addr,
