@@ -29,7 +29,8 @@ dhblock_srv::dhblock_srv (ptr<vnode> node,
   maint (get_maint_aclnt (msock)),
   node (node),
   cli (cli),
-  default_lifetime (-1)
+  default_lifetime (-1),
+  repairs_completed (0)
 {
   (void) Configurator::only ().get_int ("dhash.default_lifetime",
       default_lifetime);
@@ -190,8 +191,23 @@ dhblock_srv::fetch (chordID k, cb_fetch cb)
 void
 dhblock_srv::stats (vec<dstat> &s)
 {
-  // Default implementation adds no statistics
-  return;
+  str prefix = "unknown";
+  switch (ctype) {
+    case DHASH_CONTENTHASH:
+      prefix = "chash";
+      break;
+    case DHASH_NOAUTH:
+      prefix = "noauth";
+      break;
+    case DHASH_KEYHASH:
+      prefix = "keyhash";
+      break;
+    case DHASH_APPEND:
+      prefix = "append";
+      break;
+  }
+      
+  s.push_back (dstat (prefix << ".repairs", repairs_completed));
 }
 
 //
@@ -282,6 +298,7 @@ void
 dhblock_srv::repair_done (str desc)
 {
   repairs_inprogress.remove (desc);
+  repairs_completed++;
   info << "completed repair of " << desc << "; "
 	<< repairs_inprogress.size () << " in progress, "
 	<< repairs_queued.size () << " in queue.\n";

@@ -116,13 +116,9 @@ dhash_impl::dhash_impl (ptr<vnode> node, str dbsock, str msock,
   host_node (node),
   cli (NULL),
   bytes_stored (0),
-  keys_stored (0),
-  keys_replicated (0),
-  keys_cached (0),
-  keys_others (0),
   bytes_served (0),
-  keys_served (0),
-  rpc_answered (0)
+  objects_stored (0),
+  objects_served (0)
 {
   ptr<dhblock_srv> srv;
 
@@ -170,7 +166,7 @@ dhash_impl::start_maint ()
 
 void
 dhash_impl::fetchcomplete_done (int nonce, chord_node sender,
-				dhash_stat err, bool present)
+				dhash_stat err, bool present, u_int32_t sz)
 {
   // warn << host_node->my_ID () << ": dhash_impl::fetchcomplete_done: "
   //     << nonce << " " << sender << " " << err << "\n";
@@ -184,6 +180,9 @@ dhash_impl::fetchcomplete_done (int nonce, chord_node sender,
     arg->type = DHASH_NOENT_NOTIFY;
     doRPC (sender, dhash_program_1, DHASHPROC_FETCHCOMPLETE, 
 	   arg, NULL, aclnt_cb_null);
+  } else {
+    objects_served++;
+    bytes_served += sz;
   }
 }
 
@@ -206,7 +205,6 @@ dhash_impl::unregister_fetch_callback (long nonce)
 void
 dhash_impl::dispatch (user_args *sbp) 
 {
-  rpc_answered++;
   switch (sbp->procno) {
   case DHASHPROC_FETCHREC:
     {
@@ -320,6 +318,7 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
     // is called.
     srv->store (arg->key, d, wrap (&store_after_store, cb));
     bytes_stored += ss->size;
+    objects_stored++;
     pst.remove (ss);
     delete ss;
     // Wait until store returns to decide what error code to return.
@@ -387,11 +386,10 @@ vec<dstat>
 dhash_impl::stats ()
 {
   vec<dstat> s;
-  s.push_back(dstat ("new blocks stored", keys_stored));
-  s.push_back(dstat ("new bytes stored", bytes_stored));
-  s.push_back(dstat ("keys served", keys_served));
-  s.push_back(dstat ("bytes served", bytes_served));
-  s.push_back(dstat ("RPCs answered", rpc_answered));
+  s.push_back(dstat ("all.objects.stored", objects_stored));
+  s.push_back(dstat ("all.bytes.stored", bytes_stored));
+  s.push_back(dstat ("all.objects.served", objects_served));
+  s.push_back(dstat ("all.bytes.served", bytes_served));
 
   blocksrv.traverse (wrap (&statscb, &s));
 

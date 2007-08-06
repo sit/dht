@@ -13,7 +13,7 @@ typedef callback<void, dhash_stat, chordID>::ref cbinsert_t;
 typedef callback<void, dhash_stat, vec<chordID> >::ref cbinsert_path_t;
 typedef callback<void, dhash_stat, vec<chord_node>, route>::ref
   dhashcli_lookupcb_t;
-typedef	callback<void, dhash_stat, bool>::ref sendblockcb_t;
+typedef	callback<void, dhash_stat, bool, u_int32_t>::ref sendblockcb_t;
 
 // Forward declarations
 class adb;
@@ -127,7 +127,8 @@ private:
   void sendblock_fetch_cb (ptr<location> dst, blockID bid_to_send,
 			   sendblockcb_t cb, int nonce, adb_status stat,
 			   chordID key, str data);
-  void sendblock_cb (callback<void, dhash_stat, bool>::ref cb, 
+  void sendblock_cb (sendblockcb_t cb, 
+		     u_int32_t sz,
 		     dhash_stat err, chordID dest, bool present);
 
   bool on_timeout (ptr<rcv_state> rs, 

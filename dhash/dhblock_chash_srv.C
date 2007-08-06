@@ -37,7 +37,7 @@ struct rjchash : public repair_job {
   void retrieve_cb (dhash_stat err, ptr<dhash_block> b, route r);
   void send_frag (str block);
   void local_store_cb (dhash_stat stat);
-  void send_frag_cb (dhash_stat err, bool present);
+  void send_frag_cb (dhash_stat err, bool present, u_int32_t sz);
 };
 
 struct rjchashsend : public repair_job {
@@ -47,7 +47,7 @@ struct rjchashsend : public repair_job {
 
   void execute ();
   // Async callback
-  void send_frag_cb (dhash_stat err, bool present);
+  void send_frag_cb (dhash_stat err, bool present, u_int32_t sz);
 };
 
 dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
@@ -115,14 +115,6 @@ dhblock_chash_srv::maintqueue (const vec<maint_repair_t> &repairs)
     repair_add (job);
   }
 }
-
-void
-dhblock_chash_srv::stats (vec<dstat> &s)
-{
-  warn << "chash stats no longer supported\n";
-  return;
-}
-
 
 //
 // Repair Logic Implementation
@@ -209,7 +201,7 @@ rjchash::local_store_cb (dhash_stat stat)
 }
 
 void
-rjchash::send_frag_cb (dhash_stat err, bool present)
+rjchash::send_frag_cb (dhash_stat err, bool present, u_int32_t sz)
 {
   strbuf x;
   x << "repair: " << bsrv->node->my_ID ();
@@ -242,7 +234,7 @@ rjchashsend::execute ()
 }
 
 void
-rjchashsend::send_frag_cb (dhash_stat err, bool present)
+rjchashsend::send_frag_cb (dhash_stat err, bool present, u_int32_t sz)
 {
   strbuf x;
   x << "grepair: " << bsrv->node->my_ID ();

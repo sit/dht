@@ -104,20 +104,16 @@ class dhash_impl : public dhash, public virtual refcount {
 				dhash_stat s, ptr<dhash_block> b, route r);
 
   void fetchcomplete_done (int nonce, chord_node sender,
-			   dhash_stat status, bool present);
+			   dhash_stat status, bool present, u_int32_t sz);
 
   void srv_ready (ptr<chord_trigger_t> t);
   void start_maint ();
 
   /* statistics */
-  long bytes_stored;
-  long keys_stored;
-  long keys_replicated;
-  long keys_cached;
-  long keys_others;
-  long bytes_served;
-  long keys_served;
-  long rpc_answered;
+  u_int64_t bytes_stored;
+  u_int64_t bytes_served;
+  u_int64_t objects_stored;
+  u_int64_t objects_served;
 
  public:
   dhash_impl (ptr<vnode> v, str dbsock, str msock, ptr<chord_trigger_t> t);

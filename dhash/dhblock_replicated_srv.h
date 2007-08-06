@@ -24,7 +24,7 @@ struct rjrep : public repair_job {
 			   ptr<dhash_block> b, 
 			   route r);
   void storecb (dhash_stat err);
-  void repair_send_cb (dhash_stat err, bool something);
+  void repair_send_cb (dhash_stat err, bool something, u_int32_t sz);
 };
 
 class dhblock_replicated_srv : public dhblock_srv

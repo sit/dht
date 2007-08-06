@@ -70,6 +70,8 @@ class dhblock_srv : virtual public refcount {
     REPAIR_QUEUE_MAX = 64
   };
 
+  u_int64_t repairs_completed;
+
   bhash<str> repairs_queued;
   bhash<str> repairs_inprogress;
   // RepInv:

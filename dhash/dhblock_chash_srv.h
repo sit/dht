@@ -21,7 +21,6 @@ public:
       str msock, str dbsock, str dbname, ptr<chord_trigger_t> t);
 
   void store (chordID k, str d, cb_dhstat cb);
-  void stats (vec<dstat> &s);
   void generate_repair_jobs ();
 };
 

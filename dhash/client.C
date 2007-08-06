@@ -564,7 +564,7 @@ dhashcli::sendblock (ptr<location> dst, blockID bid, str data,
 
   dhash_store::execute 
     (clntnode, dst, bid, data,
-     wrap (this, &dhashcli::sendblock_cb, cb),
+     wrap (this, &dhashcli::sendblock_cb, cb, data.len ()),
      DHASH_FRAGMENT,
      nonce); //XXX choose DHASH_STORE if appropriate (i.e. full replica)
 }
@@ -596,20 +596,21 @@ dhashcli::sendblock_fetch_cb (ptr<location> dst, blockID bid_to_send,
 	<< stat << "\n";
 
   if (stat != ADB_OK) {
-    cb (DHASH_NOENT, false);
+    cb (DHASH_NOENT, false, 0);
     return;
   }
 
   dhash_store::execute 
     (clntnode, dst, bid_to_send, data,
-     wrap (this, &dhashcli::sendblock_cb, cb),
+     wrap (this, &dhashcli::sendblock_cb, cb, data.len ()),
      get_store_status(bid_to_send.ctype), //XXX store_status broken
      nonce); 
 }
 
 void
-dhashcli::sendblock_cb (callback<void, dhash_stat, bool>::ref cb, 
-			  dhash_stat err, chordID dest, bool present)
+dhashcli::sendblock_cb (sendblockcb_t cb, 
+		        u_int32_t sz,
+			dhash_stat err, chordID dest, bool present)
 {
-  (*cb) (err, present);
+  (*cb) (err, present, sz);
 }

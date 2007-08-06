@@ -241,7 +241,7 @@ rjrep::storecb (dhash_stat err)
 }
 
 void
-rjrep::repair_send_cb (dhash_stat err, bool something)
+rjrep::repair_send_cb (dhash_stat err, bool something, u_int32_t sz)
 {
   if (err && err != DHASH_STALE) { 
     info << "rjrep (" << key << ") error sending block: " << err << "\n";
