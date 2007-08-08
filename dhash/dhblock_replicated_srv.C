@@ -84,19 +84,20 @@ dhblock_replicated_srv::store (chordID key, str new_data, cb_dhstat cb)
 
 void
 dhblock_replicated_srv::store_after_fetch_cb (str new_data,
-    cb_dhstat cb, adb_status err, chordID dbkey, str old_data) 
+    cb_dhstat cb, adb_status err, adb_fetchdata_t obj)
 {
   if (err == ADB_ERR) {
-    finish_store (dbkey);
+    finish_store (obj.id);
     cb (DHASH_DBERR);
     return;
   }
   if (err == ADB_NOTFOUND) 
-    old_data = "";
+    obj.data = "";
 
   // Hand off the real work to my subclass.
-  real_store (dbkey, old_data, new_data,
-      wrap (this, &dhblock_replicated_srv::store_after_rstore_cb, dbkey, cb));
+  real_store (obj.id, obj.data, new_data,
+      wrap (this, &dhblock_replicated_srv::store_after_rstore_cb,
+	obj.id, cb));
 }
 
 void

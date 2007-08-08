@@ -34,7 +34,7 @@ class dhblock_replicated_srv : public dhblock_srv
   // async callbacks
   void delete_cb (chordID k, str d, cb_dhstat cb, adb_status stat);
   void store_after_fetch_cb (str d, cb_dhstat cb, adb_status stat, 
-			     chordID key, str old_data);  
+			     adb_fetchdata_t obj);  
   void store_after_rstore_cb (chordID dbkey, cb_dhstat cb, dhash_stat astat);
   void finish_store (chordID key);
 

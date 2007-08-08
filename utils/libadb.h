@@ -15,7 +15,13 @@ strbuf_cat (const strbuf &sb, adb_status status)
   return rpc_print (sb, status, 0, NULL, NULL);
 }
 
-typedef callback<void, adb_status, chordID, str>::ptr cb_fetch;
+struct adb_fetchdata_t {
+  chordID id;
+  str data;
+  u_int32_t expiration;
+};
+
+typedef callback<void, adb_status, adb_fetchdata_t>::ptr cb_fetch;
 typedef callback<void, adb_status>::ptr cb_adbstat;
 typedef callback<void, adb_status, u_int32_t, vec<adb_keyaux_t> >::ptr cb_getkeys;
 typedef callback<void, adb_status, vec<chordID>, vec<u_int32_t> >::ptr cb_getkeyson;

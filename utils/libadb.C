@@ -113,7 +113,7 @@ adb::generic_cb (adb_status *res, cb_adbstat cb, clnt_stat err)
 void
 adb::fetch (chordID key, cb_fetch cb)
 {
-  fetch( key, false, cb );
+  fetch (key, false, cb);
 }
 
 void
@@ -132,14 +132,18 @@ adb::fetch (chordID key, bool nextkey, cb_fetch cb)
 void
 adb::fetch_cb (adb_fetchres *res, chordID key, cb_fetch cb, clnt_stat err)
 {
+  adb_fetchdata_t obj;
+  obj.id = key;
   if (err || (res && res->status)) {
-    str nodata = "";
-    cb ((err ? ADB_ERR : res->status) , key, nodata);
+    obj.data = "";
+    obj.expiration = 0;
+    cb ((err ? ADB_ERR : res->status), obj);
   } else {
     // Not true if nextkey is true
     // assert (key == res->resok->key);
-    str data (res->resok->data.base (), res->resok->data.size ());
-    cb (ADB_OK, res->resok->key, data);
+    obj.data = str (res->resok->data.base (), res->resok->data.size ());
+    obj.expiration = res->resok->expiration;
+    cb (ADB_OK, obj);
   }
   delete res;
   return;

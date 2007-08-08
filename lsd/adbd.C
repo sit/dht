@@ -182,7 +182,7 @@ public:
 
   // Primary data management
   int insert (const chordID &key, DBT &data, u_int32_t auxdata = 0, u_int32_t exptime = 0);
-  int lookup (const chordID &key, str &data);
+  int lookup (const chordID &key, str &data, adb_metadata_t &md);
   int lookup_nextkey (const chordID &key, chordID &nextkey);
   int del (const chordID &key, u_int32_t auxdata);
   int getkeys (const chordID &start, size_t count, bool getaux,
@@ -198,7 +198,7 @@ public:
 
   str time2fn (u_int32_t exptime);
   int write_object (const chordID &key, DBT &data, u_int32_t t);
-  int read_object (const chordID &key, str &data);
+  int read_object (const chordID &key, str &data, adb_metadata_t &md);
   int expire_objects (u_int32_t exptime);
 };
 // }}}
@@ -424,11 +424,11 @@ dbns::insert (const chordID &key, DBT &data, u_int32_t auxdata, u_int32_t exptim
 // }}}
 // {{{ dbns::lookup
 int
-dbns::lookup (const chordID &key, str &data)
+dbns::lookup (const chordID &key, str &data, adb_metadata_t &md)
 {
   int r = 0;
 
-  r = read_object (key, data);
+  r = read_object (key, data, md);
   // read_object returns -1 on error, 0 otherwise.
   if (r) {
     // Treat all errors as not found.
@@ -763,10 +763,9 @@ dbns::write_object (const chordID &key, DBT &data, u_int32_t exptime)
 // }}}
 // {{{ dbns::read_object
 int
-dbns::read_object (const chordID &key, str &data)
+dbns::read_object (const chordID &key, str &data, adb_metadata_t &metadata)
 {
   // Get the metadata necessary to do the read.
-  adb_metadata_t metadata;
   int r = get_metadata (key, metadata);
   if (r) {
     if (r != DB_NOTFOUND)
@@ -1062,6 +1061,8 @@ do_fetch (dbmanager *dbm, svccb *sbp)
   u_int64_t t = io_start ();
  
   str data; 
+  adb_metadata_t md;
+  bzero (&md, sizeof (md));
 
   int r;
   chordID key;
@@ -1069,7 +1070,7 @@ do_fetch (dbmanager *dbm, svccb *sbp)
     r = db->lookup_nextkey (arg->key, key);
     data = "";
   } else {
-    r = db->lookup (arg->key, data);
+    r = db->lookup (arg->key, data, md);
     key = arg->key;
   }
 
@@ -1078,6 +1079,7 @@ do_fetch (dbmanager *dbm, svccb *sbp)
   } else {
     res.resok->key = key;
     res.resok->data = data;
+    res.resok->expiration = md.expiration;
   }
 
   io_finish (t, strbuf ("fetch %s", arg->name.cstr ()));

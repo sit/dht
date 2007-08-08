@@ -587,8 +587,8 @@ dhashcli::sendblock (ptr<location> dst, blockID bid_to_send,
 
 void
 dhashcli::sendblock_fetch_cb (ptr<location> dst, blockID bid_to_send,
-			      sendblockcb_t cb, int nonce, adb_status stat,
-			      chordID key, str data)
+			      sendblockcb_t cb, int nonce,
+			      adb_status stat, adb_fetchdata_t obj)
 {
 
   trace << clntnode->my_ID () << ": dhashcli::sendblock_fetch_cb (" 
@@ -601,8 +601,8 @@ dhashcli::sendblock_fetch_cb (ptr<location> dst, blockID bid_to_send,
   }
 
   dhash_store::execute 
-    (clntnode, dst, bid_to_send, data,
-     wrap (this, &dhashcli::sendblock_cb, cb, data.len ()),
+    (clntnode, dst, bid_to_send, obj.data,
+     wrap (this, &dhashcli::sendblock_cb, cb, obj.data.len ()),
      get_store_status(bid_to_send.ctype), //XXX store_status broken
      nonce); 
 }

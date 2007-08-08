@@ -33,7 +33,7 @@ struct rjchash : public repair_job {
   // 3. Cache it and send frag.
 
   // Async callbacks
-  void cache_check_cb (adb_status stat, chordID key, str d);
+  void cache_check_cb (adb_status stat, adb_fetchdata_t obj);
   void retrieve_cb (dhash_stat err, ptr<dhash_block> b, route r);
   void send_frag (str block);
   void local_store_cb (dhash_stat stat);
@@ -134,11 +134,11 @@ rjchash::execute ()
 }
 
 void
-rjchash::cache_check_cb (adb_status stat, chordID k, str d)
+rjchash::cache_check_cb (adb_status stat, adb_fetchdata_t obj)
 {
   if (stat == ADB_OK) {
-    assert (key.ID == k);
-    send_frag (d);
+    assert (key.ID == obj.id);
+    send_frag (obj.data);
   } else {
     bsrv->cli->retrieve (key,
 	wrap (mkref (this), &rjchash::retrieve_cb));

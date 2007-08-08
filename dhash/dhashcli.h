@@ -126,7 +126,7 @@ private:
 
   void sendblock_fetch_cb (ptr<location> dst, blockID bid_to_send,
 			   sendblockcb_t cb, int nonce, adb_status stat,
-			   chordID key, str data);
+			   adb_fetchdata_t obj);
   void sendblock_cb (sendblockcb_t cb, 
 		     u_int32_t sz,
 		     dhash_stat err, chordID dest, bool present);
