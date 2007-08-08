@@ -241,10 +241,10 @@ dhash_impl::dispatch (user_args *sbp)
       fcb_state *fcb = fetch_cbs[sarg->nonce];
       if (fcb) {
 	if (sarg->type == DHASH_NOENT_NOTIFY) {
-	  (fcb->cb) (str (""), -1, -1);
+	  (fcb->cb) (str (""), -1, sarg->attr);
 	} else {
 	  str data (sarg->data.base (), sarg->data.size ());
-	  (fcb->cb) (data, sarg->offset, sarg->attr.size);
+	  (fcb->cb) (data, sarg->offset, sarg->attr);
 	}
       } else
 	warn << host_node->my_ID () << ": unexpected FCB for " << sarg->key 
@@ -316,7 +316,7 @@ dhash_impl::store (s_dhash_insertarg *arg, cbstore cb)
     str d (ss->buf, ss->size);
     // this will start the store, but it won't be on disk until the cb
     // is called.
-    srv->store (arg->key, d, wrap (&store_after_store, cb));
+    srv->store (arg->key, d, arg->attr.expiration, wrap (&store_after_store, cb));
     bytes_stored += ss->size;
     objects_stored++;
     pst.remove (ss);

@@ -20,7 +20,7 @@ public:
   dhblock_chash_srv (ptr<vnode> node, ptr<dhashcli> cli,
       str msock, str dbsock, str dbname, ptr<chord_trigger_t> t);
 
-  void store (chordID k, str d, cb_dhstat cb);
+  void store (chordID k, str d, u_int32_t expire, cb_dhstat cb);
   void generate_repair_jobs ();
 };
 

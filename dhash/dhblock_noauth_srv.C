@@ -75,7 +75,7 @@ dhblock_noauth_srv::dhblock_noauth_srv (ptr<vnode> node,
 
 void
 dhblock_noauth_srv::real_store (chordID dbkey,
-    str old_data, str new_data, cb_dhstat cb)
+    str old_data, str new_data, u_int32_t exp, cb_dhstat cb)
 {
   str dprep = merge_data (dbkey, new_data, old_data);
 
@@ -85,9 +85,9 @@ dhblock_noauth_srv::real_store (chordID dbkey,
     if (old_data.len ()) {
       u_int32_t hash = mhashdata (old_data);
       db->remove (kdb, hash, wrap (this, &dhblock_noauth_srv::after_delete, 
-				   dbkey, dprep, cb));
+				   dbkey, dprep, exp, cb));
     } else
-      after_delete (dbkey, dprep, cb, ADB_OK);
+      after_delete (dbkey, dprep, exp, cb, ADB_OK);
   } else {
     // Don't need to do anything.
     cb (DHASH_STALE);
@@ -95,7 +95,7 @@ dhblock_noauth_srv::real_store (chordID dbkey,
 }
 
 void
-dhblock_noauth_srv::after_delete (chordID key, str data, cb_dhstat cb,
+dhblock_noauth_srv::after_delete (chordID key, str data, u_int32_t exp, cb_dhstat cb,
 				  adb_status err)
 {
   assert (err == ADB_OK);
@@ -103,9 +103,7 @@ dhblock_noauth_srv::after_delete (chordID key, str data, cb_dhstat cb,
 
   warn << node->my_ID () << " db write: " 
        << "U " << key << " " << data.len ()  << "\n";
-  db_store (key, data, hash,
-      (default_lifetime < 0) ? 0 : (timenow + default_lifetime),
-      cb); 
+  db_store (key, data, hash, exp, cb); 
 }
 
 

@@ -57,6 +57,7 @@ struct dhash_block
   dhash_ctype ctype;
   str data;
   vec<str> vData;
+  u_int32_t expiration;
   int hops;
   int errors;
   int retries;

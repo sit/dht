@@ -54,7 +54,7 @@ struct dstat {
   dstat (str s, u_int64_t n) : desc (s), value (n) {};
 };
 
-typedef callback<void, str, int, int>::ptr cbfetch;
+typedef callback<void, str, int, dhash_valueattr>::ptr cbfetch;
 typedef callback<void, str, dhash_stat>::ptr cbvalue;
 typedef callback<void,dhash_stat>::ptr cbstat_t;
 typedef callback<void, s_dhash_block_arg *>::ptr cbblockuc_t;

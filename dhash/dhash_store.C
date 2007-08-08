@@ -87,6 +87,7 @@ dhash_store::store (char *buf, size_t len, size_t off, int num)
   arg->offset  = off;
   arg->type    = store_type;
   arg->attr.size = data.len ();
+  arg->attr.expiration = expiration;
   arg->nonce = nonce;
 
   bool stream = (data.len () > 8000);

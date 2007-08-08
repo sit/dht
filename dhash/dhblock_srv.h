@@ -62,9 +62,6 @@ class dhblock_srv : virtual public refcount {
 
   ptr<dhashcli> cli;
 
-  // If no expiration is provided as an RPC arg, use this.
-  int default_lifetime;
-
   enum {
     REPAIR_OUTSTANDING_MAX = 16,
     REPAIR_QUEUE_MAX = 64
@@ -103,7 +100,7 @@ class dhblock_srv : virtual public refcount {
 
   virtual void stats (vec<dstat> &s);
 
-  virtual void store (chordID k, str d, cb_dhstat cb) = 0;
+  virtual void store (chordID k, str d, u_int32_t expire, cb_dhstat cb) = 0;
   virtual void fetch (chordID k, cb_fetch cb);
   virtual ptr<adb> get_db () { return db; };
 };

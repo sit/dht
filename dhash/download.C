@@ -23,9 +23,9 @@ dhash_download::dhash_download (ptr<vnode> clntnode, ptr<dhash> dh,
   buf_len (0),
   dh (dh),
   bytes_read (0),
+  expiration (0),
   fetch_acked (false),
   called_cb (false)
- 
 {
 
   assert (dh);
@@ -85,14 +85,15 @@ dhash_download::sent_request (ptr<dhash_fetchiter_res> res, clnt_stat err)
   
 
 void 
-dhash_download::gotchunk (str data, int offset, int totsz)
+dhash_download::gotchunk (str data, int offset, dhash_valueattr attr)
 {
   //first chunk
   if (offset < 0) {
     fail ("Block not found");
   } else {
     if (buf_len == 0) {
-      buf_len = totsz;
+      expiration = attr.expiration;
+      buf_len = attr.size;
       buffer = (char *)malloc (buf_len);
     }
     add_data (data, offset);
@@ -126,6 +127,7 @@ dhash_download::check_finish ()
     if (!error)  {
       block = New refcounted<dhash_block> (buffer, buf_len, blckID.ctype);
       block->source = source.x;
+      block->expiration = expiration;
       block->hops   = 0;
       block->errors = 0;
     }

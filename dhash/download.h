@@ -17,6 +17,7 @@ private:
   unsigned long nonce;
   ptr<dhash> dh;
   unsigned long bytes_read;
+  u_int32_t expiration; 
 
   bool fetch_acked;
   bool called_cb;
@@ -28,7 +29,7 @@ private:
   ~dhash_download ();
 
   void sent_request (ptr<dhash_fetchiter_res> res, clnt_stat err);
-  void gotchunk (str data, int offset, int totsz);
+  void gotchunk (str data, int offset, dhash_valueattr attr);
   void add_data (str data, int off);
   void check_finish ();
   void fail (str errstr);

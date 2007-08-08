@@ -29,11 +29,8 @@ dhblock_srv::dhblock_srv (ptr<vnode> node,
   maint (get_maint_aclnt (msock)),
   node (node),
   cli (cli),
-  default_lifetime (-1),
   repairs_completed (0)
 {
-  (void) Configurator::only ().get_int ("dhash.default_lifetime",
-      default_lifetime);
   warn << "opened " << dbsock << " with space " << dbname 
        << (hasaux ? " (hasaux)\n" : "\n");
   delaycb (dhash::reptm (), wrap (this, &dhblock_srv::sync_timer));

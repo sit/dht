@@ -13,6 +13,7 @@ enum store_status {
 
 struct dhash_valueattr {
   unsigned size;
+  unsigned expiration; /* Seconds since epoch */
 };
 
 struct s_dhash_insertarg {

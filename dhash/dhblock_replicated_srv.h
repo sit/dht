@@ -33,7 +33,7 @@ class dhblock_replicated_srv : public dhblock_srv
 
   // async callbacks
   void delete_cb (chordID k, str d, cb_dhstat cb, adb_status stat);
-  void store_after_fetch_cb (str d, cb_dhstat cb, adb_status stat, 
+  void store_after_fetch_cb (str d, u_int32_t expiration, cb_dhstat cb, adb_status stat, 
 			     adb_fetchdata_t obj);  
   void store_after_rstore_cb (chordID dbkey, cb_dhstat cb, dhash_stat astat);
   void finish_store (chordID key);
@@ -48,14 +48,14 @@ protected:
   virtual chordID idaux_to_mkey (chordID key, u_int32_t aux);
   virtual chordID id_to_dbkey (chordID key);
 
-  virtual void real_store (chordID key, str od, str nd, cb_dhstat cb) = 0;
+  virtual void real_store (chordID key, str od, str nd, u_int32_t exp, cb_dhstat cb) = 0;
   virtual void real_repair (blockID key, ptr<location> me, u_int32_t *myaux, ptr<location> them, u_int32_t *theiraux) = 0;
 
 public:
   dhblock_replicated_srv (ptr<vnode> node, ptr<dhashcli> cli,
     dhash_ctype c, str msock, str dbsock, str dbname, ptr<chord_trigger_t> t);
 
-  virtual void store (chordID key, str d, cb_dhstat cb);
+  virtual void store (chordID key, str d, u_int32_t expire, cb_dhstat cb);
   virtual void fetch (chordID key, cb_fetch cb);
   virtual void generate_repair_jobs ();
 };

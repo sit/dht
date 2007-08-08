@@ -90,11 +90,14 @@ dhashcli_config_init::dhashcli_config_init ()
 // DHASHCLI
 
 dhashcli::dhashcli (ptr<vnode> node, ptr<dhash> dh)
-  : clntnode (node), ordersucc_ (true), dh (dh)
+  : clntnode (node), ordersucc_ (true), default_lifetime (-1), dh (dh)
 {
   int ordersucc = 1;
   Configurator::only ().get_int ("dhashcli.order_successors", ordersucc);
   ordersucc_ = (ordersucc > 0);
+
+  (void) Configurator::only ().get_int ("dhash.default_lifetime",
+      default_lifetime);
 }
 
 
@@ -306,6 +309,7 @@ dhashcli::retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
 							      data.len (),
 							      rs->key.ctype);
     ret_block->ID = rs->key.ID;
+    ret_block->expiration = block->expiration;
     ret_block->hops = rs->r.size ();
     ret_block->errors = rs->errors;
     ret_block->retries = block->errors;
@@ -485,6 +489,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
       dhash_store::execute (clntnode, dest, 
 			    blockID(block->ID, block->ctype),
 			    frag,
+			    (default_lifetime < 0) ? 0 : (timenow + default_lifetime),
 			    wrap (this, &dhashcli::insert_store_cb,  
 				  ss, i, getusec ()),
 			    get_store_status (block->ctype)); 
@@ -559,11 +564,12 @@ dhashcli::lookup_findsucc_cb (chordID blockID, dhashcli_lookupcb_t cb,
 
 void
 dhashcli::sendblock (ptr<location> dst, blockID bid, str data,
+		     u_int32_t expiration,
 		     sendblockcb_t cb, int nonce /* = 0 */)
 {
 
   dhash_store::execute 
-    (clntnode, dst, bid, data,
+    (clntnode, dst, bid, data, expiration,
      wrap (this, &dhashcli::sendblock_cb, cb, data.len ()),
      DHASH_FRAGMENT,
      nonce); //XXX choose DHASH_STORE if appropriate (i.e. full replica)
@@ -601,7 +607,7 @@ dhashcli::sendblock_fetch_cb (ptr<location> dst, blockID bid_to_send,
   }
 
   dhash_store::execute 
-    (clntnode, dst, bid_to_send, obj.data,
+    (clntnode, dst, bid_to_send, obj.data, obj.expiration,
      wrap (this, &dhashcli::sendblock_cb, cb, obj.data.len ()),
      get_store_status(bid_to_send.ctype), //XXX store_status broken
      nonce); 

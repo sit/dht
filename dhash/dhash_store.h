@@ -17,11 +17,12 @@ public:
   static void execute (ptr<vnode> clntnode, ptr<location> dest, 
 		       blockID bid,
 		       str data, 
+		       u_int32_t exp,
 		       cbclistore_t cb, 
 		       store_status store_type = DHASH_STORE,
 		       int nonce = 0)
   {
-    vNew dhash_store (clntnode, dest, bid, data, store_type, nonce, cb);
+    vNew dhash_store (clntnode, dest, bid, data, exp, store_type, nonce, cb);
   }
 
 
@@ -32,6 +33,7 @@ protected:
 
   ptr<location> dest;
   str data;
+  u_int32_t expiration;
   blockID bid;
   cbclistore_t cb;
   dhash_ctype ctype;
@@ -47,12 +49,13 @@ protected:
   ptr<bool> deleted;
 
   dhash_store (ptr<vnode> clntnode, ptr<location> dest, blockID bid,
-               str _block, store_status store_type, int nonce,
+               str _block, u_int32_t exp,
+	       store_status store_type, int nonce,
 	       cbclistore_t cb)
     : npending (0),
       error (false),
       status (DHASH_OK),
-      dest (dest), data (_block), bid (bid), cb (cb),
+      dest (dest), data (_block), expiration (exp), bid (bid), cb (cb),
       ctype (bid.ctype), 
       procno ((nonce > 0) ? DHASHPROC_FETCHCOMPLETE : DHASHPROC_STORE), 
       nonce (nonce),

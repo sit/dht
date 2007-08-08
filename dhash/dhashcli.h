@@ -88,6 +88,8 @@ public:
 private:
   ptr<vnode> clntnode;
   bool ordersucc_;
+  // If no expiration is provided as an RPC arg, use this.
+  int default_lifetime;
   ptr<dhash> dh;
 
 
@@ -154,6 +156,7 @@ public:
 
   //send a specific fragment (not the one in the DB)
   void sendblock (ptr<location> dst, blockID bid, str data,
+		  u_int32_t expiration,
 		  sendblockcb_t cb, int nonce = 0);
 
   void lookup (chordID blockID, dhashcli_lookupcb_t cb);

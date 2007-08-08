@@ -59,7 +59,8 @@ dhblock_replicated_srv::fetch (chordID k, cb_fetch cb)
 }
 
 void
-dhblock_replicated_srv::store (chordID key, str new_data, cb_dhstat cb)
+dhblock_replicated_srv::store (chordID key, str new_data,
+    u_int32_t expiration, cb_dhstat cb)
 {
   chordID dbKey = id_to_dbkey (key);
   // Serialize writers to this key in the order that they arrive here.
@@ -70,7 +71,7 @@ dhblock_replicated_srv::store (chordID key, str new_data, cb_dhstat cb)
     waiters->push_back (wrap (db, &adb::fetch, dbKey, false,
 			      wrap (this, 
 				    &dhblock_replicated_srv::store_after_fetch_cb, 
-				    new_data, cb)));
+				    new_data, expiration, cb)));
     return;
   } else {
     // We must clear this out before calling cb on all possible paths
@@ -78,12 +79,13 @@ dhblock_replicated_srv::store (chordID key, str new_data, cb_dhstat cb)
     _paused_stores.insert (dbKey, waiters);
     db->fetch (dbKey, 
 	       wrap (this, &dhblock_replicated_srv::store_after_fetch_cb, 
-		     new_data, cb));
+		     new_data, expiration, cb));
   }
 }
 
 void
 dhblock_replicated_srv::store_after_fetch_cb (str new_data,
+    u_int32_t expiration,
     cb_dhstat cb, adb_status err, adb_fetchdata_t obj)
 {
   if (err == ADB_ERR) {
@@ -95,7 +97,7 @@ dhblock_replicated_srv::store_after_fetch_cb (str new_data,
     obj.data = "";
 
   // Hand off the real work to my subclass.
-  real_store (obj.id, obj.data, new_data,
+  real_store (obj.id, obj.data, new_data, expiration,
       wrap (this, &dhblock_replicated_srv::store_after_rstore_cb,
 	obj.id, cb));
 }
@@ -209,7 +211,7 @@ rjrep::repair_retrieve_cb (dhash_stat err, ptr<dhash_block> b, route r)
     return;
   }
   
-  bsrv->store (key.ID, b->data, wrap (mkref (this), &rjrep::storecb));
+  bsrv->store (key.ID, b->data, b->expiration, wrap (mkref (this), &rjrep::storecb));
 }
 
 void

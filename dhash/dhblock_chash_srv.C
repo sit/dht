@@ -35,7 +35,7 @@ struct rjchash : public repair_job {
   // Async callbacks
   void cache_check_cb (adb_status stat, adb_fetchdata_t obj);
   void retrieve_cb (dhash_stat err, ptr<dhash_block> b, route r);
-  void send_frag (str block);
+  void send_frag (str block, u_int32_t expiration);
   void local_store_cb (dhash_stat stat);
   void send_frag_cb (dhash_stat err, bool present, u_int32_t sz);
 };
@@ -66,16 +66,13 @@ dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
 }
 
 void
-dhblock_chash_srv::store (chordID key, str d, cb_dhstat cb)
+dhblock_chash_srv::store (chordID key, str d, u_int32_t expire, cb_dhstat cb)
 {
   char *action;
 
   if (1) {  // without maintaining our own merkle tree, we can't know
     action = "N"; // New
-    if (default_lifetime < 0)
-      db_store (key, d, cb);
-    else
-      db_store (key, d, 0, timenow + default_lifetime, cb);
+    db_store (key, d, 0, expire, cb);
   } else {
     action = "R";
     cb (DHASH_OK);
@@ -138,7 +135,7 @@ rjchash::cache_check_cb (adb_status stat, adb_fetchdata_t obj)
 {
   if (stat == ADB_OK) {
     assert (key.ID == obj.id);
-    send_frag (obj.data);
+    send_frag (obj.data, obj.expiration);
   } else {
     bsrv->cli->retrieve (key,
 	wrap (mkref (this), &rjchash::retrieve_cb));
@@ -156,8 +153,8 @@ rjchash::retrieve_cb (dhash_stat err, ptr<dhash_block> b, route r)
     // XXX maybe make sure we don't try too "often"?
   } else {
     assert (b);
-    bsrv->cache_db->store (key.ID, b->data, wrap (cache_store_cb));
-    send_frag (b->data);
+    bsrv->cache_db->store (key.ID, b->data, 0, b->expiration, wrap (cache_store_cb));
+    send_frag (b->data, b->expiration);
   }
 }
 
@@ -169,7 +166,7 @@ cache_store_cb (adb_status stat)
 }
 
 void
-rjchash::send_frag (str block)
+rjchash::send_frag (str block, u_int32_t expiration)
 {
   u_long m = Ida::optimal_dfrag (block.len (), dhblock::dhash_mtu ());
   if (m > dhblock_chash::num_dfrags ())
@@ -180,10 +177,10 @@ rjchash::send_frag (str block)
   // an RPC to ourselves. This will happen a lot, so the optmization
   // is probably worth it.
   if (where == bsrv->node->my_location ()) {
-    bsrv->store (key.ID, frag,
+    bsrv->store (key.ID, frag, expiration,
 	wrap (mkref (this), &rjchash::local_store_cb));
   } else {
-    bsrv->cli->sendblock (where, key, frag, 
+    bsrv->cli->sendblock (where, key, frag, expiration,
 	wrap (mkref (this), &rjchash::send_frag_cb));
   }
 }

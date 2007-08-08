@@ -28,7 +28,7 @@ dhblock_keyhash_srv::dhblock_keyhash_srv (ptr<vnode> node,
 }
 
 void
-dhblock_keyhash_srv::real_store (chordID key, str od, str nd, cb_dhstat cb)
+dhblock_keyhash_srv::real_store (chordID key, str od, str nd, u_int32_t exp, cb_dhstat cb)
 {
   u_int32_t v1 = dhblock_keyhash::version (nd.cstr (), nd.len ());
   if (od.len ()) {
@@ -44,27 +44,23 @@ dhblock_keyhash_srv::real_store (chordID key, str od, str nd, cb_dhstat cb)
       info << "db delete: " << key << "\n";
       db->remove (key, v0, 
 		  wrap (this, &dhblock_keyhash_srv::delete_cb, key, 
-			nd, v1, cb));
+			nd, v1, exp, cb));
     }
   } else {
     info << "db write: " << node->my_ID ()
 	 << " N " << key << " " << nd.len () << "\n";
-    db_store (key, nd, v1,
-	(default_lifetime < 0) ? 0 : (timenow + default_lifetime),
-	cb);
+    db_store (key, nd, v1, exp, cb);
   }
 }
 
 void 
-dhblock_keyhash_srv::delete_cb (chordID k, str d, u_int32_t v, cb_dhstat cb, adb_status stat) 
+dhblock_keyhash_srv::delete_cb (chordID k, str d, u_int32_t v, u_int32_t exp, cb_dhstat cb, adb_status stat) 
 {
   assert (stat == ADB_OK);
   info << "db write: " << node->my_ID ()
        << " U " << k << " " << d.len () << "\n";
   
-  db_store (k, d, v,
-      (default_lifetime < 0) ? 0 : (timenow + default_lifetime),
-      cb);
+  db_store (k, d, v, exp, cb);
 }
 
 // XXX could ideally try to find the newest version over
