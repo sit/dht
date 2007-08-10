@@ -305,8 +305,7 @@ dhashcli::retrieve_fetch_cb (ptr<rcv_state> rs, u_int i,
   if (block_t->done ()) {
     rs->timemark ();
     str data = block_t->produce_block_data ();
-    ptr<dhash_block> ret_block = New refcounted<dhash_block> (data.cstr(),
-							      data.len (),
+    ptr<dhash_block> ret_block = New refcounted<dhash_block> (data,
 							      rs->key.ctype);
     ret_block->ID = rs->key.ID;
     ret_block->expiration = block->expiration;
