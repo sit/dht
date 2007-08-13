@@ -627,24 +627,27 @@ dbns::expire (u_int32_t limit, u_int32_t deadline)
       cursor->c_close (cursor);
     return r;
   }
+
   r = cursor->c_pget (cursor, &begin_time, &key, &content, DB_SET_RANGE);
-  while (!r && (limit == 0 || victims.size () < limit)) {
+  while (!r) {
     if (key.size == master_metadata.size && 
 	!memcmp (key.data, master_metadata.data, key.size))
     {
       free (key.data);
-      goto expire_nextkey;
-    }
-    adb_metadata_t md;
-    buf2xdr (md, content.data, content.size);
-    if (md.expiration < deadline) {
-      victims.push_back (key);
-      victim_metadata.push_back (md);
-    } else {
+    } else if (limit > 0 && victims.size () >= limit) {
       free (key.data);
       break;
+    } else {
+      adb_metadata_t md;
+      buf2xdr (md, content.data, content.size);
+      if (md.expiration < deadline) {
+	victims.push_back (key);
+	victim_metadata.push_back (md);
+      } else {
+	free (key.data);
+	break;
+      }
     }
-expire_nextkey:
     bzero (&key, sizeof (key));
     key.flags = DB_DBT_MALLOC;
     r = cursor->c_pget (cursor, &begin_time, &key, &content, DB_NEXT);
@@ -920,8 +923,10 @@ dbmanager::dbmanager (str p, str lp = NULL) :
   logpath (lp)
 {
   mkdir_wrapper (dbpath);
-  if (logpath)
+  if (logpath) {
     mkdir_wrapper (logpath);
+    logpath = canonicalize_path (logpath);
+  }
 
   // Add trailing slash if necessary
   str x = canonicalize_path (dbpath);
@@ -929,7 +934,6 @@ dbmanager::dbmanager (str p, str lp = NULL) :
     dbpath = strbuf () << x << "/";
   else 
     dbpath = x;
-  logpath = canonicalize_path (logpath);
 }
 
 dbmanager::~dbmanager ()
@@ -1188,7 +1192,7 @@ dispatch (ref<axprt_stream> s, ptr<asrv> a, dbmanager *dbm, svccb *sbp)
 {
   if (sbp == NULL) {
     warn << "EOF from client\n";
-    a = NULL;
+    a->setcb (NULL);
     return;
   }
 
