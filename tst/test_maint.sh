@@ -17,6 +17,8 @@
 
 # Defaults
 NREPLICAS=2
+CTYPE=chash
+CEXT=c
 
 batchsize=1000
 lifetime=0
@@ -109,13 +111,13 @@ store () {
     size=$2
     shift 2
     TOTALOBJECTS=$(expr $TOTALOBJECTS + $count)
-    $DBM ${prefix}-a/dhash-sock store chash $count $size "$@" > $TMPDIR/store.out 2>&1
+    $DBM ${prefix}-a/dhash-sock store $CTYPE $count $size "$@" > $TMPDIR/store.out 2>&1
 }
 fetch () {
     count=$1
     size=$2
     shift 2
-    $DBM ${prefix}-a/dhash-sock fetch chash $count $size "$@" > $TMPDIR/fetch.out 2>&1
+    $DBM ${prefix}-a/dhash-sock fetch $CTYPE $count $size "$@" > $TMPDIR/fetch.out 2>&1
 }
 # }}}
 # {{{ check_counts nreplicas
@@ -125,7 +127,7 @@ check_counts () # nreplicas
     exact=$2
     shift 2
     # Need at least $nreplica copies of $TOTALOBJECTS objects
-    for db in ${prefix}-*/db/*.c
+    for db in ${prefix}-*/db/*.$CEXT
     do
 	$DBDUMP $db | awk '/^key/ { print $2 }'
     done | sort | uniq -c > $TMPDIR/counts
