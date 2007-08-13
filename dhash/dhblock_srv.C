@@ -33,7 +33,7 @@ dhblock_srv::dhblock_srv (ptr<vnode> node,
 {
   warn << "opened " << dbsock << " with space " << dbname 
        << (hasaux ? " (hasaux)\n" : "\n");
-  delaycb (dhash::reptm (), wrap (this, &dhblock_srv::sync_timer));
+  sync_tcb = delaycb (dhash::reptm (), wrap (this, &dhblock_srv::sync_timer));
 }
 
 dhblock_srv::~dhblock_srv ()
