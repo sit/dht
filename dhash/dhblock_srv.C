@@ -299,6 +299,8 @@ dhblock_srv::repair_done (str desc)
   info << "completed repair of " << desc << "; "
 	<< repairs_inprogress.size () << " in progress, "
 	<< repairs_queued.size () << " in queue.\n";
+  if (repairs_queued.size () < REPAIR_QUEUE_MAX)
+    generate_repair_jobs ();
   repair_flush_q ();
 }
 
