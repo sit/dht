@@ -56,7 +56,7 @@ succ_list::succs ()
 unsigned int
 succ_list::num_succ ()
 {
-  int goodnodes = locations->usablenodes () - 1;
+  int goodnodes = locations->usablenodes ();
   int newnsucc = (nsucc_ > goodnodes) ? goodnodes : nsucc_;
   
   if (newnsucc < 0) {
