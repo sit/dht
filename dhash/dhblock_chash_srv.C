@@ -58,6 +58,8 @@ dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
 				      ptr<chord_trigger_t> t) :
   dhblock_srv (node, cli, DHASH_CONTENTHASH, msock,
       dbsock, dbname, false, t),
+  cache_hits (0),
+  cache_misses (0),
   cache_db (NULL),
   cache_sync_tcb (NULL)
 {
@@ -74,6 +76,15 @@ dhblock_chash_srv::~dhblock_chash_srv ()
     timecb_remove (cache_sync_tcb);
     cache_sync_tcb = NULL;
   }
+}
+
+void
+dhblock_chash_srv::stats (vec<dstat> &s)
+{
+  str p = prefix ();
+  base_stats (s);
+  s.push_back (dstat (p << ".repair_cache_hits", cache_hits));
+  s.push_back (dstat (p << ".repair_cache_misses", cache_misses));
 }
 
 void
@@ -162,9 +173,11 @@ void
 rjchash::cache_check_cb (adb_status stat, adb_fetchdata_t obj)
 {
   if (stat == ADB_OK) {
+    bsrv->cache_hits++;
     assert (key.ID == obj.id);
     send_frag (obj.data, obj.expiration);
   } else {
+    bsrv->cache_misses++;
     bsrv->cli->retrieve (key,
 	wrap (mkref (this), &rjchash::retrieve_cb));
   }
@@ -181,6 +194,7 @@ rjchash::retrieve_cb (dhash_stat err, ptr<dhash_block> b, route r)
     // XXX maybe make sure we don't try too "often"?
   } else {
     assert (b);
+    bsrv->repair_read_bytes += b->data.len (); 
     bsrv->cache_db->store (key.ID, b->data, 0, b->expiration, wrap (cache_store_cb));
     send_frag (b->data, b->expiration);
   }
@@ -231,6 +245,7 @@ rjchash::send_frag_cb (dhash_stat err, bool present, u_int32_t sz)
   strbuf x;
   x << "repair: " << bsrv->node->my_ID ();
   if (!err) {
+    bsrv->repair_sent_bytes += sz;
     x << " sent ";
   } else {
     x << " error sending ";
@@ -266,6 +281,7 @@ rjchashsend::send_frag_cb (dhash_stat err, bool present, u_int32_t sz)
   if (!err) {
     // Remove this fragment/replica; it was transferred successfully.
     // bsrv->db->remove (key.ID, wrap (XXX));
+    bsrv->repair_sent_bytes += sz;
     x << " sent ";
   } else {
     x << " error sending ";

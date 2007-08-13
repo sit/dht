@@ -29,6 +29,8 @@ dhblock_srv::dhblock_srv (ptr<vnode> node,
   maint (get_maint_aclnt (msock)),
   node (node),
   cli (cli),
+  repair_read_bytes (0),
+  repair_sent_bytes (0),
   repairs_completed (0)
 {
   warn << "opened " << dbsock << " with space " << dbname 
@@ -44,6 +46,27 @@ dhblock_srv::~dhblock_srv ()
     sync_tcb = NULL;
   }
 }
+
+str
+dhblock_srv::prefix () const
+{
+  char *p = "unknown";
+  switch (ctype) {
+    case DHASH_CONTENTHASH:
+      p = "chash";
+      break;
+    case DHASH_NOAUTH:
+      p = "noauth";
+      break;
+    case DHASH_KEYHASH:
+      p = "keyhash";
+      break;
+    case DHASH_APPEND:
+      p = "append";
+      break;
+  }
+  return p;
+}      
 
 ptr<aclnt>
 dhblock_srv::get_maint_aclnt (str msock)
@@ -186,25 +209,20 @@ dhblock_srv::fetch (chordID k, cb_fetch cb)
 }
 
 void
+dhblock_srv::base_stats (vec<dstat> &s)
+{
+  str p = prefix ();
+  s.push_back (dstat (p << ".repair_read_bytes", repair_read_bytes));
+  s.push_back (dstat (p << ".repair_sent_bytes", repair_sent_bytes));
+  s.push_back (dstat (p << ".repairs_completed", repairs_completed));
+  s.push_back (dstat (p << ".repairs_queued", repairs_queued.size ()));
+  s.push_back (dstat (p << ".repairs_inprogress", repairs_inprogress.size ()));
+}
+
+void
 dhblock_srv::stats (vec<dstat> &s)
 {
-  str prefix = "unknown";
-  switch (ctype) {
-    case DHASH_CONTENTHASH:
-      prefix = "chash";
-      break;
-    case DHASH_NOAUTH:
-      prefix = "noauth";
-      break;
-    case DHASH_KEYHASH:
-      prefix = "keyhash";
-      break;
-    case DHASH_APPEND:
-      prefix = "append";
-      break;
-  }
-      
-  s.push_back (dstat (prefix << ".repairs", repairs_completed));
+  base_stats (s);
 }
 
 //

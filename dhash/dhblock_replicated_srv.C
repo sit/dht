@@ -45,10 +45,19 @@ dhblock_replicated_srv::dhblock_replicated_srv (ptr<vnode> node,
 						str dbsock,
 						str dbname,
 						ptr<chord_trigger_t> t) :
-  dhblock_srv (node, cli, ctype, msock, dbsock, dbname, true, t)
+  dhblock_srv (node, cli, ctype, msock, dbsock, dbname, true, t),
+  stale_repairs (0)
 {
   maint_initspace (dhblock_replicated::num_replica (),
                    dhblock_replicated::num_replica (), t);
+}
+
+void
+dhblock_replicated_srv::stats (vec<dstat> &s)
+{
+  str p = prefix ();
+  base_stats (s);
+  s.push_back (dstat (p << ".stale_repairs", stale_repairs));
 }
 
 void
@@ -210,7 +219,7 @@ rjrep::repair_retrieve_cb (dhash_stat err, ptr<dhash_block> b, route r)
     info << "rjrep (" << key<< "): retrieve during repair failed: " << err << "\n";
     return;
   }
-  
+  bsrv->repair_read_bytes += b->data.len ();
   bsrv->store (key.ID, b->data, b->expiration, wrap (mkref (this), &rjrep::storecb));
 }
 
@@ -246,6 +255,13 @@ rjrep::storecb (dhash_stat err)
 void
 rjrep::repair_send_cb (dhash_stat err, bool something, u_int32_t sz)
 {
+  if (!err)
+    bsrv->repair_sent_bytes += sz;
+  if (err == DHASH_STALE) {
+    bsrv->repair_sent_bytes += sz;
+    bsrv->stale_repairs++;
+  }
+
   if (err && err != DHASH_STALE) { 
     info << "rjrep (" << key << ") error sending block: " << err << "\n";
   } else if (!reversed && err == DHASH_STALE) {

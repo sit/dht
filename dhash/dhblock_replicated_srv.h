@@ -31,6 +31,8 @@ class dhblock_replicated_srv : public dhblock_srv
 {
   friend struct rjrep;
 
+  u_int64_t stale_repairs;
+
   // async callbacks
   void delete_cb (chordID k, str d, cb_dhstat cb, adb_status stat);
   void store_after_fetch_cb (str d, u_int32_t expiration, cb_dhstat cb, adb_status stat, 
@@ -43,7 +45,6 @@ class dhblock_replicated_srv : public dhblock_srv
 protected:
   qhash<chordID, vec<cbv> *, hashID> _paused_stores;
 
-
   // Mutable blocks require Merkle key tweaking
   virtual chordID idaux_to_mkey (chordID key, u_int32_t aux);
   virtual chordID id_to_dbkey (chordID key);
@@ -55,6 +56,7 @@ public:
   dhblock_replicated_srv (ptr<vnode> node, ptr<dhashcli> cli,
     dhash_ctype c, str msock, str dbsock, str dbname, ptr<chord_trigger_t> t);
 
+  void stats (vec<dstat> &s);
   virtual void store (chordID key, str d, u_int32_t expire, cb_dhstat cb);
   virtual void fetch (chordID key, cb_fetch cb);
   virtual void generate_repair_jobs ();

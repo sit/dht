@@ -55,6 +55,8 @@ class dhblock_srv : virtual public refcount {
 
  protected:
   const dhash_ctype ctype;
+  str prefix () const;
+
   ptr<adb> db;
   ptr<aclnt> maint;
 
@@ -67,6 +69,8 @@ class dhblock_srv : virtual public refcount {
     REPAIR_QUEUE_MAX = 64
   };
 
+  u_int64_t repair_read_bytes;
+  u_int64_t repair_sent_bytes;
   u_int64_t repairs_completed;
 
   bhash<str> repairs_queued;
@@ -88,6 +92,9 @@ class dhblock_srv : virtual public refcount {
   void maint_getrepairs (int thresh, int count, chordID start,
     cb_maintrepairs_t cbr);
   ptr<location> maintloc2location (u_int32_t a, u_int32_t b);
+
+  // stats common to all block_srvs
+  void base_stats (vec<dstat> &s);
 
  public:
   dhblock_srv (ptr<vnode> node, ptr<dhashcli> cli,

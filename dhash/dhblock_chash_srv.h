@@ -13,6 +13,9 @@ class dhblock_chash_srv : public dhblock_srv {
   friend class rjchash;
   friend class rjchashsend;
 
+  u_int64_t cache_hits;
+  u_int64_t cache_misses;
+
   ptr<adb> cache_db;
   timecb_t *cache_sync_tcb;
   void cache_sync_timer ();
@@ -25,6 +28,7 @@ public:
       str msock, str dbsock, str dbname, ptr<chord_trigger_t> t);
   ~dhblock_chash_srv ();
 
+  void stats (vec<dstat> &s);
   void store (chordID k, str d, u_int32_t expire, cb_dhstat cb);
   void generate_repair_jobs ();
 };
