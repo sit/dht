@@ -35,14 +35,24 @@ format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
     vec<merkle_hash> keys = ltree->database_get_keys (depth, prefix);
 
     if (keys.size () != rpcnode->count) {
-      warn << "\n\n\n----------------------------------------------------------\n";
-      warn << "BUG BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG BUG\n";
-      warn << "Send this output to chord@pdos.lcs.mit.edu\n";
-      warn << "BUG: " << depth << " " << prefix << "\n";
-      warn << "BUG: " << keys.size () << " != " << rpcnode->count << "\n";
-      ltree->check_invariants ();
-      warn << "BUG BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG  BUG BUG\n";
-      panic << "----------------------------------------------------------\n\n\n";
+      // This means that the tree has changed since the lookup.
+      // (Perhaps a key was added or expired.)
+      // Don't panic; just fudge it.
+      warn << "format_rpcnode: mismatched count "
+	   << keys.size () << " != " << rpcnode->count
+	   << " at depth " << depth << " / " << prefix << "\n";
+      // Lose extra keys if too many.
+      while (keys.size () > 64)
+	keys.pop_back ();
+      rpcnode->count = keys.size ();
+      if (!keys.size ()) {
+	rpcnode->hash = 0;
+      } else {
+	sha1ctx sc;
+	for (u_int i = 0; i < keys.size (); i++)
+	  sc.update (keys[i].bytes, keys[i].size);
+	sc.final (rpcnode->hash.bytes);
+      }
     }
 
     rpcnode->child_hash.setsize (keys.size ());
