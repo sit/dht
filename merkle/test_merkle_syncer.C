@@ -408,6 +408,91 @@ main (int argc, char *argv[])
   dump_stats ();
   finish ();
 
+  for (size_t c = 0; c < 10; c++) {
+    setup ();
+    addrand (SERVER.tree, 512);
+    vec<chordID> allkeys = SERVER.tree->get_keyrange (0, idmax, 512);
+    chordID a = make_randomID ();
+    chordID b = make_randomID ();
+    warnx << "sync " << a << " " << b << "\n";
+    bhash<chordID, hashID> filtered;
+    filtered.clear ();
+    for (size_t i = 0; i < allkeys.size (); i++) {
+      if (betweenbothincl (a, b, allkeys[i]))
+	filtered.insert (allkeys[i]);
+    }
+    runsync (a, b);
+    assert (nkeyspulled == filtered.size ());
+    assert (nkeyspushed == 0);
+    warnx << "Expecting " << filtered.size () << " keys\n";
+    vec<chordID> y = SYNCER.tree->get_keyrange (0, idmax, 512);
+    bool bad = false;
+    for (size_t i = 0; i < y.size (); i++) {
+      if (!filtered[y[i]]) {
+	warnx << "Unexpected key: " << y[i] << "\n";
+	bad = true;
+      }
+      filtered.remove (y[i]);
+    }
+    if (filtered.size ()) {
+      warnx << "Missing " << filtered.size () << " keys\n";
+      warnx << "(syncer pulled " << nkeyspulled << ")\n";
+      bad = true;
+    }
+    assert (!bad);
+    finish ();
+  }
+
+  for (size_t c = 0; c < 10; c++) {
+    setup ();
+    addrand (SERVER.tree, 512);
+    addrand (SYNCER.tree, 512);
+    chordID a = make_randomID ();
+    chordID b = make_randomID ();
+    warnx << "sync " << a << " " << b << "\n";
+    bhash<chordID, hashID> filtered;
+    filtered.clear ();
+    vec<chordID> allkeys = SERVER.tree->get_keyrange (0, idmax, 512);
+    for (size_t i = 0; i < allkeys.size (); i++) {
+      if (betweenbothincl (a, b, allkeys[i]))
+	filtered.insert (allkeys[i]);
+    }
+    unsigned int expected = filtered.size ();
+    allkeys = SYNCER.tree->get_keyrange (0, idmax, 512);
+    for (size_t i = 0; i < allkeys.size (); i++) {
+      if (betweenbothincl (a, b, allkeys[i]))
+	filtered.insert (allkeys[i]);
+    }
+    runsync (a, b);
+    warnx << "Expecting " << expected << " keys\n";
+    assert (nkeyspulled == expected);
+    vec<chordID> y = SYNCER.tree->get_keyrange (0, idmax, 1024);
+    bool bad = false;
+    for (size_t i = 0; i < y.size (); i++) {
+      if (!betweenbothincl (a, b, y[i]))
+	continue;
+      if (!filtered[y[i]]) {
+	warnx << "Unexpected key: " << y[i] << "\n";
+	bad = true;
+	continue;
+      }
+      filtered.remove (y[i]);
+    }
+    if (filtered.size ()) {
+      warnx << "Missing " << filtered.size () << " keys\n";
+      warnx << "(syncer pulled " << nkeyspulled << ")\n";
+      qhash_slot<chordID, void> *slot = filtered.first ();
+      while (slot) {
+	warnx << "  " << slot->key << "\n";
+	slot = filtered.next (slot);
+      }
+      
+      bad = true;
+    }
+    assert (!bad);
+    finish ();
+  }
+
   // Non-empty A, Empty B, Complete range
   // ==> A should equal B.
   // ==> Resync should move no keys.

@@ -43,7 +43,7 @@ format_rpcnode (merkle_tree *ltree, u_int depth, const merkle_hash &prefix,
 	   << " at depth " << depth << " / " << prefix << "\n";
       // Lose extra keys if too many.
       while (keys.size () > 64)
-	keys.pop_back ();
+        keys.pop_back ();
       rpcnode->count = keys.size ();
       if (!keys.size ()) {
 	rpcnode->hash = 0;
@@ -475,16 +475,45 @@ merkle_syncer::compare_nodes (bigint rngmin, bigint rngmax,
     bigint node_width = bigint (1) << (160 - 6*rnode->depth);
     bigint tmpmax = tmpmin + node_width - 1;
 
+    assert (tmpmin < tmpmax);
     // further constrain to be within the host's range of interest
-    if (between (tmpmin, tmpmax, rngmin))
-      tmpmin = rngmin;
-    if (between (tmpmin, tmpmax, rngmax))
-      tmpmax = rngmax;
-
-    outstanding_keyranges++;
-    vNew merkle_getkeyrange (vnode, ctype, tmpmin, tmpmax, lkeys,
-	missingfnc, rpcfnc,
-	wrap (mkref (this), &merkle_syncer::collect_keyranges, deleted));
+    // This can be purely inside, at the start, at the end,
+    // or at the outsides.
+    if (rngmin < rngmax) {
+      // Completely contained, or only partial overlap
+      if (between (tmpmin, tmpmax, rngmin))
+	tmpmin = rngmin;
+      if (between (tmpmin, tmpmax, rngmax))
+	tmpmax = rngmax;
+      outstanding_keyranges++;
+      vNew merkle_getkeyrange (vnode, ctype, tmpmin, tmpmax, lkeys,
+	  missingfnc, rpcfnc,
+	  wrap (mkref (this), &merkle_syncer::collect_keyranges, deleted));
+    } else {
+      if (betweenbothincl (rngmin, maxID, tmpmin) &&
+	  betweenbothincl (0, rngmax, tmpmax))
+      {
+	// node is completely one of our ends.
+	outstanding_keyranges++;
+	vNew merkle_getkeyrange (vnode, ctype, tmpmin, tmpmax, lkeys,
+	    missingfnc, rpcfnc,
+	    wrap (mkref (this), &merkle_syncer::collect_keyranges, deleted));
+      } else {
+	// partial overlap; check right and left hand sides.
+	if (betweenbothincl (rngmin, maxID, tmpmax)) {
+	  outstanding_keyranges++;
+	  vNew merkle_getkeyrange (vnode, ctype, rngmin, tmpmax, lkeys,
+	      missingfnc, rpcfnc,
+	      wrap (mkref (this), &merkle_syncer::collect_keyranges, deleted));
+	}
+	if (betweenbothincl (0, rngmax, tmpmin)) {
+	  outstanding_keyranges++;
+	  vNew merkle_getkeyrange (vnode, ctype, tmpmin, rngmax, lkeys,
+	      missingfnc, rpcfnc,
+	      wrap (mkref (this), &merkle_syncer::collect_keyranges, deleted));
+	}
+      }
+    }
   }
 }
 
