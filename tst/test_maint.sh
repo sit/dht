@@ -129,7 +129,9 @@ check_counts () # nreplicas
     # Need at least $nreplica copies of $TOTALOBJECTS objects
     for db in ${prefix}-*/db/*.$CEXT
     do
-	$DBDUMP $db | awk '/^key/ { print $2 }'
+	if [ -e $(dirname $db)/../dhash-sock ]; then
+	    $DBDUMP $db | awk '/^key/ { print $2 }'
+	fi
     done | sort | uniq -c > $TMPDIR/counts
     if [ -z "$exact" ];
     then
@@ -250,7 +252,7 @@ create_conf $NREPLICAS
 echo "Starting initial nodes..."
 start_dhash a $mode 3250 2 & 
 sleep 2
-start_dhash b $mode 3254 2 &
+start_dhash b $mode 3246 2 &
 sleep 2
 
 echo -n "Waiting for stable..."
@@ -307,7 +309,7 @@ echo -n "Waiting for stable after kill..."
 wait_stable && echo "OK" || fail
 
 echo "Waiting and checking after repair timers..."
-sleep 120
+sleep 180
 expect_repairs || fail
 check_counts $nreplicas && echo "OK" || echo "Blocks lost!"
 
