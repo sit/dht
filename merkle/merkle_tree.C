@@ -1,4 +1,5 @@
 #include <chord_types.h>
+#include <id_utils.h>
 #include "merkle_tree.h"
 
 merkle_node::~merkle_node ()
@@ -196,6 +197,19 @@ merkle_tree::database_get_IDs (u_int depth, const merkle_hash &prefix)
   for (unsigned int i = 0; i < mhash.size (); i++)
     ret.push_back (static_cast<bigint> (mhash[i]));
   return ret;
+}
+
+vec<chordID>
+merkle_tree::get_keyrange (chordID min, chordID max, u_int n)
+{
+  vec<chordID> keys;
+  if (min < max) {
+    get_keyrange_nowrap (min, max, n, keys);
+  } else {
+    get_keyrange_nowrap (min, maxID, n, keys);
+    get_keyrange_nowrap (0, max, n, keys);
+  }
+  return keys;
 }
 
 

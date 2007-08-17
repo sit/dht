@@ -789,12 +789,11 @@ merkle_tree_bdb::database_get_keys (u_int depth, const merkle_hash &prefix)
   return keys;
 }
 // }}}
-// {{{ merkle_tree_bdb::get_keyrange
-vec<chordID>
-merkle_tree_bdb::get_keyrange (chordID min, chordID max, u_int n)
+// {{{ merkle_tree_bdb::get_keyrange_nowrap
+void
+merkle_tree_bdb::get_keyrange_nowrap (const chordID &min,
+    const chordID &max, u_int n, vec<chordID> &keys)
 {
-  vec<chordID> keys;
-
   merkle_hash h (min);
   DBT key; mhash_to_dbt (h, &key);
   DBT content; bzero (&content, sizeof (content)); // Irrelevant
@@ -807,7 +806,7 @@ merkle_tree_bdb::get_keyrange (chordID min, chordID max, u_int n)
   if (r) {
     warner ("merkle_tree_bdb::get_keyrange", "cursor open", r);
     (void) cursor->c_close (cursor);
-    return keys;
+    return;
   }
   r = cursor->c_get (cursor, &key, &content, DB_SET_RANGE);
   while (!r && keys.size () < n) {
@@ -823,8 +822,6 @@ merkle_tree_bdb::get_keyrange (chordID min, chordID max, u_int n)
   if (r && r != DB_NOTFOUND)
     warner ("merkle_tree_bdb::get_keyrange", "cursor c_get", r);
   (void) cursor->c_close (cursor);
-
-  return keys;
 }
 // }}}
 // {{{ merkle_tree_bdb::lookup_exact

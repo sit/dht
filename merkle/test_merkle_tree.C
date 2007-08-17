@@ -183,7 +183,7 @@ test_reads (merkle_tree *mtree, const keys_t &keys)
   chordID highest = (((chordID) 1) << 160) - 1;
   for (int i = 0; i < 32; i++) {
     chordID min = make_randomID ();
-    chordID max = min + make_randomID () % (highest - min);
+    chordID max = make_randomID ();
     //warn << "  get_keyrange (" << min << ", " << max << ", " << nkeys << ")\n";
     vec<chordID> rangekeys = mtree->get_keyrange (min, max, nkeys);
 

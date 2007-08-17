@@ -106,6 +106,8 @@ public:
   vec<merkle_hash> database_get_keys (u_int depth,
 					      const merkle_hash &prefix);
   bool key_exists (chordID key);
+  void get_keyrange_nowrap (const chordID &min,
+      const chordID &max, u_int n, vec<chordID> &keys) {}
   vec<chordID> get_keyrange (chordID min, chordID max, u_int n);
 
   merkle_tree_disk (str index, str internal, str leaf, bool writer = false);

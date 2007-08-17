@@ -325,19 +325,17 @@ merkle_tree_mem::database_get_keys (u_int depth, const merkle_hash &prefix)
   return ret;
 }
 
-vec<chordID>
-merkle_tree_mem::get_keyrange (chordID min, chordID max, u_int n)
+void
+merkle_tree_mem::get_keyrange_nowrap (const chordID &min,
+    const chordID &max, u_int n, vec<chordID> &keys)
 {
-  vec<chordID> keys;
   merkle_key *k = closestsucc (keylist, min);
-  for (u_int i = 0; k && i < n; i++) {
+  for (u_int i = 0; k && keys.size () < n; i++) {
     if (!betweenbothincl (min, max, k->id))
       break;
     keys.push_back (k->id);
     k = keylist.next (k);
   }
-
-  return keys;
 }
 // }}}
 

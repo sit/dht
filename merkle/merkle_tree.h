@@ -74,7 +74,9 @@ public:
   virtual bool key_exists (chordID key) = 0;
   virtual vec<merkle_hash> database_get_keys (u_int depth,
       const merkle_hash &prefix) = 0;
-  virtual vec<chordID> get_keyrange (chordID min, chordID max, u_int n) = 0;
+  virtual void get_keyrange_nowrap (const chordID &min,
+      const chordID &max, u_int n, vec<chordID> &keys) = 0;
+  virtual vec<chordID> get_keyrange (chordID min, chordID max, u_int n);
 
   // return the node a given depth matching key
   // returns NULL if no such node exists
@@ -144,7 +146,8 @@ public:
   }
   virtual vec<merkle_hash> database_get_keys (u_int depth,
       const merkle_hash &prefix);
-  virtual vec<chordID> get_keyrange (chordID min, chordID max, u_int n);
+  void get_keyrange_nowrap (const chordID &min,
+      const chordID &max, u_int n, vec<chordID> &keys);
 
   virtual merkle_node *lookup_exact (u_int depth, const merkle_hash &key);
   virtual merkle_node *lookup (u_int depth, const merkle_hash &key);

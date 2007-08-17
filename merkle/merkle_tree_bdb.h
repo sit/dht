@@ -59,7 +59,8 @@ public:
   bool key_exists (chordID key);
   vec<merkle_hash> database_get_keys (u_int depth,
       const merkle_hash &prefix);
-  vec<chordID> get_keyrange (chordID min, chordID max, u_int n);
+  void get_keyrange_nowrap (const chordID &min,
+      const chordID &max, u_int n, vec<chordID> &keys);
 
   using merkle_tree::lookup;
   merkle_node *lookup_exact (u_int depth, const merkle_hash &key);
