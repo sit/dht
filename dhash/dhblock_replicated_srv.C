@@ -46,6 +46,8 @@ dhblock_replicated_srv::dhblock_replicated_srv (ptr<vnode> node,
 						str dbname,
 						ptr<chord_trigger_t> t) :
   dhblock_srv (node, cli, ctype, msock, dbsock, dbname, true, t),
+  last_repair (node->my_pred ()->id ()),
+  maint_pending (false),
   stale_repairs (0)
 {
   maint_initspace (dhblock_replicated::num_replica (),
@@ -138,7 +140,16 @@ dhblock_replicated_srv::finish_store (chordID key)
 void
 dhblock_replicated_srv::generate_repair_jobs ()
 {
-  chordID rngmin = id_to_dbkey (node->my_pred ()->id ()) | 0xFFFFFFFF;
+  if (maint_pending)
+    return;
+
+  // Use last_repair to handle continuations
+  // But be sure to restart after predecessor changes.
+  if (!between (node->my_pred ()->id (), node->my_ID (), last_repair))
+    last_repair = node->my_pred ()->id ();
+
+  maint_pending = true;
+  chordID rngmin = id_to_dbkey (last_repair) | 0xFFFFFFFF;
   // Get anything that isn't replicated efrags times (if Carbonite).
   // Expect that we'll be told who to fetch from.
   u_int32_t reps = dhblock_replicated::num_replica ();
@@ -150,6 +161,7 @@ dhblock_replicated_srv::generate_repair_jobs ()
 void
 dhblock_replicated_srv::maintqueue (const vec<maint_repair_t> &repairs)
 {
+  maint_pending = false;
   for (size_t i = 0; i < repairs.size (); i++) {
     ptr<location> f = maintloc2location (
 	repairs[i].src_ipv4_addr,
@@ -161,6 +173,7 @@ dhblock_replicated_srv::maintqueue (const vec<maint_repair_t> &repairs)
     ptr<repair_job> job (NULL);
     if (repairs[i].responsible) {
       job = New refcounted<rjrep> (key, f, w, mkref (this));
+      last_repair = repairs[i].id;
     } else {
       // Not responsible for this object;
       // therefore, no need to reverse it, even if stale.
@@ -173,6 +186,9 @@ dhblock_replicated_srv::maintqueue (const vec<maint_repair_t> &repairs)
     }
     repair_add (job);
   }
+  // Reset when no new repairs are sent.
+  if (!repairs.size ())
+    last_repair = node->my_pred ()->id ();
 }
 
 //

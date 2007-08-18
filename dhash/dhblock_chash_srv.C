@@ -58,6 +58,8 @@ dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
 				      ptr<chord_trigger_t> t) :
   dhblock_srv (node, cli, DHASH_CONTENTHASH, msock,
       dbsock, dbname, false, t),
+  last_repair (node->my_pred ()->id ()),
+  maint_pending (false),
   cache_hits (0),
   cache_misses (0),
   cache_db (NULL),
@@ -127,15 +129,25 @@ dhblock_chash_srv::store (chordID key, str d, u_int32_t expire, cb_dhstat cb)
 void
 dhblock_chash_srv::generate_repair_jobs ()
 {
+  if (maint_pending)
+    return;
+
+  // Use last_repair to handle continuations
+  // But be sure to restart after predecessor changes.
+  if (!between (node->my_pred ()->id (), node->my_ID (), last_repair))
+    last_repair = node->my_pred ()->id ();
+  
+  maint_pending = true;
   u_int32_t frags = dhblock_chash::num_efrags ();
   maint_getrepairs (frags, REPAIR_QUEUE_MAX - repair_qlength (),
-      node->my_pred ()->id (),
+      incID (last_repair),
       wrap (this, &dhblock_chash_srv::maintqueue));
 }
 
 void
 dhblock_chash_srv::maintqueue (const vec<maint_repair_t> &repairs)
 {
+  maint_pending = false;
   for (size_t i = 0; i < repairs.size (); i++) {
     blockID key (repairs[i].id, DHASH_CONTENTHASH);
     ptr<location> w = maintloc2location (
@@ -144,12 +156,16 @@ dhblock_chash_srv::maintqueue (const vec<maint_repair_t> &repairs)
     ptr<repair_job> job (NULL);
     if (repairs[i].responsible) {
       job = New refcounted<rjchash> (key, w, mkref (this));
+      last_repair = repairs[i].id;
     } else {
       // This is a pmaint repair job; just transfer our local object.
       job = New refcounted<rjchashsend> (key, w, mkref (this));
     }
     repair_add (job);
   }
+  // Reset when no new repairs are sent.
+  if (!repairs.size ())
+    last_repair = node->my_pred ()->id ();
 }
 
 //

@@ -31,6 +31,9 @@ class dhblock_replicated_srv : public dhblock_srv
 {
   friend struct rjrep;
 
+  chordID last_repair;
+  bool maint_pending;
+
   u_int64_t stale_repairs;
 
   // async callbacks

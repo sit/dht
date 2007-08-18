@@ -13,6 +13,9 @@ class dhblock_chash_srv : public dhblock_srv {
   friend class rjchash;
   friend class rjchashsend;
 
+  chordID last_repair;
+  bool maint_pending;
+
   u_int64_t cache_hits;
   u_int64_t cache_misses;
 
