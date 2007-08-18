@@ -427,7 +427,7 @@ carbonite::handle_missing (ptr<locationcc> from,
 TAMED void
 carbonite::process_neighbors (
     const vec<ptr<locationcc> > &preds,
-    const vec<ptr<locationcc> > &succs,
+    const vec<ptr<locationcc> > &osuccs,
     cbv cb)
 {
   VARS {
@@ -441,6 +441,13 @@ carbonite::process_neighbors (
   }
   BLOCK {
     // Merkle data structures for remote nodes are private to maintd.
+    // We want to sync with self, but just once.  This is to avoid
+    // having newer information about self than successors, which
+    // can cause spurious repairs of objects written between
+    // sync and getrepairs.
+    vec<ptr<locationcc> > succs = osuccs;
+    if (succs.back ()->id () != host.x)
+      succs.push_back (locationcc::alloc (host));
     for (unsigned int i=0; i < succs.size(); i++) {
       str succtreepath = strbuf () << private_path << "/" 
 	<< host.vnode_num << "-"
@@ -528,14 +535,18 @@ carbonite::getrepairs (chordID start, int thresh, int count,
   itree<chordID, keycounter, &keycounter::id, &keycounter::ik> keymap;
 
   // 0 is self, 1 and on are actual successors.
-  trees.push_back (ltree);
-  lastread.push_back (start);
-  treedone.push_back (false);
+  // Make sure to use private copy of tree to avoid spurious repairs.
+  vec<ptr<locationcc> > nsuccs;
+  nsuccs.push_back (locationcc::alloc (host));
+  nsuccs += succs;
+  // Exclude dup self if self on successor list (small ring case).
+  if (succs.back ()->id () == host.x)
+    nsuccs.pop_back ();
 
-  for (unsigned int i = 0; i < succs.size (); i++) {
+  for (unsigned int i = 0; i < nsuccs.size (); i++) {
     str succtreepath = strbuf () << private_path << "/" 
       << host.vnode_num << "-"
-      << succs[i]->id () << "." << ctype2ext (ctype);
+      << nsuccs[i]->id () << "." << ctype2ext (ctype);
     if (!merkle_tree_bdb::tree_exists (succtreepath.cstr ())) {
       warn << host << ": Not returning repairs due to missing tree "
 	   << succtreepath << "\n";
@@ -599,34 +610,23 @@ carbonite::getrepairs (chordID start, int thresh, int count,
 	// aux is an indicator of mutability
 	if (db->hasaux ()) {
 	  unsigned int src = k->firstpresent ();
-	  assert (src <= succs.size ());
-	  if (src == 0) {
-	    ptr<locationcc> hostcc = locationcc::alloc (host);
-	    hostcc->fill_ipportvn (repair.src_ipv4_addr,
-		repair.src_port_vnnum);
-	  } else {
-	    succs[src-1]->fill_ipportvn (repair.src_ipv4_addr,
-		repair.src_port_vnnum);
-	  }
+	  assert (src < nsuccs.size ());
+	  nsuccs[src]->fill_ipportvn (repair.src_ipv4_addr,
+	      repair.src_port_vnnum);
 	}
 
 	unsigned int dst = k->firstvoid ();
-	if (dst > succs.size ()) {
+	if (dst < nsuccs.size ()) {
+	  // warn << "carbonite " << host << " adds " << k->id
+	  //      << " to successor " << dst << "\n";
+	  nsuccs[dst]->fill_ipportvn (repair.dst_ipv4_addr,
+	      repair.dst_port_vnnum);
+	  repairs.push_back (repair);
+	} else {
 	  // warn << "carbonite " << host << " rejects " << k->id
-	  //      << " no dst " << dst << " >= " << succs.size () << "\n";
+	  //      << " no dst " << dst << " >= " << nsuccs.size () << "\n";
 	  continue;
 	}
-	// warn << "carbonite " << host << " adds " << k->id
-	//      << " to successor " << dst << "\n";
-	if (dst == 0) {
-	  ptr<locationcc> hostcc = locationcc::alloc (host);
-	  hostcc->fill_ipportvn (repair.dst_ipv4_addr,
-	      repair.dst_port_vnnum);
-	} else {
-	  succs[dst-1]->fill_ipportvn (repair.dst_ipv4_addr,
-	      repair.dst_port_vnnum);
-	}
-	repairs.push_back (repair);
       } else {
 	// warn << "carbonite " << host << " rejects " << k->id
 	//      << " enough copies " << k->count << "\n";
