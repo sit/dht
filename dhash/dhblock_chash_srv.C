@@ -226,6 +226,9 @@ cache_store_cb (adb_status stat)
 void
 rjchash::send_frag (str block, u_int32_t expiration)
 {
+  if (expiration < static_cast<u_int32_t> (timenow))
+    bsrv->expired_repairs++;
+
   u_long m = Ida::optimal_dfrag (block.len (), dhblock::dhash_mtu ());
   if (m > dhblock_chash::num_dfrags ())
     m = dhblock_chash::num_dfrags ();

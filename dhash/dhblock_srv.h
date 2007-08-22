@@ -73,6 +73,9 @@ class dhblock_srv : virtual public refcount {
   u_int64_t repair_sent_bytes;
   u_int64_t repairs_completed;
 
+  // Repairs that, upon reading the metadata, were for expired objects.
+  u_int64_t expired_repairs;
+
   bhash<str> repairs_queued;
   bhash<str> repairs_inprogress;
   // RepInv:

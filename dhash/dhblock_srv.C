@@ -31,7 +31,8 @@ dhblock_srv::dhblock_srv (ptr<vnode> node,
   cli (cli),
   repair_read_bytes (0),
   repair_sent_bytes (0),
-  repairs_completed (0)
+  repairs_completed (0),
+  expired_repairs (0)
 {
   warn << "opened " << dbsock << " with space " << dbname 
        << (hasaux ? " (hasaux)\n" : "\n");
@@ -215,6 +216,7 @@ dhblock_srv::base_stats (vec<dstat> &s)
   s.push_back (dstat (p << ".repair_read_bytes", repair_read_bytes));
   s.push_back (dstat (p << ".repair_sent_bytes", repair_sent_bytes));
   s.push_back (dstat (p << ".repairs_completed", repairs_completed));
+  s.push_back (dstat (p << ".expired_repairs", expired_repairs));
   s.push_back (dstat (p << ".repairs_queued", repairs_queued.size ()));
   s.push_back (dstat (p << ".repairs_inprogress", repairs_inprogress.size ()));
 }

@@ -235,6 +235,9 @@ rjrep::repair_retrieve_cb (dhash_stat err, ptr<dhash_block> b, route r)
     info << "rjrep (" << key<< "): retrieve during repair failed: " << err << "\n";
     return;
   }
+  if (b->expiration < static_cast<u_int32_t> (timenow))
+    bsrv->expired_repairs++;
+
   bsrv->repair_read_bytes += b->data.len ();
   bsrv->store (key.ID, b->data, b->expiration, wrap (mkref (this), &rjrep::storecb));
 }
