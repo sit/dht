@@ -286,12 +286,26 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
     {
       lsdctl_getdhashstats_arg *arg = sbp->Xtmpl getarg<lsdctl_getdhashstats_arg> ();
       ptr<lsdctl_dhashstats> ds = New refcounted<lsdctl_dhashstats> ();
-      if (arg->vnode < vnodes) {
-	vec<dstat> stats = dh[arg->vnode]->stats ();
-	ds->stats.setsize (stats.size ());
+      for (int v = 0; v < vnodes; v++) {
+	// Treat < 0 as a wildcard; otherwise only do particular vnode.
+	if (arg->vnode >= 0 && arg->vnode != v)
+	  continue;
+	vec<dstat> stats = dh[v]->stats ();
 	for (unsigned int i = 0; i < stats.size (); i++) {
-	  ds->stats[i].desc = stats[i].desc;
-	  ds->stats[i].value = stats[i].value;
+	  bool found = false;
+	  for (unsigned int j = 0; j < ds->stats.size (); j++) {
+	    if (ds->stats[j].desc == stats[i].desc) {
+	      ds->stats[j].value += stats[i].value;
+	      found = true;
+	      break;
+	    }
+	  }
+	  if (!found) {
+	    lsdctl_stat stat;
+	    stat.desc = stats[i].desc;
+	    stat.value = stats[i].value;
+	    ds->stats.push_back (stat);
+	  }
 	}
       }
       sbp->reply (ds);

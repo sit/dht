@@ -326,7 +326,7 @@ void
 lsdctl_getdhashstats (int argc, char *argv[])
 {
   ptr<lsdctl_getdhashstats_arg> a = New refcounted<lsdctl_getdhashstats_arg> ();
-  a->vnode = 0;
+  a->vnode = -1;
 
   if (optind != argc)
     if (!convertint (argv[optind], &a->vnode))
