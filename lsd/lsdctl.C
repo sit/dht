@@ -317,8 +317,6 @@ lsdctl_getdhashstats_cb (ptr<lsdctl_getdhashstats_arg> a,
   out << "Statistics:\n";
   for (size_t i = 0; i < ds->stats.size (); i++)
     out << "  " << ds->stats[i].desc << " " << ds->stats[i].value << "\n";
-  for (size_t i = 0; i < ds->blocks.size (); i++) 
-    out << ds->blocks[i].id << "\t" << ds->blocks[i].missing.size () << "\n";
   make_sync (1);
   out.tosuio ()->output (1);
   exit (0);

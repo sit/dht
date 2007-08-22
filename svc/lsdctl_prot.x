@@ -44,18 +44,12 @@ struct lsdctl_stat {
   u_int64_t value;
 };
 
-struct lsdctl_blockstatus {
-  chordID id;
-  chord_node_wire missing<>;
-};
-
 struct lsdctl_getdhashstats_arg  {
   int vnode;
 };
 
 struct lsdctl_dhashstats {
   lsdctl_stat stats<>;
-  lsdctl_blockstatus blocks<>;
 };
 
 struct lsdctl_lsdparameters {
