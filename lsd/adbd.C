@@ -161,10 +161,16 @@ class dbns {
   DB *metadatadb;
   DB *byexpiredb;
 
+  u_int32_t last_mtree_time;
   merkle_tree_bdb *mtree;
 
   adb_master_metadata_t mmd;
 
+  timecb_t *mtree_tcb;
+  void mtree_cleaner ();
+
+  int expire_walk (u_int32_t limit, u_int32_t start, u_int32_t end,
+    vec<DBT> &victims, vec<adb_metadata_t> &victim_metadata);
   int update_metadata (int32_t sz, u_int32_t expiration, DB_TXN *t = NULL);
 
 public:
@@ -194,6 +200,7 @@ public:
     if (q < mmd.size) return 100;
     return u_int64_t (100) * mmd.size / q;
   }
+  int expire_mtree ();
   int expire (u_int32_t limit = 0, u_int32_t t = 0);
 
   str time2fn (u_int32_t exptime);
@@ -209,7 +216,9 @@ dbns::dbns (const str &dbpath, const str &name, bool aux, str logpath) :
   dbe (NULL),
   metadatadb (NULL),
   byexpiredb (NULL),
-  mtree (NULL)
+  last_mtree_time (0),
+  mtree (NULL),
+  mtree_tcb (NULL)
 {
   bzero (&mmd, sizeof (mmd));
 #define DBNS_ERRCHECK(desc) \
@@ -240,12 +249,18 @@ dbns::dbns (const str &dbpath, const str &name, bool aux, str logpath) :
   r = metadatadb->associate (metadatadb, NULL, byexpiredb, getexpire, DB_AUTO_COMMIT);
   DBNS_ERRCHECK ("metadatdb->associate (byexpiredb)");
 
+  mtree_cleaner ();
+
   warn << "dbns::dbns (" << dbpath << ", " << name << ", " << aux << ")\n";
 }
 // }}}
 // {{{ dbns::~dbns
 dbns::~dbns ()
 {
+  if (mtree_tcb) {
+    timecb_remove (mtree_tcb);
+    mtree_tcb = NULL;
+  }
   sync (/* force = */ true);
 
 #define DBNS_DBCLOSE(x)			\
@@ -593,26 +608,19 @@ getkeys_nextkey:
   return r;
 }
 // }}}
-// {{{ dbns::expire (u_int32_t, u_int32_t)
+// {{{ dbns::expire_walk
+// Grab limit keys from time start to end into victims/victim_metadata.
+// Caller is responsible for freeing the data allocated into
+// the victims DBTs.
 int
-dbns::expire (u_int32_t limit, u_int32_t deadline)
+dbns::expire_walk (u_int32_t limit, u_int32_t start, u_int32_t end,
+    vec<DBT> &victims, vec<adb_metadata_t> &victim_metadata)
 {
-  if (deadline == 0)
-    deadline = time (NULL);
-
-  u_int64_t victim_size = 0;
-  u_int32_t last_expire = 0;
-  vec<DBT> victims;
-  vec<adb_metadata_t> victim_metadata;
-
-  // XXX Would it be okay to modify the database (and its
-  //     sibling databases) while the cursor is open?
-
   // Open a cursor in secondary database.
   // Make sure it points to the first thing after 0.
   // Keep reading and deleting until the thing's key is > t.
   //   Accumulate entries into a vec, including the object size.
-  u_int32_t begin_time_data = htonl (1);
+  u_int32_t begin_time_data = htonl (start);
   DBT begin_time; bzero (&begin_time, sizeof (begin_time));
   begin_time.data = &begin_time_data;
   begin_time.size = sizeof (begin_time_data);
@@ -622,7 +630,7 @@ dbns::expire (u_int32_t limit, u_int32_t deadline)
   DBC *cursor = NULL;
   int r = byexpiredb->cursor (byexpiredb, NULL, &cursor, 0);
   if (r) {
-    warner ("dbns::expire", "byexpiredb->cursor", r);
+    warner ("dbns::expire_walk", "byexpiredb->cursor", r);
     if (cursor)
       cursor->c_close (cursor);
     return r;
@@ -640,7 +648,7 @@ dbns::expire (u_int32_t limit, u_int32_t deadline)
     } else {
       adb_metadata_t md;
       buf2xdr (md, content.data, content.size);
-      if (md.expiration < deadline) {
+      if (md.expiration < end) {
 	victims.push_back (key);
 	victim_metadata.push_back (md);
       } else {
@@ -653,8 +661,76 @@ dbns::expire (u_int32_t limit, u_int32_t deadline)
     r = cursor->c_pget (cursor, &begin_time, &key, &content, DB_NEXT);
   }
   if (r && r != DB_NOTFOUND)
-    warner ("dbns::expire", "byexpiredb cursor->c_pget", r);
+    warner ("dbns::expire_walk", "byexpiredb cursor->c_pget", r);
   (void) cursor->c_close (cursor);
+  return r;
+}
+// }}}
+// {{{ dbns::mtree_cleaner
+void
+dbns::mtree_cleaner ()
+{
+  expire_mtree ();
+  mtree_tcb = delaycb (60, wrap (this, &dbns::mtree_cleaner));
+}
+// }}}
+// {{{ dbns::expire_mtree
+// Clean out expired keys from the local Merkle tree
+int
+dbns::expire_mtree ()
+{
+  vec<DBT> victims;
+  vec<adb_metadata_t> victim_metadata;
+  u_int32_t now = time (NULL);
+
+  // Get all objects from the last time we did this until present
+  int r = expire_walk (0, last_mtree_time, now, victims, victim_metadata);
+
+  // start a transaction
+  DB_TXN *parent = NULL;
+  dbfe_txn_begin (dbe, &parent);
+  // Iterate over objects to be expired:
+  while (victims.size ()) {
+    DB_TXN *t = NULL;
+    dbe->txn_begin (dbe, parent, &t, 0);
+    DBT key = victims.pop_back ();
+    adb_metadata_t md = victim_metadata.pop_back ();
+    chordID id = dbt_to_id (key);
+    if (hasaux ()) {
+      r = mtree->remove (id, md.auxdata, t);
+    } else {
+      r = mtree->remove (id, t);
+    }
+    free (key.data);
+    if (r && r != DB_NOTFOUND) {
+      warner ("dbns::expire_mtree", "mtree remove", r);
+      dbfe_txn_abort (dbe, t);
+    } else {
+      warnx << name << ": Expired mtree " << id << "\n";
+      dbfe_txn_commit (dbe, t);
+    }
+  }
+  dbfe_txn_commit (dbe, parent);
+  last_mtree_time = now;
+
+  return r;
+}
+// }}}
+// {{{ dbns::expire (u_int32_t, u_int32_t)
+int
+dbns::expire (u_int32_t limit, u_int32_t deadline)
+{
+  if (deadline == 0)
+    deadline = time (NULL);
+
+  vec<DBT> victims;
+  vec<adb_metadata_t> victim_metadata;
+  int r = expire_walk (limit, 1, deadline, victims, victim_metadata);
+
+  u_int64_t victim_size = 0;
+  u_int32_t last_expire = 0;
+  // XXX Would it be okay to modify the database (and its
+  //     sibling databases) while the cursor is open?
 
   // start a transaction
   DB_TXN *parent = NULL;
@@ -675,7 +751,7 @@ dbns::expire (u_int32_t limit, u_int32_t deadline)
       } else {
 	r = mtree->remove (id, t);
       }
-      if (r) break;
+      // Ignore error on mtree removals
       err = "metadatadb->del";
       r = metadatadb->del (metadatadb, t, &key, 0);
       if (r) break;
