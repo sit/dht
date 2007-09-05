@@ -2,7 +2,7 @@
 #include "libadb.h"
 
 void res (int, adb_status);
-void res2 (int, adb_status, chordID, str);
+void res2 (int, adb_status, adb_fetchdata_t);
 void res3 (adb_status, str, bool);
 
 adb *db;
@@ -38,9 +38,9 @@ res (int i, adb_status error)
 }
 
 void
-res2 (int i, adb_status stat, chordID key, str data)
+res2 (int i, adb_status stat, adb_fetchdata_t d)
 {
-  warn << "fetch: " << i << " " << key << " " << data << "\n";
+  warn << "fetch: " << i << " " << d.id << " " << d.data << "\n";
   if (i % 1000 < 100) 
     db->fetch (bigint(1 + i), wrap (res2, 1 + i));
 }
