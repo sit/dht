@@ -168,35 +168,36 @@ rpc_manager::rpc_manager (ptr<u_int32_t> _nrcv)
 }
 
 void
-rpc_manager::stats () 
+rpc_manager::stats (const strbuf &ob) 
 {
   char buf[1024];
 
-  warnx << "RPC MANAGER STATS:\n";
-  warnx << "total # of RPCs: good " << nrpc
-	<< " failed " << nrpcfailed << "\n";
-  warnx << "  Per link avg. RPC latencies\n";
+  ob << "RPC MANAGER STATS:\n";
+  ob << "total # of RPCs: good " << nrpc
+     << " failed " << nrpcfailed << "\n";
+
+  ob << "  Per link avg. RPC latencies\n";
   for (hostinfo *h = hosts.first (); h ; h = hosts.next (h)) {
-    warnx << "    host " << h->host
-	  << " # RPCs: " << h->nrpc
-	  << " (" << h->orpc << " outstanding)\n";
+    ob << "    host " << h->host
+       << " # RPCs: " << h->nrpc
+       << " (" << h->orpc << " outstanding)\n";
     if (h->connect_time && h->xp) {
       u_int64_t bytes = h->xp->get_raw_bytes_sent ();
       u_int64_t now   = getusec ();
-      warnx << "       Average b/w: "
-	    << h->last_bw
-	    <<  " "
-	    << bytes / ((now - h->connect_time)/1000000)
-	    << "\n";
+      ob << "       Average b/w: "
+	 << h->last_bw
+	 <<  " "
+	 << bytes / ((now - h->connect_time)/1000000)
+	 << "\n";
     }
 
     sprintf (buf,
 	     "       Average latency: %f\n"
 	     "       Average variance: %f\n",
 	     h->a_lat, h->a_var);
-    warnx << buf;
+    ob << buf;
     sprintf (buf, "       Max latency: %qd\n", h->maxdelay);
-    warnx << buf;
+    ob << buf;
   }
 }
 

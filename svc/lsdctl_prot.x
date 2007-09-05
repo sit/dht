@@ -61,6 +61,10 @@ struct lsdctl_lsdparameters {
   net_address addr;
 };
 
+struct lsdctl_rpcmstats {
+  string stats<>;
+};
+
 program LSDCTL_PROG {
 	version LSDCTL_VERSION {
 		void
@@ -103,5 +107,9 @@ program LSDCTL_PROG {
 		lsdctl_lsdparameters 
 		LSDCTL_GETLSDPARAMETERS (void) = 9;
 		/** Return useful parameters about this lsd */
+
+		lsdctl_rpcmstats
+		LSDCTL_GETRPCMSTATS (void) = 10;
+		/** Return exactly rpcm's stats string. */
 	} = 1;
 } = 344500;

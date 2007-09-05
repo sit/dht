@@ -314,6 +314,15 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
   case LSDCTL_GETLSDPARAMETERS:
     sbp->reply (&parameters);
     break;
+  case LSDCTL_GETRPCMSTATS:
+    {
+      lsdctl_rpcmstats res;
+      strbuf ob;
+      chordnode->rpcmstats (ob);
+      res.stats = ob;
+      sbp->replyref (res);
+    }
+    break;
   default:
     sbp->reject (PROC_UNAVAIL);
     break;

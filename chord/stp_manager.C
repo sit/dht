@@ -370,44 +370,44 @@ stp_manager::setup_rexmit_timer (ptr<location> from, ptr<location> l,
   }
 }
 
-void stp_manager::stats ()
+void stp_manager::stats (const strbuf &ob)
 {
   char buf[1024];
 
-  stream_rpcm->stats ();
+  stream_rpcm->stats (ob);
 
-  rpc_manager::stats ();
+  rpc_manager::stats (ob);
   
   sprintf(buf, "  Average latency/variance: %f/%f\n", a_lat, a_var);
-  warnx << buf;
+  ob << buf;
   sprintf(buf, "  Average cwind: %f\n", cwind_cum/num_cwind_samples);
-  warnx << buf;
+  ob << buf;
 
   if (shortstats) return;
-  warnx << "Timer history:\n";
+  ob << "Timer history:\n";
   for (unsigned int i = 0; i < timers.size (); i++) {
     sprintf (buf, "%f", timers[i]);
-    warnx << "t: " << buf << "\n";
+    ob << "t: " << buf << "\n";
   }
 
-  warnx << "Latencies (in q):\n";
+  ob << "Latencies (in q):\n";
   for (unsigned int i = 0; i < lat_inq.size (); i++) {
-    warnx << "lat(q): " << lat_inq[i] << "\n";
+    ob << "lat(q): " << lat_inq[i] << "\n";
   }
 
-  warnx << "cwind over time:\n";
+  ob << "cwind over time:\n";
   for (unsigned int i = 0; i < cwind_cwind.size (); i++) {
     sprintf (buf, "%f %f", cwind_time[i], cwind_cwind[i]);
-    warnx << "cw: " << buf << "\n";
+    ob << "cw: " << buf << "\n";
   }
 
-  warnx << "queue length over time:\n";
+  ob << "queue length over time:\n";
   for (unsigned int i = 0; i < qued_hist.size (); i++) {
     sprintf (buf, "%f %ld", cwind_time[i], qued_hist[i]);
-    warnx << "qued: " << buf << "\n";
+    ob << "qued: " << buf << "\n";
   }
 
-  warnx << "current RPCs queued for transmission pending window: " << num_qed << "\n";
+  ob << "current RPCs queued for transmission pending window: " << num_qed << "\n";
   RPC_delay_args *args = Q.first;
   //  const rpcgen_table *rtp;
   u_int64_t now = getusec ();
@@ -418,7 +418,7 @@ void stp_manager::stats ()
     int real_procno = ((dorpc_arg *)args_as_pointer)->procno;
     long diff = now - args->now;
 
-    warn << "   " << real_prog << "." << real_procno << " for " << args->l->id() << " queued for " << diff << "\n";
+    ob << "   " << real_prog << "." << real_procno << " for " << args->l->id() << " queued for " << diff << "\n";
 
     /*    rtp = &(args->prog.tbl[args->procno]);
     if (rtp) 
@@ -429,16 +429,16 @@ void stp_manager::stats ()
     args = Q.next (args);
   }
 
-  warnx << "per program bytes\n";
+  ob << "per program bytes\n";
   rpcstats *s = rpc_stats_tab.first ();
   while (s) {
-    warnx << "  " << s->key << "\n";
-    warnx << "    calls (bytes/num):   " << s->call_bytes
-	  << "/" << s->ncall << "\n";
-    warnx << "    rexmits (bytes/num): " << s->rexmit_bytes
-	  << "/" << s->nrexmit << "\n";
-    warnx << "    replies (bytes/num): " << s->reply_bytes
-	  << "/" << s->nreply << "\n";
+    ob << "  " << s->key << "\n";
+    ob << "    calls (bytes/num):   " << s->call_bytes
+       << "/" << s->ncall << "\n";
+    ob << "    rexmits (bytes/num): " << s->rexmit_bytes
+       << "/" << s->nrexmit << "\n";
+    ob << "    replies (bytes/num): " << s->reply_bytes
+       << "/" << s->nreply << "\n";
     s = rpc_stats_tab.next (s);
   }
 }

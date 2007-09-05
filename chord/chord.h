@@ -225,6 +225,7 @@ class chord : public virtual refcount {
 
   void stats (void);
   void print (strbuf &outbuf);
+  void rpcmstats (const strbuf &ob);
   void stop (void);
   void stabilize (void);
 

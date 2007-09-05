@@ -153,7 +153,7 @@ class rpc_manager {
   void count_rpc (ptr<location> l, hostinfo *h = NULL);
 
  public:
-  virtual void stats ();
+  virtual void stats (const strbuf &o);
   virtual long doRPC (ptr<location> from, ptr<location> l, 
 		      const rpc_program &prog, int procno,
 		      ptr<void> in, void *out, aclnt_cb cb, 
@@ -254,7 +254,7 @@ class stp_manager : public rpc_manager {
   void timeout_cb (rpc_state *C);
   bool room_in_window ();
  public:
-  void stats ();
+  void stats (const strbuf &o);
 
   long doRPC (ptr<location> from, ptr<location> l, 
 	      const rpc_program &prog, int procno,

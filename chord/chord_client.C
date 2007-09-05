@@ -275,7 +275,7 @@ chord::stats ()
   warnx << "# vnodes: " << vlist.size () << "\n";
   for (size_t i = 0; i < vlist.size (); i++) 
     vlist[i]->stats ();
-  rpcm->stats ();
+  rpcm->stats (warnx);
 }
 
 void
@@ -283,6 +283,12 @@ chord::print (strbuf &outbuf)
 {
   for (size_t i = 0; i < vlist.size (); i++) 
     vlist[i]->print (outbuf);
+}
+
+void
+chord::rpcmstats (const strbuf &ob)
+{
+  rpcm->stats (ob);
 }
 
 void
