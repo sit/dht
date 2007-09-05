@@ -107,10 +107,18 @@ struct hostinfo {
   vec<RPC_delay_args *> connect_waiters;
   unsigned orpc; // tcp debugging (benjie)
 
+  u_int64_t connect_time;
+  u_int64_t last_time;
+  u_int64_t last_sent;
+  u_int64_t last_bw;
+  timecb_t *bwcb;
+  void update_bw ();
+
   ihash_entry<hostinfo> hlink_;
   tailq_entry<hostinfo> lrulink_;
 
   hostinfo (const net_address &r);
+  ~hostinfo ();
 };
 
 // Default implementation, udp aclnt

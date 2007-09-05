@@ -120,8 +120,31 @@ rpc_state::rpc_state (ptr<location> from, ref<location> l, aclnt_cb c,
 // -----------------------------------------------------
 hostinfo::hostinfo (const net_address &r)
   : host (r.hostname), nrpc (0), maxdelay (0),
-    a_lat (0.0), a_var (0.0), fd (-2), orpc (0)
+    a_lat (0.0), a_var (0.0), fd (-2), orpc (0),
+    connect_time (0), last_time (0), last_sent (0), last_bw (0), bwcb (NULL)
 {
+  update_bw ();
+}
+
+hostinfo::~hostinfo ()
+{
+  if (bwcb) {
+    timecb_remove (bwcb);
+    bwcb = NULL;
+  }
+}
+
+void
+hostinfo::update_bw ()
+{
+  if (connect_time && xp) {
+    u_int64_t now  = getusec ();
+    u_int64_t sent = xp->get_raw_bytes_sent ();
+    last_bw   = (sent - last_sent) / ((now - last_time)/1000000);
+    last_sent = sent;
+    last_time = now;
+  }
+  bwcb = delaycb (10, wrap (this, &hostinfo::update_bw));
 }
 
 // -----------------------------------------------------
@@ -157,6 +180,15 @@ rpc_manager::stats ()
     warnx << "    host " << h->host
 	  << " # RPCs: " << h->nrpc
 	  << " (" << h->orpc << " outstanding)\n";
+    if (h->connect_time && h->xp) {
+      u_int64_t bytes = h->xp->get_raw_bytes_sent ();
+      u_int64_t now   = getusec ();
+      warnx << "       Average b/w: "
+	    << h->last_bw
+	    <<  " "
+	    << bytes / ((now - h->connect_time)/1000000)
+	    << "\n";
+    }
 
     sprintf (buf,
 	     "       Average latency: %f\n"
@@ -373,6 +405,7 @@ tcp_manager::remove_host (hostinfo *h)
   
   h->fd = -2;
   h->xp = NULL;
+  h->connect_time = 0;
   while (h->connect_waiters.size ()) {
     RPC_delay_args *a =  h->connect_waiters.pop_front ();
     a->cb (RPC_CANTSEND);
@@ -430,6 +463,7 @@ tcp_manager::doRPC_tcp_connect_cb (RPC_delay_args *args, int fd)
     setsockopt (fd, SOL_SOCKET, SO_LINGER, (char *) &li, sizeof (li));
     tcp_nodelay (fd);
     make_async(fd);
+    hi->connect_time = getusec ();
     hi->fd = fd;
     hi->xp = axprt_stream::alloc (fd, 260*1024);
     assert (hi->xp);
