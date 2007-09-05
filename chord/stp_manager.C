@@ -217,13 +217,9 @@ stp_manager::doRPCcb (ref<aclnt> c, rpc_state *C, clnt_stat err)
 	  << "\n";
   } else {
     assert (res->status == DORPC_OK);
-    u_int64_t sent_time = res->resok->send_time_echo;
-    u_int64_t now = getusec ();
-    // prevent overflow, caused by time reversal
-    if (now >= sent_time) {
-      u_int64_t lat = now - sent_time;
-      update_latency (C->from, C->loc, lat);
-    } 
+
+    count_rpc (C->loc);
+    update_latency (C->from, C->loc, res->resok->send_time_echo);
   }
   
   pending.remove (C);

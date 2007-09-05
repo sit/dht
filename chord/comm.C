@@ -247,27 +247,38 @@ rpc_manager::doRPCcb (aclnt_cb realcb, ptr<location> l, u_int64_t sent,
     nrpcfailed++;
     l->set_alive (false);
   } else {
-    nrpc++;
+    count_rpc (l);
     // Only update latency on successful RPC.
     // This probably includes time needed for rexmits.
-    u_int64_t now = getusec ();
-    // prevent overflow, caused by time reversal
-    if (now >= sent) {
-      u_int64_t lat = now - sent;
-      update_latency (NULL, l, lat);
-    } else {
-      warn << "*** Ignoring timewarp: sent " << sent
-	   << " > now " << now << "\n";
-    }
+    update_latency (NULL, l, sent);
   }
   
   (realcb) (err);
 }
 
 void
-rpc_manager::update_latency (ptr<location> from, ptr<location> l, u_int64_t lat)
+rpc_manager::count_rpc (ptr<location> l, hostinfo *h)
 {
   nrpc++;
+  l->inc_nrpc ();
+  if (!h)
+    h = lookup_host (l->address ());
+  if (h)
+    h->nrpc++;
+}
+
+void
+rpc_manager::update_latency (ptr<location> from, ptr<location> l, u_int64_t senttime)
+{
+  u_int64_t now = getusec ();
+  // prevent overflow, caused by time reversal
+  if (now < senttime) {
+    warn << "*** Ignoring timewarp: sent " << senttime
+	 << " > now " << now << "\n";
+    return;
+  }
+
+  u_int64_t lat = now - senttime;
 
   //update global latency
   float err = (lat - a_lat);
@@ -278,7 +289,6 @@ rpc_manager::update_latency (ptr<location> from, ptr<location> l, u_int64_t lat)
   //update per-host latency
   hostinfo *h = lookup_host (l->address ());
   if (h) {
-    h->nrpc++;
     if (h->a_lat == 0 && h->a_var == 0)
       h->a_lat = lat;
     else {
@@ -290,7 +300,6 @@ rpc_manager::update_latency (ptr<location> from, ptr<location> l, u_int64_t lat)
     if (lat > h->maxdelay) h->maxdelay = lat;
 
     // Copy info over to just this location
-    l->inc_nrpc ();
     l->set_distance (h->a_lat);
     l->set_variance (h->a_var);
   }
@@ -438,9 +447,8 @@ tcp_manager::doRPC_tcp_cleanup (ptr<aclnt> c, RPC_delay_args *args,
   if (err) { 
     nrpcfailed++;
   } else {
-    nrpc++;
-    if (hi) 
-      hi->nrpc++;
+    count_rpc (args->l, hi);
+    update_latency (args->from, args->l, args->now);
   }
   if (hi) hi->orpc--;
   (*args->cb)(err);

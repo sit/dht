@@ -141,7 +141,8 @@ class rpc_manager {
 
   hostinfo *lookup_host (const net_address &r);
   virtual void remove_host (hostinfo *h);
-  void update_latency (ptr<location> from, ptr<location> l, u_int64_t lat);
+  void update_latency (ptr<location> from, ptr<location> l, u_int64_t senttime);
+  void count_rpc (ptr<location> l, hostinfo *h = NULL);
 
  public:
   virtual void stats ();
