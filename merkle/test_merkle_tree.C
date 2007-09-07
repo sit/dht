@@ -346,7 +346,7 @@ main (int argc, char *argv[])
       test ("In-memory", t, sz[i], true);
       delete t; t = NULL;
     }
-
+#if 0
     for (uint i = 0; i < sizeof (sz) / sizeof (sz[0]); i++) {
       merkle_tree *t = 
 	New merkle_tree_disk (indexpath, internalpath, leafpath, true);
@@ -354,11 +354,14 @@ main (int argc, char *argv[])
       delete t; t = NULL;
       cleanup ();
     }
+#endif /* 0 */
   }
 
   test_merkle_disk_specific ("bdb", wrap (&allocate_bdb));
   cleanup ();
 
+#if 0
   test_merkle_disk_specific ("disk", wrap (&allocate_disk));
   cleanup ();
+#endif /* 0 */
 }
