@@ -681,7 +681,8 @@ dbns::expire_mtree ()
 {
   vec<DBT> victims;
   vec<adb_metadata_t> victim_metadata;
-  u_int32_t now = time (NULL);
+  // Don't bother repair objects that will expire in the next 15 minutes anyway.
+  u_int32_t now = time (NULL) + 15 * 60;
 
   // Get all objects from the last time we did this until present
   int r = expire_walk (0, last_mtree_time, now, victims, victim_metadata);
