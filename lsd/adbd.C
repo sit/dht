@@ -689,6 +689,7 @@ dbns::expire_mtree ()
   // start a transaction
   DB_TXN *parent = NULL;
   dbfe_txn_begin (dbe, &parent);
+  u_int32_t txnsize = 0;
   // Iterate over objects to be expired:
   while (victims.size ()) {
     DB_TXN *t = NULL;
@@ -708,6 +709,13 @@ dbns::expire_mtree ()
     } else {
       warnx << name << ": Expired mtree " << id << "\n";
       dbfe_txn_commit (dbe, t);
+    }
+    // Don't tie up too many locks?
+    txnsize++;
+    if (txnsize > 1000) {
+      txnsize = 0;
+      dbfe_txn_commit (dbe, parent);
+      dbfe_txn_begin (dbe, &parent);
     }
   }
   dbfe_txn_commit (dbe, parent);
@@ -735,6 +743,7 @@ dbns::expire (u_int32_t limit, u_int32_t deadline)
   // start a transaction
   DB_TXN *parent = NULL;
   dbfe_txn_begin (dbe, &parent);
+  u_int32_t txnsize = 0;
   // Iterate over objects to be expired:
   while (victims.size ()) {
     DB_TXN *t = NULL;
@@ -765,6 +774,14 @@ dbns::expire (u_int32_t limit, u_int32_t deadline)
       if (md.expiration > last_expire)
 	last_expire = md.expiration;
       dbfe_txn_commit (dbe, t);
+    }
+
+    txnsize++;
+    if (txnsize > 1000) {
+      txnsize = 0;
+      r = update_metadata (-victim_size, last_expire, parent);
+      dbfe_txn_commit (dbe, parent);
+      dbfe_txn_begin (dbe, &parent);
     }
   }
   // Update the metadata with size/time difference
