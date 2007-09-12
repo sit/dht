@@ -174,7 +174,7 @@ class dbns {
 
   int expire_walk (u_int32_t limit, u_int32_t start, u_int32_t end,
     vec<DBT> &victims, vec<adb_metadata_t> &victim_metadata);
-  int update_metadata (int32_t sz, u_int32_t expiration, DB_TXN *t = NULL);
+  int update_metadata (bool add, u_int64_t sz, u_int32_t expiration, DB_TXN *t = NULL);
 
 public:
   dbns (const str &dbpath, const str &name, bool aux, str logpath = NULL);
@@ -308,9 +308,9 @@ dbns::sync (bool force)
 #endif
 }
 // }}}
-// {{{ dbns::update_metadata (int32_t, u_int32_t, DB_TXN *)
+// {{{ dbns::update_metadata (bool, u_int64_t, u_int32_t, DB_TXN *)
 int
-dbns::update_metadata (int32_t sz, u_int32_t expiration, DB_TXN *t)
+dbns::update_metadata (bool add, u_int64_t sz, u_int32_t expiration, DB_TXN *t)
 {
   DBT md; bzero (&md, sizeof (md));
   int r = metadatadb->get (metadatadb, t, &master_metadata, &md, DB_RMW);
@@ -326,12 +326,15 @@ dbns::update_metadata (int32_t sz, u_int32_t expiration, DB_TXN *t)
       return r;
       break;
   }
-  if (sz < 0 && mmd.size < u_int64_t (-sz)) {
+  if (!add && mmd.size < sz) {
     fatal << "dbns::update_metadata: small size: "
           << mmd.size << " < " << sz << "\n";
   }
-  mmd.size += sz;
-  if (quota && mmd.size > quota)
+  if (add)
+    mmd.size += sz;
+  else
+    mmd.size -= sz;
+  if (add && quota && mmd.size > quota)
     return ENOSPC;
   if (mmd.expiration == 0 && expiration > 0) {
     if (sz > 0 && expiration < mmd.expiration)
@@ -383,7 +386,7 @@ dbns::insert (const chordID &key, DBT &data, u_int32_t auxdata, u_int32_t exptim
     return r;
   }
 
-  r = update_metadata (data.size, exptime, t);
+  r = update_metadata (true, data.size, exptime, t);
   if (r) {
     dbfe_txn_abort (dbe, t);
     // Even if r == ENOSPC, we can't afford to blow a lot of time
@@ -525,7 +528,7 @@ dbns::del (const chordID &key, u_int32_t auxdata)
 
   // Update min expiration lazily; we can't know if this is the
   // last object with a particular expiration time.
-  r = update_metadata (-metadata.size, 0, t);
+  r = update_metadata (false, metadata.size, 0, t);
   if (r) {
     dbfe_txn_abort (dbe, t);
     return r;
@@ -794,13 +797,14 @@ dbns::expire (u_int32_t limit, u_int32_t deadline)
     txnsize++;
     if (txnsize > 1000) {
       txnsize = 0;
-      r = update_metadata (-victim_size, last_expire, parent);
+      r = update_metadata (false, victim_size, last_expire, parent);
+      victim_size = 0;
       dbfe_txn_commit (dbe, parent);
       dbfe_txn_begin (dbe, &parent);
     }
   }
   // Update the metadata with size/time difference
-  r = update_metadata (-victim_size, last_expire, parent);
+  r = update_metadata (false, victim_size, last_expire, parent);
   dbfe_txn_commit (dbe, parent);
 
   // Metadata is gone, now remove data.
