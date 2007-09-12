@@ -310,12 +310,20 @@ merkle_tree_bdb::init_db (bool ro)
     r = db_create (&nodedb, dbe, 0);
     if (r) break;
 
+    err = "nodedb->reverse split";
+    r = nodedb->set_flags (nodedb, DB_REVSPLITOFF);
+    if (r) break;
+
     err = "nodedb->open";
     r = nodedb->open (nodedb, t, "node.db", NULL, DB_BTREE, flags, 0);
     if (r) break;
 
     err = "keydb->create";
     r = db_create (&keydb, dbe, 0);
+    if (r) break;
+
+    err = "keydb->reverse split";
+    r = keydb->set_flags (keydb, DB_REVSPLITOFF);
     if (r) break;
 
     err = "keydb->open";
