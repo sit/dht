@@ -30,6 +30,9 @@ static u_int32_t expire_batch_size (24);
 // Threshold percentage for expiring on insert
 static u_int32_t expire_threshold (90);
 
+// If an object will expire in this many seconds, ignore it.
+static u_int32_t expire_buffer (15 * 60);
+
 // This is the key used to access the master metadata record.
 // The master metadata record contains:
 //   Total size of objects put into a dbns,
@@ -373,6 +376,13 @@ dbns::insert (const chordID &key, DBT &data, u_int32_t auxdata, u_int32_t exptim
   r = dbfe_txn_begin (dbe, &t);
   assert (r == 0);
 
+  adb_metadata_t oldmetadata;
+  r = get_metadata (key, oldmetadata, t);
+  if (r != DB_NOTFOUND) {
+    dbfe_txn_abort (dbe, t);
+    return r;
+  }
+
   r = update_metadata (data.size, exptime, t);
   if (r) {
     dbfe_txn_abort (dbe, t);
@@ -386,23 +396,26 @@ dbns::insert (const chordID &key, DBT &data, u_int32_t auxdata, u_int32_t exptim
   id_to_dbt (key, &skey);
 
   char *err = "";
-  if (hasaux ()) {
-    err = "mtree->insert aux";
-    r = mtree->insert (key, auxdata, t);
-  } else {
-    err = "mtree->insert";
-    r = mtree->insert (key, t);
-    // insert may return DB_KEYEXIST in which case we need
-    // not do any more work here.
-  }
   int ret;
-  if (r) {
-    if (r != DB_KEYEXIST)
-      warner ("dbns::insert", err, r);
-    ret = dbfe_txn_abort (dbe, t);
-    if (ret)
-      warner ("dbns::insert", "abort/commit error", ret);
-    return r;
+  if (exptime > timenow + expire_buffer) {
+    // Only add to Merkle tree if this object is worth repairing.
+    if (hasaux ()) {
+      err = "mtree->insert aux";
+      r = mtree->insert (key, auxdata, t);
+    } else {
+      err = "mtree->insert";
+      r = mtree->insert (key, t);
+      // insert may return DB_KEYEXIST in which case we need
+      // not do any more work here.
+    }
+    if (r) {
+      if (r != DB_KEYEXIST)
+	warner ("dbns::insert", err, r);
+      ret = dbfe_txn_abort (dbe, t);
+      if (ret)
+	warner ("dbns::insert", "abort/commit error", ret);
+      return r;
+    }
   }
 
   u_int32_t offset = write_object (key, data, exptime);
@@ -427,7 +440,7 @@ dbns::insert (const chordID &key, DBT &data, u_int32_t auxdata, u_int32_t exptim
   err = "metadatadb->put";
   r = metadatadb->put (metadatadb, t, &skey, &metadata, 0);
   if (r) {
-    assert (r != DB_KEYEXIST); // mtree already checked.
+    assert (r != DB_KEYEXIST); // Already checked.
     ret = dbfe_txn_abort (dbe, t);
   } else {
     ret = dbfe_txn_commit (dbe, t);
@@ -681,8 +694,8 @@ dbns::expire_mtree ()
 {
   vec<DBT> victims;
   vec<adb_metadata_t> victim_metadata;
-  // Don't bother repair objects that will expire in the next 15 minutes anyway.
-  u_int32_t now = time (NULL) + 15 * 60;
+  // Don't bother repair objects that will expire with the buffer.
+  u_int32_t now = time (NULL) + expire_buffer;
 
   // Get all objects from the last time we did this until present
   int r = expire_walk (0, last_mtree_time, now, victims, victim_metadata);
@@ -720,7 +733,8 @@ dbns::expire_mtree ()
     }
   }
   dbfe_txn_commit (dbe, parent);
-  last_mtree_time = now;
+  // In case of new writes, perhaps.
+  last_mtree_time = now - expire_buffer;
 
   return r;
 }
