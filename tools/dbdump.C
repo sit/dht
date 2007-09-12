@@ -4,31 +4,79 @@
 #include <dbfe.h>
 #include <adb_prot.h>
 
-static char *usage = "usage: dbdump dbhome\n";
+static char *usage = "usage: dbdump [-t] dbhome\n";
+
+// {{{ getexpire: Secondary key extractor for metadata
+static int
+getexpire (DB *sdb, const DBT *pkey, const DBT *pdata, DBT *skey)
+{
+  u_int32_t *expire = (u_int32_t *) malloc(sizeof(u_int32_t));
+  // this flag should mean that berkeley db will free this memory when it's
+  // done with it.
+  skey->flags = DB_DBT_APPMALLOC;
+  skey->data = expire;
+  skey->size = sizeof (*expire);
+
+  if (pkey->size != sha1::hashsize)
+  {
+    *expire = 0;
+    return 0;
+  }
+
+  adb_metadata_t md;
+  if (!buf2xdr (md, pdata->data, pdata->size)) {
+    hexdump hd (pdata->data, pdata->size);
+    warn << "getexpire: unable to unmarshal pdata.\n" << hd << "\n";
+    return -1;
+  }
+  // Ensure big-endian for proper BDB sorting.
+  *expire = htonl (md.expiration);
+  return 0;
+}
+// }}}
 
 int
 main (int argc, char *argv[])
 {
-  if (argc != 2)
+  if (argc != 2 && argc != 3)
     fatal << usage;
   
   int r;
   DB_ENV* dbe = NULL;
-  DB *db = NULL;
+  DB *metadatadb = NULL;
+  DB *byexpiredb = NULL;
 
-  r = dbfe_initialize_dbenv (&dbe, argv[1], /* join = */ true);
+  bool bytime = false;
+  char *path = argv[1];
+
+  if (!strcmp (argv[1], "-t")) {
+    path = argv[2];
+    bytime = true;
+  }
+
+  r = dbfe_initialize_dbenv (&dbe, path, /* join = */ true);
   if (r)
     fatal << "couldn't open dbenv: " << db_strerror (r) << "\n";
 
-  r = dbfe_opendb (dbe, &db, "metadatadb", DB_RDONLY);
+  r = dbfe_opendb (dbe, &metadatadb, "metadatadb", DB_RDONLY);
   if (r)
     fatal << "couldn't open db: " << db_strerror (r) << "\n";
-    
+
+  r = dbfe_opendb (dbe, &byexpiredb, "byexpiredb", DB_RDONLY, 0, /* dups = */ true);
+  if (r)
+    fatal << "couldn't open expiredb: " << db_strerror (r) << "\n";
+  r = metadatadb->associate (metadatadb, NULL, byexpiredb, getexpire, DB_AUTO_COMMIT);
+  if (r)
+    fatal << "couldn't associate expiredb: " << db_strerror (r) << "\n";
+
   DBC *cursor;
-  r = db->cursor(db, NULL, &cursor, 0);
+  if (bytime) 
+    r = byexpiredb->cursor (byexpiredb, NULL, &cursor, 0);
+  else 
+    r = metadatadb->cursor (metadatadb, NULL, &cursor, 0);
   assert (r == 0);
 
-  DBT key, data;
+  DBT begin_time, key, data;
   unsigned totalsz = 0;
   unsigned keys = 0;
 
@@ -41,9 +89,14 @@ main (int argc, char *argv[])
   bzero (&mmd, sizeof (mmd));
 
   for (int i = 0; ; i++) {
+    bzero (&begin_time, sizeof (begin_time));
     bzero (&key, sizeof (key));
     bzero (&data, sizeof (data));
-    int err = cursor->c_get (cursor, &key, &data, DB_NEXT);
+    int err = 0;
+    if (bytime)
+      err = cursor->c_pget (cursor, &begin_time, &key, &data, DB_NEXT);
+    else 
+      err = cursor->c_get (cursor, &key, &data, DB_NEXT);
     if (err == DB_NOTFOUND) {
       aout << "EOF.\n";
       break;
@@ -70,7 +123,8 @@ main (int argc, char *argv[])
   }
   cursor->c_close (cursor);
 
-  db->close (db, 0);
+  byexpiredb->close (byexpiredb, 0);
+  metadatadb->close (metadatadb, 0);
   dbe->close (dbe, 0);
   aout << "total keys: " << keys << "\n";
   aout << "total bytes: " << totalsz << "\n";
