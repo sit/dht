@@ -77,7 +77,7 @@ main (int argc, char *argv[])
   assert (r == 0);
 
   DBT begin_time, key, data;
-  unsigned totalsz = 0;
+  u_int64_t totalsz = 0;
   unsigned keys = 0;
 
 #ifndef DB_BUFFER_SMALL
