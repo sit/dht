@@ -134,6 +134,9 @@ protected:
   // Does not include host in either.
   vec<ptr<locationcc> > succs;
   vec<ptr<locationcc> > preds;
+  // Indicate if succs/preds changed since last round.
+  // (If true, then no change.)
+  bool stable;
 
   u_int32_t delay;
   timecb_t *mainttimer;

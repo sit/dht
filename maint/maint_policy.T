@@ -289,6 +289,7 @@ maintainer::update_neighbors (cbv cb)
     chord_nodelistres *slist;
     chord_nodelistres *plist;
     clnt_stat e1, e2;
+    bool changed (false);
   }
   id = New refcounted<chordID> (host.x);
 
@@ -302,32 +303,56 @@ maintainer::update_neighbors (cbv cb)
   }
   if (e1 || e2) {
     warn << "my local node is down.\n";
+    changed = true;
     goto updateOUT;
   }
 
   // Predecessor and predecessor list (for range).
   {
     size_t sz = plist->resok->nlist.size ();
-    preds.clear ();
+    vec<ptr<locationcc> > npreds;
     for (size_t i = 1; i < sz; i++) {
       chord_node n = make_chord_node (plist->resok->nlist[i]);
       ptr<locationcc> s = locationcc::alloc (n);
-      preds.push_back (s);
+      npreds.push_back (s);
     }
+    if (npreds.size () != preds.size ())
+      changed = true;
+    else {
+      for (size_t i = 0; i < preds.size (); i++) {
+	if (npreds[i]->id () != preds[i]->id ()) {
+	  changed = true;
+	  break;
+	}
+      }
+    }
+    preds = npreds;
   }
 
   // Successor
   {
     size_t sz = slist->resok->nlist.size ();
-    succs.clear ();
+    vec<ptr<locationcc> > nsuccs;
     for (size_t i = 1; i < sz; i++) {
       chord_node n = make_chord_node (slist->resok->nlist[i]);
       ptr<locationcc> s = locationcc::alloc (n);
-      succs.push_back (s);
+      nsuccs.push_back (s);
     }
+    if (nsuccs.size () != succs.size ())
+      changed = true;
+    else {
+      for (size_t i = 0; i < succs.size (); i++) {
+	if (nsuccs[i]->id () != succs[i]->id ()) {
+	  changed = true;
+	  break;
+	}
+      }
+    }
+    succs = nsuccs;
   }
 
 updateOUT:
+  stable = !changed;
   if (slist)
     delete slist;
   if (plist)
@@ -697,6 +722,12 @@ passingtone::process_neighbors (
 {
   VARS {
     chordID rngmin, rngmax;
+  }
+  
+  if (!stable) {
+    warn << "passingtone " << host << " neighbors changed; flushing queue.\n";
+    repairqueue.clear ();
+    repairfrom.clear ();
   }
 
   // If there are repairs queued, don't bother re-syncing.
