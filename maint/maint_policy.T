@@ -706,12 +706,12 @@ passingtone::handle_missing (ptr<locationcc> from,
     return;
   // XXX Should do better than linear scan here...
   for (size_t i = 0; i < repairqueue.size (); i++) {
-    if (repairqueue[i] == key)
+    if (repairqueue[i].key == key)
       return;
   }
   warn << "passingtone " << host << " needs " << key << "\n";
-  repairqueue.push_back (key);
-  repairfrom.push_back (from);
+  struct pt_repair_t r (key, from, timenow);
+  repairqueue.push_back (r);
 }
 
 TAMED void
@@ -727,7 +727,6 @@ passingtone::process_neighbors (
   if (!stable) {
     warn << "passingtone " << host << " neighbors changed; flushing queue.\n";
     repairqueue.clear ();
-    repairfrom.clear ();
   }
 
   // If there are repairs queued, don't bother re-syncing.
@@ -781,16 +780,16 @@ passingtone::getrepairs (chordID start, int thresh, int count,
   u_int32_t a = ntohl (saddr.sin_addr.s_addr);
   u_int32_t b = (ntohs (saddr.sin_port) << 16) | host.vnode_num;
   while (repairqueue.size () && (int) repairs.size () < count) {
-    chordID k = repairqueue.pop_front ();
-    ptr<locationcc> from = repairfrom.pop_front ();
+    pt_repair_t rq = repairqueue.pop_front ();
     maint_repair_t r;
     r.responsible = true;
-    r.id = k;
-    from->fill_ipportvn (r.src_ipv4_addr, r.src_port_vnnum);
+    r.id = rq.key;
+    rq.from->fill_ipportvn (r.src_ipv4_addr, r.src_port_vnnum);
     r.dst_ipv4_addr = a;
     r.dst_port_vnnum = b;
     repairs.push_back (r);
+    warn << "passingtone " << host << " unqueued " << rq.key
+         << " after " << timenow - rq.add_time << "s.\n";
   }
-  assert (repairqueue.size () == repairfrom.size ());
 }
 // }}}

@@ -188,8 +188,17 @@ public:
 };
 
 class passingtone: public maintainer {
-  vec<chordID> repairqueue;
-  vec<ptr<locationcc> > repairfrom;
+  struct pt_repair_t {
+    chordID key;
+    ptr<locationcc> from;
+    u_int32_t add_time;
+    pt_repair_t (chordID k, ptr<locationcc> l, u_int32_t t) :
+      key (k), from (l), add_time (t) {}
+    pt_repair_t (const pt_repair_t &r) :
+      key (r.key), from (r.from), add_time (r.add_time) {}
+    ~pt_repair_t () {}
+  };
+  vec<pt_repair_t> repairqueue;
   void handle_missing (ptr<locationcc> from, ptr<merkle_tree> t, chordID key, bool missing_local);
   void process_neighbors (const vec<ptr<locationcc> > &preds,
       const vec<ptr<locationcc> > &succs, cbv cb, CLOSURE);
