@@ -30,6 +30,8 @@ static u_int32_t expire_batch_size (24);
 // Threshold percentage for expiring on insert
 static u_int32_t expire_threshold (90);
 
+// Run an expiration of the mtree every this many seconds.
+static u_int32_t expire_mtree_interval (60);
 // If an object will expire in this many seconds, ignore it.
 static u_int32_t expire_buffer (15 * 60);
 
@@ -687,7 +689,14 @@ void
 dbns::mtree_cleaner ()
 {
   expire_mtree ();
-  mtree_tcb = delaycb (60, wrap (this, &dbns::mtree_cleaner));
+  // Align the next run time so that everyone in the system runs
+  // at approximately the start of the next interval, with some jitter.
+  // This should reduce the number of spurious sync repairs.
+  u_int32_t next_interval =
+    (tsnow.tv_sec / expire_mtree_interval) * expire_mtree_interval +
+      expire_mtree_interval + (tsnow.tv_nsec % 10);
+  mtree_tcb = delaycb (next_interval - tsnow.tv_sec,
+      wrap (this, &dbns::mtree_cleaner));
 }
 // }}}
 // {{{ dbns::expire_mtree
@@ -697,8 +706,10 @@ dbns::expire_mtree ()
 {
   vec<DBT> victims;
   vec<adb_metadata_t> victim_metadata;
-  // Don't bother repair objects that will expire with the buffer.
-  u_int32_t now = time (NULL) + expire_buffer;
+  u_int32_t now = time (NULL);
+  // Round to the next lowest expire_mtree_interval.
+  // This may compensate for the jitter scheduled in by mtree_cleaner.
+  now = (now / expire_mtree_interval) * expire_mtree_interval;
 
   // Get all objects from the last time we did this until present
   int r = expire_walk (0, last_mtree_time, now, victims, victim_metadata);
@@ -736,8 +747,8 @@ dbns::expire_mtree ()
     }
   }
   dbfe_txn_commit (dbe, parent);
-  // In case of new writes, perhaps.
-  last_mtree_time = now - expire_buffer;
+
+  last_mtree_time = now;
 
   return r;
 }
