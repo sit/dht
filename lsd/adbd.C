@@ -731,15 +731,17 @@ dbns::expire_mtree ()
       r = mtree->remove (id, t);
     }
     free (key.data);
-    if (r && r != DB_NOTFOUND) {
-      warner ("dbns::expire_mtree", "mtree remove", r);
+    if (r) {
+      if (r != DB_NOTFOUND)
+	warner ("dbns::expire_mtree", "mtree remove", r);
       dbfe_txn_abort (dbe, t);
     } else {
-      warnx << name << ": Expired mtree " << id << "\n";
+      warnx ("%d.%06d ", int (tsnow.tv_sec), int (tsnow.tv_nsec/1000))
+	<< name << ": Expired mtree " << id << "\n";
       dbfe_txn_commit (dbe, t);
+      // Don't tie up too many locks?
+      txnsize++;
     }
-    // Don't tie up too many locks?
-    txnsize++;
     if (txnsize > 1000) {
       txnsize = 0;
       dbfe_txn_commit (dbe, parent);
@@ -780,7 +782,8 @@ dbns::expire (u_int32_t limit, u_int32_t deadline)
     DBT key = victims.pop_back ();
     adb_metadata_t md = victim_metadata.pop_back ();
     chordID id = dbt_to_id (key);
-    warnx << name << ": Expiring " << id << "\n";
+    warnx ("%d.%06d ", int (tsnow.tv_sec), int (tsnow.tv_nsec/1000))
+      << name << ": Expiring " << id << "\n";
     char *err = "";
     do {
       err = "mtree->remove";
