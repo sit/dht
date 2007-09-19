@@ -44,7 +44,6 @@
 struct dhash_insert_arg {
   chordID   blockID;      /* the key */
   dhash_ctype ctype;
-  int32_t len; /* XXX fix to not need len */
   dhash_value block;      /* the data block */
   int options;
   chordID guess; /* a guess as to where this block will end up */
@@ -60,7 +59,6 @@ struct dhash_retrieve_arg {
 struct dhash_retrieve_resok {
   dhash_value block;
   dhash_ctype ctype; /* XXX fix to not need */
-  int32_t len; /* XXX not needed */
   int hops;
   int errors;
   int retries;

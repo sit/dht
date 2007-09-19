@@ -78,7 +78,7 @@ dhashgateway::dispatch (svccb *sbp)
       dhash_insert_arg *arg = sbp->Xtmpl getarg<dhash_insert_arg> ();
 
       ref<dhash_block> block =
-	New refcounted<dhash_block> (arg->block.base (), arg->len, arg->ctype);
+	New refcounted<dhash_block> (arg->block.base (), arg->block.size (), arg->ctype);
       block->ID = arg->blockID;
 
       ptr<chordID> guess = NULL;
@@ -137,7 +137,6 @@ dhashgateway::retrieve_cb (svccb *sbp, dhash_stat stat,
   else {
     res.resok->block.setsize (block->data.len ());
     res.resok->ctype = block->ctype;
-    res.resok->len = block->data.len ();
     res.resok->hops = block->hops;
     res.resok->errors = block->errors;
     res.resok->retries = block->retries;

@@ -92,7 +92,7 @@ dhashclient::insert (bigint key, const char *buf,
 
   int m_len = marshalled_data.len ();
   char *m_dat = (char *)marshalled_data.cstr ();
-  insert_togateway (key, m_dat, m_len, cb, t, m_len, options);
+  insert_togateway (key, m_dat, m_len, cb, t, options);
 }
 
 void
@@ -124,8 +124,7 @@ dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
 					     p);
   int m_len = mdata.len ();
   char *m_dat = (char *)mdata.cstr ();
-  insert_togateway (hash, m_dat, m_len, cb, DHASH_KEYHASH, 
-                    m_len, options);
+  insert_togateway (hash, m_dat, m_len, cb, DHASH_KEYHASH, options);
 }
 
 
@@ -135,13 +134,12 @@ dhashclient::insert (bigint hash, sfs_pubkey2 key, sfs_sig2 sig,
 void
 dhashclient::insert_togateway (bigint key, const char *buf, 
                                size_t buflen, cbinsertgw_t cb,
-                               dhash_ctype t, size_t realsize,
+                               dhash_ctype t,
                                ptr<option_block> options)
 {
   dhash_insert_arg arg;
   arg.blockID = key;
   arg.ctype = t;
-  arg.len = realsize;
   arg.block.setsize (buflen);
   memcpy (arg.block.base (), buf, buflen);
   arg.options = 0;

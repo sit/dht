@@ -27,7 +27,7 @@ dispatch (ptr<asrv> s, svccb *sbp)
 	if (verbose)
 	  warnx << arg->ctype << " "
 	        << arg->blockID << " ("
-		<< arg->len << ")\n";
+		<< arg->block.size () << ")\n";
 	dhash_insert_res res (DHASH_OK);
 	res.resok->path.setsize (0);
 	sbp->replyref (res);

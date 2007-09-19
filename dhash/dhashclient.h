@@ -45,7 +45,7 @@ private:
   // some public. --MW
   void insert_togateway (bigint chordid, const char *buf, size_t buflen, 
 	                 cbinsertgw_t cb,  dhash_ctype t, 
-	                 size_t realsize, ptr<option_block> options = NULL);
+	                 ptr<option_block> options = NULL);
 
   void insertcb (cbinsertgw_t cb, bigint key, 
 		 ptr<dhash_insert_res>, clnt_stat err);
