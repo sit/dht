@@ -105,8 +105,6 @@ dhashgateway::dispatch (svccb *sbp)
 	 arg->options, guess);
     }
     break;
-    
-    //XXX DHASHPROC_ACTIVE messes up the back-call scheme. Disabled. --FED
 
   default:
     sbp->reject (PROC_UNAVAIL);

@@ -96,8 +96,5 @@ program DHASHGATEWAY_PROGRAM {
 
                 dhash_retrieve_res
 		DHASHPROC_RETRIEVE (dhash_retrieve_arg) = 2;
-                
-		dhash_stat
-         	DHASHPROC_ACTIVE (int32_t) = 3;
 	} = 1;
 } = 344448;
