@@ -44,12 +44,14 @@ protected:
   dhash_ctype ctype;    // Type of objects to store
   unsigned int nobj;    // Number of objects to store
   unsigned int objsize; // Size of each object stored
+  unsigned int lifetime;// How long before objects expire
   unsigned int window;  // Number of operations to run in parallel
   unsigned int seed;    // Random seed
 
   unsigned int niters;  // Mutable objects may go multiple rounds
 
   dhashclient *dhash;
+  ptr<option_block> options;
 
 private:
   FILE *outfile;
@@ -139,6 +141,7 @@ usage (int stat)
   warnx << "Usage: " << progname << " dhashsock store|fetch <ctype>"
     << " <nobj> <objsize> [option=value ...]\n";
   warnx << "Valid options include:\n"
+    "\tlifetime=<count>[s|m|h|d|w|M|y]\n"
     "\tniters=<iterations>\n"
     "\tnops=<rpc window size>\n"
     "\tseed=<randseed>\n"
@@ -202,10 +205,12 @@ harness_t::harness_t (str cs, dhash_ctype ct) :
   ctype (ct),
   nobj (32),
   objsize (8192),
+  lifetime (0),
   window (1),
   seed (0),
   niters (1),
   dhash (NULL),
+  options (NULL),
   outfile (stdout),
   bwfile (stdout),
   mode (STORE),
@@ -274,6 +279,36 @@ harness_t::parse_argv (const vec<str> &argv)
 	if (val != "-")
 	  bwfile = fopen (val, "w");
 	measurecb = delaycb (1, wrap (this, &harness_t::measure_bw));
+      }
+      else if (name == "lifetime") {
+	u_int32_t factor = 1; // Default of seconds.
+	char f = val[val.len () - 1];
+	if (!isdigit (f))
+	  val = substr (val, 0, val.len () - 1);
+	char *err = NULL;
+	lifetime = strtoul (val.cstr (), &err, 10);
+	if (*err != '\0') {
+	  warnx << "Bad lifetime " << val << "\n";
+	  usage (1);
+	}
+	switch (f) {
+	  case 'y': factor = 365 * 86400 + 6 * 3600; break;
+	  case 'M': factor = 30 * 86400;     break;
+	  case 'w': factor = 7 * 86400;      break;
+	  case 'd': factor = 86400;          break;
+	  case 'h': factor = 3600;	     break;
+	  case 'm': factor = 60;	     break;
+	  case 's': factor = 1;              break;
+	  default:
+	    if (!isdigit (f)) {
+	      warnx ("Bad life factor '%c'\n", f); 
+	      usage (1);
+	    }
+	}
+	lifetime *= factor;
+	options = New refcounted<option_block> ();
+	options->flags = DHASHCLIENT_EXPIRATION_SUPPLIED;
+	options->expiration = time (NULL) + lifetime;
       }
       else {
 	warnx << "Unrecognized option " << name << "\n";
@@ -429,10 +464,11 @@ harness_t::fetchcb (int iter, unsigned int i, u_int64_t start,
     buf << " /";
 
     buf << " " << blk->hops << " " <<  blk->errors
-	<< " " << blk->retries << " ";
+	<< " " << blk->retries;
     for (u_int i=0; i < path.size (); i++) {
-      buf << (path[i]>>144) << " ";
+      buf << " " << (path[i]>>144);
     }
+    buf << " / " << blk->expiration;
     
     buf << "\n";
     fprintf (outfile, str (buf).cstr ());
@@ -477,7 +513,7 @@ chash_harness_t::prepare_test_data (void)
 void
 chash_harness_t::store_one (unsigned int iter, unsigned int i, cbinsertgw_t cb)
 {
-  dhash->insert (data[i].cstr (), data[i].len (), cb);
+  dhash->insert (data[i].cstr (), data[i].len (), cb, options);
 }
 
 void
@@ -520,7 +556,7 @@ void
 noauth_harness_t::store_one (unsigned int iter, unsigned int i, cbinsertgw_t cb)
 {
   dhash->insert (IDs[i], data[i][iter].cstr (), data[i][iter].len (),
-      cb, NULL, DHASH_NOAUTH);
+      cb, options, DHASH_NOAUTH);
 }
 
 void
@@ -594,7 +630,7 @@ keyhash_harness_t::store_one (unsigned int iter, unsigned int i, cbinsertgw_t cb
   sfs_sig2 s;
   sfs_pubkey2 pk;
   data[i][iter].sign (sk, pk, s);
-  dhash->insert (IDs[i], pk, s, data[i][iter], cb);
+  dhash->insert (IDs[i], pk, s, data[i][iter], cb, options);
 }
 
 void

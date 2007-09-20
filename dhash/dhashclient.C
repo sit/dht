@@ -142,6 +142,7 @@ dhashclient::insert_togateway (bigint key, const char *buf,
   arg.ctype = t;
   arg.block.setsize (buflen);
   memcpy (arg.block.base (), buf, buflen);
+  arg.expiration = 0;
   arg.options = 0;
   if (options) {
     arg.options = options->flags;
@@ -149,6 +150,8 @@ dhashclient::insert_togateway (bigint key, const char *buf,
       arg.guess = options->guess;
       warn << "starting with guess: " << arg.guess << "\n";
     }
+    if (options->flags & DHASHCLIENT_EXPIRATION_SUPPLIED)
+      arg.expiration = options->expiration;
   }
 
   ptr<dhash_insert_res> res = New refcounted<dhash_insert_res> ();
@@ -242,7 +245,8 @@ dhashclient::retrievecb (cb_cret cb, bigint key,
 					   res->resok->ctype);
 	blk->vData = contents;
       }
-	
+
+      blk->expiration = res->resok->expiration;
       blk->hops = res->resok->hops;
       blk->errors = res->resok->errors;
       blk->retries = res->resok->retries;

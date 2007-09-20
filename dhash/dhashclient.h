@@ -28,6 +28,7 @@ struct option_block
 {
   int flags;
   chordID guess;
+  u_int32_t expiration;
 };
 
 class dhashclient

@@ -412,6 +412,10 @@ dhashcli::insert (ref<dhash_block> block, cbinsert_path_t cb,
   ptr<location> l = NULL;
   if (guess) 
     l =  clntnode->locations->lookup (*guess);
+  if (!(options & DHASHCLIENT_EXPIRATION_SUPPLIED))
+    block->expiration = (default_lifetime < 0) ?
+      0 :
+      (timenow + default_lifetime);
 
   if (!l) 
     lookup (block->ID, wrap (this, &dhashcli::insert_lookup_cb, 
@@ -488,7 +492,7 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
       dhash_store::execute (clntnode, dest, 
 			    blockID(block->ID, block->ctype),
 			    frag,
-			    (default_lifetime < 0) ? 0 : (timenow + default_lifetime),
+			    block->expiration,
 			    wrap (this, &dhashcli::insert_store_cb,  
 				  ss, i, getusec ()),
 			    get_store_status (block->ctype)); 

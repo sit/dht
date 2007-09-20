@@ -81,6 +81,10 @@ dhashgateway::dispatch (svccb *sbp)
 	New refcounted<dhash_block> (arg->block.base (), arg->block.size (), arg->ctype);
       block->ID = arg->blockID;
 
+      block->expiration = 0;
+      if (arg->options & DHASHCLIENT_EXPIRATION_SUPPLIED)
+	block->expiration = arg->expiration;
+
       ptr<chordID> guess = NULL;
       if (arg->options & DHASHCLIENT_GUESS_SUPPLIED)
 	guess = New refcounted<chordID> (arg->guess);
@@ -137,6 +141,7 @@ dhashgateway::retrieve_cb (svccb *sbp, dhash_stat stat,
   else {
     res.resok->block.setsize (block->data.len ());
     res.resok->ctype = block->ctype;
+    res.resok->expiration = block->expiration;
     res.resok->hops = block->hops;
     res.resok->errors = block->errors;
     res.resok->retries = block->retries;
