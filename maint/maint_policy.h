@@ -172,6 +172,8 @@ public:
 };
 
 class carbonite: public maintainer {
+  vec<bool> treedone;
+
   void init_ltree (cbv cb, adb_status err, str path, bool hasaux);
   void handle_missing (ptr<locationcc> from, ptr<merkle_tree> t, chordID key, bool missing_local);
   void process_neighbors (const vec<ptr<locationcc> > &preds,

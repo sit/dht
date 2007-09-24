@@ -473,10 +473,15 @@ carbonite::process_neighbors (
     vec<ptr<locationcc> > succs = osuccs;
     if (succs.back ()->id () != host.x)
       succs.push_back (locationcc::alloc (host));
+    // We only want to read each tree off the disk once
+    // per sync period.  We initialize treedone here and it
+    // gets flipped to true in getrepairs.
+    treedone.clear ();
     for (unsigned int i=0; i < succs.size(); i++) {
       str succtreepath = strbuf () << private_path << "/" 
 	<< host.vnode_num << "-"
 	<< succs[i]->id () << "." << ctype2ext (ctype);
+      treedone.push_back (false);
       ptr<merkle_tree> t = New refcounted<merkle_tree_bdb> 
 	(succtreepath.cstr (),
 	 /* join = */ false, /* ro = */ false);
@@ -545,15 +550,14 @@ carbonite::getrepairs (chordID start, int thresh, int count,
     return;
   }
 
+  warn << host << ": Starting getrepairs " << start << " " << count << "\n";
+
   // No point in doing any work if there are no successors.
-  // (The code below should return nothing anyway but it may
-  // be expensive to run.)
   if (!succs.size ())
     return;
 
   vec<ptr<merkle_tree> > trees;
   vec<chordID> lastread;
-  vec<bool> treedone;
   chordID stop = host.x;
   if (db->hasaux ())
     stop = ((stop << 32) >> 32) | 0xFFFFFFFF;
@@ -581,8 +585,8 @@ carbonite::getrepairs (chordID start, int thresh, int count,
       (succtreepath.cstr (), /* join = */ false, /* ro = */ true);
     trees.push_back (t);
     lastread.push_back (start);
-    treedone.push_back (false);
   }
+  assert (treedone.size () == nsuccs.size ());
   
   while ((int) repairs.size () < count) {
     bool addedany = false;
@@ -642,8 +646,8 @@ carbonite::getrepairs (chordID start, int thresh, int count,
 
 	unsigned int dst = k->firstvoid ();
 	if (dst < nsuccs.size ()) {
-	  // warn << "carbonite " << host << " adds " << k->id
-	  //      << " to successor " << dst << "\n";
+	  warn << "carbonite " << host << " adds " << k->id
+	       << " to successor " << dst << "\n";
 	  nsuccs[dst]->fill_ipportvn (repair.dst_ipv4_addr,
 	      repair.dst_port_vnnum);
 	  repairs.push_back (repair);
