@@ -136,17 +136,25 @@ check_counts () # nreplicas
     if [ -z "$exact" ];
     then
 	perl -lane '$n++;
-        die "$_ insufficient replicas\n" if ($F[0] < '$nreplicas');
+	if ($F[0] < '$nreplicas') {
+	    warn "$_ insufficient replicas $F[0]\n";
+	    $bad++;
+	}
 	END {
 	  die "wrong num objects $n != '$TOTALOBJECTS'\n"
 	    unless $n == '$TOTALOBJECTS';
+	  die "$bad objects with insufficient replicas\n" if $bad;
 	}' $TMPDIR/counts
     else
 	perl -lane '$n++;
-        die "$_ wrong number of replicas\n" if ($F[0] != '$nreplicas');
+	if ($F[0] != '$nreplicas') {
+	    warn "$_ wrong number of replicas\n";
+	    $bad++;
+	}
 	END {
 	  die "wrong num objects $n != '$TOTALOBJECTS'\n"
 	    unless $n == '$TOTALOBJECTS';
+	  die "$bad objects with wrong number replicas\n" if $bad;
 	}' $TMPDIR/counts
     fi
 }
@@ -259,7 +267,7 @@ echo -n "Waiting for stable..."
 wait_stable && echo "OK" || fail "Not stable!"
 
 echo -n "Storing $batchsize objects: "
-store $batchsize 1024 seed=1 && echo "OK" || fail 
+store $batchsize 1024 seed=1 lifetime=1y && echo "OK" || fail 
 echo -n "Fetching $batchsize objects: "
 fetch $batchsize 1024 seed=1 && echo "OK" || fail
 
@@ -296,7 +304,7 @@ fi
 sleep 5
 
 echo -n "Inserting $batchsize additional objects: "
-store $batchsize 1024 seed=2 && echo "OK" || fail 
+store $batchsize 1024 seed=2 lifetime=1y && echo "OK" || fail 
 echo -n "Fetching all $TOTALOBJECTS objects: "
 fetch $batchsize 1024 seed=1 && \
     fetch $batchsize 1024 seed=2 && echo "OK" || fail
@@ -309,9 +317,9 @@ echo -n "Waiting for stable after kill..."
 wait_stable && echo "OK" || fail
 
 echo "Waiting and checking after repair timers..."
-sleep 180
-expect_repairs || fail
+sleep 300
 check_counts $nreplicas && echo "OK" || echo "Blocks lost!"
+expect_repairs || fail
 
 teardown
 
