@@ -21,9 +21,9 @@
 #ifdef DMALLOC
 #include <dmalloc.h>
 #endif
-
 struct rjchash : public repair_job {
-  rjchash (blockID key, ptr<location> w, ptr<dhblock_chash_srv> bsrv);
+  rjchash (blockID key, ptr<location> s, ptr<location> w, ptr<dhblock_chash_srv> bsrv);
+  ptr<location> src;
 
   const ptr<dhblock_chash_srv> bsrv;
 
@@ -150,12 +150,20 @@ dhblock_chash_srv::maintqueue (const vec<maint_repair_t> &repairs)
   maint_pending = false;
   for (size_t i = 0; i < repairs.size (); i++) {
     blockID key (repairs[i].id, DHASH_CONTENTHASH);
+
+    ptr<location> f = NULL;
+    if (repairs[i].src_ipv4_addr > 0) {
+      // Only Passing Tone (or global maint) will provide a source.
+      // We should assert num_dfrags == 1 here, probably.
+      f = maintloc2location (repairs[i].src_ipv4_addr,
+	  repairs[i].src_port_vnnum);
+    }
     ptr<location> w = maintloc2location (
 	repairs[i].dst_ipv4_addr,
 	repairs[i].dst_port_vnnum);
     ptr<repair_job> job (NULL);
     if (repairs[i].responsible) {
-      job = New refcounted<rjchash> (key, w, mkref (this));
+      job = New refcounted<rjchash> (key, f, w, mkref (this));
       last_repair = repairs[i].id;
     } else {
       // This is a pmaint repair job; just transfer our local object.
@@ -171,9 +179,10 @@ dhblock_chash_srv::maintqueue (const vec<maint_repair_t> &repairs)
 //
 // Repair Logic Implementation
 //
-rjchash::rjchash (blockID key, ptr<location> w,
+rjchash::rjchash (blockID key, ptr<location> s, ptr<location> w,
 		  ptr<dhblock_chash_srv> bsrv) :
     repair_job (key, w),
+    src (s),
     bsrv (bsrv)
 {
 }
@@ -194,8 +203,15 @@ rjchash::cache_check_cb (adb_status stat, adb_fetchdata_t obj)
     send_frag (obj.data, obj.expiration);
   } else {
     bsrv->cache_misses++;
+    ptr<chordID> id (NULL);
+    int options = 0;
+    if (src) {
+      id = New refcounted<chordID> (src->id ());
+      options = DHASHCLIENT_GUESS_SUPPLIED|DHASHCLIENT_SKIP_LOOKUP;
+    }
     bsrv->cli->retrieve (key,
-	wrap (mkref (this), &rjchash::retrieve_cb));
+	wrap (mkref (this), &rjchash::retrieve_cb),
+	options, id);
   }
 }
 
