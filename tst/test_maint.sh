@@ -317,9 +317,31 @@ echo -n "Waiting for stable after kill..."
 wait_stable && echo "OK" || fail
 
 echo "Waiting and checking after repair timers..."
-sleep 300
+sleep 240
 check_counts $nreplicas && echo "OK" || echo "Blocks lost!"
 expect_repairs || fail
+
+echo -n "Inserting $batchsize additional objects: "
+store $batchsize 1024 seed=3 lifetime=1y && echo "OK" || fail 
+echo -n "Fetching all $TOTALOBJECTS objects: "
+fetch $batchsize 1024 seed=1 && \
+    fetch $batchsize 1024 seed=2 && \
+    fetch $batchsize 1024 seed=3 && echo "OK" || fail
+
+echo  "Re-adding second node..."
+start_dhash b $mode 3246 2 &
+sleep 2
+
+echo "Waiting and checking after repair timers..."
+sleep 180
+if [ $mode = "carbonite" ];
+then
+    expect_norepairs || fail
+    check_counts $nreplicas exact && echo "OK"
+else
+    expect_repairs || fail
+    check_counts $nreplicas && echo "OK"
+fi
 
 teardown
 
