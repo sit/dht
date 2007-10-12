@@ -163,7 +163,7 @@ public:
   // static ref<maintainer> produce_maintainer (const chord_node &h, dhash_ctype c, ptr<syncer> s);
   virtual ~maintainer ();
 
-  virtual void start (u_int32_t delay = default_delay);
+  virtual void start (u_int32_t delay = default_delay, bool randomize = true);
   virtual void stop ();
 
   virtual ptr<merkle_tree> localtree () { return ltree; }

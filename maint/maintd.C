@@ -193,7 +193,7 @@ do_setmaint (svccb *sbp)
   maint_setmaintarg *arg = sbp->Xtmpl getarg<maint_setmaintarg> ();
   for (unsigned int i = 0; i < maintainers.size (); i++) {
     if (arg->enable) {
-      maintainers[i]->start (arg->delay);
+      maintainers[i]->start (arg->delay, arg->randomize);
     } else {
       maintainers[i]->stop ();
     }

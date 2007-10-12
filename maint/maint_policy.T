@@ -217,13 +217,17 @@ maintainer::~maintainer ()
 }
 
 void
-maintainer::start (u_int32_t d)
+maintainer::start (u_int32_t d, bool randomize)
 {
+  int jitter = 0;
+
   delay = d;
   if (mainttimer || in_progress)
     return;
   running = true;
-  mainttimer = delaycb (delay,
+  if (randomize)
+    jitter = random_getword () % delay;
+  mainttimer = delaycb (delay + jitter,
       wrap (this, &maintainer::start_helper));
 }
 void maintainer::start_helper ()

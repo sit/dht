@@ -119,6 +119,7 @@ routing_mode_desc modes[] = {
 void stats ();
 void stop ();
 void halt ();
+void set_maint (bool enable);
 
 // =====================================
 
@@ -227,9 +228,11 @@ lsdctl_dispatch (ptr<asrv> s, svccb *sbp)
     {
       lsdctl_setreplicate_arg *a = sbp->Xtmpl getarg<lsdctl_setreplicate_arg> ();
       if (a->enable) {
+	set_maint (true);
 	for (unsigned int i = 0; i < chordnode->num_vnodes (); i++)
 	  dh[i]->start (a->randomize);
       } else {
+	set_maint (false);
 	for (unsigned int i = 0; i < chordnode->num_vnodes (); i++)
 	  dh[i]->stop ();
       }
@@ -778,18 +781,24 @@ main (int argc, char **argv)
   amain ();
 }
 
-void start_maint ()
+void set_maint (bool enable)
 {
+  static bool initialized (false);
   int fd = unixsocket_connect (maintsock);
   if (fd < 0)
     fatal ("get_maint_aclnt: Error connecting to %s: %m\n", maintsock.cstr ());
   make_async (fd);
   ptr<aclnt> c = aclnt::alloc (axprt_unix::alloc (fd, 1024*1025),
       maint_program_1);
-  c->scall (MAINTPROC_LISTEN, &parameters.addr, NULL);
+
+  // Only call listen the first time this is called.
+  // There is no mechanism to tell maintd not to listen.
+  if (!initialized)
+    c->scall (MAINTPROC_LISTEN, &parameters.addr, NULL);
 
   maint_setmaintarg arg;
-  arg.enable = true;
+  arg.enable = enable;
+  arg.randomize = true;
   int timer = 300;
   Configurator::only ().get_int ("dhash.repair_timer", timer);
   arg.delay = timer;
@@ -817,7 +826,8 @@ void finish_start ()
   warn << "  lookup_mode: " << mode << "\n";
   warn << "  ss_mode: " << ss_mode << "\n";
 
-  start_maint ();
+  if (replicate)
+    set_maint (true);
 
   if (heartbeatfn)
     delaycb (0, wrap (&do_heartbeat, heartbeatfn));

@@ -9,6 +9,7 @@ enum maint_status {
 /* {{{ MAINTPROC_SETMAINT */
 struct maint_setmaintarg {
   bool enable;     /* disable maintenance if false */
+  bool randomize;  /* randomize start within delay interval? */
   u_int32_t delay; /* delay between rounds */
 };
 /* }}} */
