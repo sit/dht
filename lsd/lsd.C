@@ -755,15 +755,6 @@ main (int argc, char **argv)
 
   assert (mode == modes[mode].m);
 
-  // Initialize for use by LSDCTL_GETLSDPARAMETERS
-  parameters.nvnodes       = vnodes;
-  parameters.adbdsock      = dbsock;
-  Configurator::only ().get_int ("dhash.efrags", parameters.efrags);
-  Configurator::only ().get_int ("dhash.dfrags", parameters.dfrags);
-  Configurator::only ().get_int ("dhash.replica", parameters.nreplica);
-  parameters.addr.hostname = my_name;
-  parameters.addr.port     = myport; // chord->get_port ();
-
   chordnode = New refcounted<chord> (my_name,
 				     myport,
 				     modes[mode].producer,
@@ -775,6 +766,15 @@ main (int argc, char **argv)
       dhash::produce_dhash (v, dbsock, maintsock,
 	chord_trigger_t::alloc (wrap (&finish_start))));
   }
+
+  // Initialize for use by LSDCTL_GETLSDPARAMETERS
+  parameters.nvnodes       = vnodes;
+  parameters.adbdsock      = dbsock;
+  Configurator::only ().get_int ("dhash.efrags", parameters.efrags);
+  Configurator::only ().get_int ("dhash.dfrags", parameters.dfrags);
+  Configurator::only ().get_int ("dhash.replica", parameters.nreplica);
+  parameters.addr.hostname = my_name;
+  parameters.addr.port     = chordnode->get_port ();
 
   info << "starting amain.\n";
 
