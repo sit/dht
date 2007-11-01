@@ -714,14 +714,14 @@ dbns::expire_mtree ()
   // Get all objects from the last time we did this until present
   int r = expire_walk (0, last_mtree_time, now, victims, victim_metadata);
 
-  // start a transaction
-  DB_TXN *parent = NULL;
-  dbfe_txn_begin (dbe, &parent);
-  u_int32_t txnsize = 0;
+  DB_TXN *t = NULL;
+  int retry_count = 0;
   // Iterate over objects to be expired:
   while (victims.size ()) {
-    DB_TXN *t = NULL;
-    dbe->txn_begin (dbe, parent, &t, 0);
+    retry_count = 0;
+retry:
+    t = NULL;
+    dbe->txn_begin (dbe, NULL, &t, 0);
     DBT key = victims.pop_back ();
     adb_metadata_t md = victim_metadata.pop_back ();
     chordID id = dbt_to_id (key);
@@ -730,28 +730,52 @@ dbns::expire_mtree ()
     } else {
       r = mtree->remove (id, t);
     }
-    free (key.data);
-    if (r) {
-      if (r != DB_NOTFOUND)
+    switch (r) {
+      case 0:
+	warnx ("%d.%06d ", int (tsnow.tv_sec), int (tsnow.tv_nsec/1000))
+	  << name << ": Expired mtree " << id << "\n";
+	dbfe_txn_commit (dbe, t);
+	break;
+      case DB_NOTFOUND:
+	// Okay to continue
+	dbfe_txn_abort (dbe, t);
+	break;
+      case DB_LOCK_DEADLOCK:
+	// Must immediately abort.
+	dbfe_txn_abort (dbe, t);
 	warner ("dbns::expire_mtree", "mtree remove", r);
-      dbfe_txn_abort (dbe, t);
-    } else {
-      warnx ("%d.%06d ", int (tsnow.tv_sec), int (tsnow.tv_nsec/1000))
-	<< name << ": Expired mtree " << id << "\n";
-      dbfe_txn_commit (dbe, t);
-      // Don't tie up too many locks?
-      txnsize++;
+	if (retry_count < 10) {
+	  retry_count++;
+	  victims.push_back (key);
+	  victim_metadata.push_back (md);
+	  goto retry;
+	} else {
+	  // Give up on the whole thing.
+	  warnx << name << ": too many retries for " << id
+	        << "; aborting.\n";
+	  free (key.data);
+	  goto abort_cleanup;
+	}
+	break;
+      default:
+	warner ("dbns::expire_mtree", "mtree remove", r);
+	dbfe_txn_abort (dbe, t);
+	goto abort_cleanup;
+	break;
     }
-    if (txnsize > 1000) {
-      txnsize = 0;
-      dbfe_txn_commit (dbe, parent);
-      dbfe_txn_begin (dbe, &parent);
-    }
+    free (key.data);
   }
-  dbfe_txn_commit (dbe, parent);
 
   last_mtree_time = now;
+  return r;
 
+abort_cleanup:
+  while (victims.size ()) {
+    DBT key = victims.pop_back ();
+    free (key.data);
+  }
+  // Leave last_mtree_time as old, make sure we get everything
+  // that we should have done this round.
   return r;
 }
 // }}}
