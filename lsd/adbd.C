@@ -35,6 +35,11 @@ static u_int32_t expire_mtree_interval (60);
 // If an object will expire in this many seconds, ignore it.
 static u_int32_t expire_buffer (15 * 60);
 
+// How frequently to consider checkpointing the database.
+// This affects the amount of disk I/O that's going to happen.
+static u_int32_t sync_interval (60);
+static u_int32_t max_unchkpt_log_size (1024); // KB
+
 // This is the key used to access the master metadata record.
 // The master metadata record contains:
 //   Total size of objects put into a dbns,
@@ -173,6 +178,8 @@ class dbns {
 
   timecb_t *mtree_tcb;
   void mtree_cleaner ();
+  timecb_t *sync_tcb;
+  void periodic_sync ();
 
   int expire_walk (u_int32_t limit, u_int32_t start, u_int32_t end,
     vec<DBT> &victims, vec<adb_metadata_t> &victim_metadata);
@@ -223,7 +230,8 @@ dbns::dbns (const str &dbpath, const str &name, bool aux, str logpath) :
   byexpiredb (NULL),
   last_mtree_time (0),
   mtree (NULL),
-  mtree_tcb (NULL)
+  mtree_tcb (NULL),
+  sync_tcb (NULL)
 {
   bzero (&mmd, sizeof (mmd));
 #define DBNS_ERRCHECK(desc) \
@@ -255,6 +263,7 @@ dbns::dbns (const str &dbpath, const str &name, bool aux, str logpath) :
   DBNS_ERRCHECK ("metadatdb->associate (byexpiredb)");
 
   mtree_cleaner ();
+  periodic_sync ();
 
   warn << "dbns::dbns (" << dbpath << ", " << name << ", " << aux << ")\n";
 }
@@ -265,6 +274,10 @@ dbns::~dbns ()
   if (mtree_tcb) {
     timecb_remove (mtree_tcb);
     mtree_tcb = NULL;
+  }
+  if (sync_tcb) {
+    timecb_remove (sync_tcb);
+    sync_tcb = NULL;
   }
   sync (/* force = */ true);
 
@@ -296,6 +309,16 @@ dbns::warner (const char *method, const char *desc, int r)
   warn << t << ": " << method << ": " << desc << ": " << db_strerror (r) << "\n";
 }
 // }}}
+// {{{ dbns::periodic_sync
+void
+dbns::periodic_sync ()
+{
+  sync_tcb = NULL;
+  sync ();
+  sync_tcb = delaycb (sync_interval + (tsnow.tv_nsec % 10),
+      wrap (this, &dbns::periodic_sync));
+}
+// }}}
 // {{{ dbns::sync
 void
 dbns::sync (bool force)
@@ -304,9 +327,9 @@ dbns::sync (bool force)
   if (force)
     flags = DB_FORCE;
 #if (DB_VERSION_MAJOR < 4)
-  txn_checkpoint (dbe, 30*1024, 10, flags);
+  txn_checkpoint (dbe, max_unchkpt_log_size, 10, flags);
 #else
-  dbe->txn_checkpoint (dbe, 30*1024, 10, flags);
+  dbe->txn_checkpoint (dbe, max_unchkpt_log_size, 10, flags);
 #endif
 }
 // }}}

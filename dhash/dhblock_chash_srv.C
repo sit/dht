@@ -62,22 +62,15 @@ dhblock_chash_srv::dhblock_chash_srv (ptr<vnode> node,
   maint_pending (false),
   cache_hits (0),
   cache_misses (0),
-  cache_db (NULL),
-  cache_sync_tcb (NULL)
+  cache_db (NULL)
 {
   cache_db = New refcounted<adb> (dbsock, "ccache", false, t);
   maint_initspace (dhblock_chash::num_efrags (),
 		   dhblock_chash::num_dfrags (), t);
-  cache_sync_tcb = delaycb (dhash::reptm (),
-      wrap (this, &dhblock_chash_srv::cache_sync_timer));
 }
 
 dhblock_chash_srv::~dhblock_chash_srv ()
 {
-  if (cache_sync_tcb) {
-    timecb_remove (cache_sync_tcb);
-    cache_sync_tcb = NULL;
-  }
 }
 
 void
@@ -87,23 +80,6 @@ dhblock_chash_srv::stats (vec<dstat> &s)
   base_stats (s);
   s.push_back (dstat (p << ".repair_cache_hits", cache_hits));
   s.push_back (dstat (p << ".repair_cache_misses", cache_misses));
-}
-
-void
-dhblock_chash_srv::cache_sync_timer ()
-{
-  cache_sync_tcb = NULL;
-  cache_db->sync (wrap (this, &dhblock_chash_srv::cache_sync_timer_cb));
-}
-
-void
-dhblock_chash_srv::cache_sync_timer_cb (adb_status stat)
-{
-  if (stat)
-    warn << node->my_ID () << ": cache sync failed: " << stat << ".\n";
-
-  cache_sync_tcb = delaycb (dhash::reptm (),
-      wrap (this, &dhblock_chash_srv::cache_sync_timer));
 }
 
 void

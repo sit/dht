@@ -20,9 +20,6 @@ class dhblock_chash_srv : public dhblock_srv {
   u_int64_t cache_misses;
 
   ptr<adb> cache_db;
-  timecb_t *cache_sync_tcb;
-  void cache_sync_timer ();
-  void cache_sync_timer_cb (adb_status stat);
 
   void maintqueue (const vec<maint_repair_t> &repairs);
 

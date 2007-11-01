@@ -22,7 +22,6 @@ dhblock_srv::dhblock_srv (ptr<vnode> node,
 			  str dbname,
 			  bool hasaux,
 			  ptr<chord_trigger_t> t) :
-  sync_tcb (NULL),
   repair_tcb (NULL),
   ctype (c),
   db (New refcounted<adb> (dbsock, dbname, hasaux, t)),
@@ -36,16 +35,11 @@ dhblock_srv::dhblock_srv (ptr<vnode> node,
 {
   warn << "opened " << dbsock << " with space " << dbname 
        << (hasaux ? " (hasaux)\n" : "\n");
-  sync_tcb = delaycb (dhash::reptm (), wrap (this, &dhblock_srv::sync_timer));
 }
 
 dhblock_srv::~dhblock_srv ()
 {
   stop ();
-  if (sync_tcb) {
-    timecb_remove (sync_tcb);
-    sync_tcb = NULL;
-  }
 }
 
 str
@@ -291,24 +285,6 @@ dhblock_srv::repair_timer ()
 
   repair_tcb = delaycb (dhash::reptm (),
       wrap (this, &dhblock_srv::repair_timer));
-}
-
-
-void
-dhblock_srv::sync_timer ()
-{
-  sync_tcb = NULL;
-  db->sync (wrap (this, &dhblock_srv::sync_timer_cb));
-}
-
-void
-dhblock_srv::sync_timer_cb (adb_status stat)
-{
-  if (stat)
-    warn << node->my_ID () << ": sync failed: " << stat << ".\n";
-
-  sync_tcb = delaycb (dhash::reptm (),
-      wrap (this, &dhblock_srv::sync_timer));
 }
 
 void
