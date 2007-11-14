@@ -80,11 +80,6 @@ main (int argc, char *argv[])
   u_int64_t totalsz = 0;
   unsigned keys = 0;
 
-#ifndef DB_BUFFER_SMALL
-/* DB_BUFFER_SMALL is introduced in db4.3 */
-#  define DB_BUFFER_SMALL ENOMEM
-#endif /* DB_BUFFER_SMALL */
-
   adb_master_metadata_t mmd;
   bzero (&mmd, sizeof (mmd));
 

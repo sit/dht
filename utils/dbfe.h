@@ -46,6 +46,11 @@
 int dbfe_initialize_dbenv (DB_ENV **dbep, str filename, bool join, unsigned int cachesize = 1024, str extraconf = NULL);
 int dbfe_opendb (DB_ENV *dbe, DB **dbp, str filename, int flags, int mode = 0664, bool dups = false);
 
+#ifndef DB_BUFFER_SMALL
+/* DB_BUFFER_SMALL is introduced in db4.3 */
+#  define DB_BUFFER_SMALL ENOMEM
+#endif /* DB_BUFFER_SMALL */
+
 inline int
 dbfe_txn_begin (DB_ENV *dbe, DB_TXN **t)
 {
