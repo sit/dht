@@ -5,6 +5,7 @@
 #include <chord.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <libgen.h>
 #include <string.h>
 #include <stdio.h>
 #include <dhash_common.h>
@@ -275,7 +276,7 @@ void store(char *name) {
   if(stat(name, &st) == -1)
     fatal("couldn't stat file\n");
 
-  inode *n = New inode(name, st.st_size);
+  inode *n = New inode(basename(name), st.st_size);
 
   FILE *f = fopen(name, "r");
   if(f == NULL)
