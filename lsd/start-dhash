@@ -70,9 +70,7 @@ for my $rawbindir ($userbindir, ".", split(/:/, $ENV{PATH})) {
 	use File::Spec;
 	$bindir = File::Spec->rel2abs ($bindir);
     }
-    if (! -d $bindir) {
-	die "$bindir: $!\n";
-    }
+    next unless -d $bindir;
     if (-x "$bindir/bin/lsd") {
 	# e.g. bindir=/usr
 	$bindir = "$bindir/bin";
