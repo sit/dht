@@ -31,6 +31,7 @@
 
 #include <arpc.h>
 #include <crypt.h>
+#include <qhash.h>
 
 #include <chord_types.h>
 #include <chord.h>
@@ -67,6 +68,21 @@ static void
 order_succs (ptr<locationtable> locations,
 	     const Coord &me, const vec<chord_node> &succs,
 	     vec<chord_node> &out, u_long max = 0);
+
+static void
+filter_succs (const vec<chord_node> &succs, vec<chord_node> &out)
+{
+  bhash<str> hosts;
+  assert (succs.size () > 0);
+  out.clear ();
+  for (size_t i = 0; i < succs.size (); i++) {
+    strbuf h; h << succs[i].r;
+    if (!hosts[h]) {
+      out.push_back (succs[i]);
+      hosts.insert (h);
+    }
+  }
+}
 
 static struct dhashcli_config_init {
   dhashcli_config_init ();
@@ -189,6 +205,9 @@ dhashcli::doassemble (ptr<rcv_state> rs, ptr<dhblock> block,
     return;
   }
 
+  vec<chord_node> unique_succs;
+  filter_succs (succs, unique_succs);
+
   if (ordersucc_) {
     ptr<locationtable> lt = NULL;
     if (rs->succopt)
@@ -197,9 +216,9 @@ dhashcli::doassemble (ptr<rcv_state> rs, ptr<dhblock> block,
     // Store list of successors ordered by expected distance.
     // fetch_frag will pull from this list in order.
     order_succs (lt, clntnode->my_location ()->coords (),
-		 succs, rs->succs, block->num_put ());
+		 unique_succs, rs->succs, block->num_put ());
   } else {
-    rs->succs = succs;
+    rs->succs = unique_succs;
   }
 
   // Dispatch min_fetch parallel requests, even though we don't know
@@ -473,6 +492,10 @@ dhashcli::insert_lookup_cb (ref<dhash_block> block, cbinsert_path_t cb,
     // we are still allowed to proceed.
     info << "Number of successors less than desired: |succs| " << succs.size ()
 	 << ", EFRAGS " << blk->num_put () << "\n";
+
+  vec<chord_node> unique_succs;
+  filter_succs (succs, unique_succs);
+  succs = unique_succs;
 
   while (succs.size () > blk->num_put ()) 
     succs.pop_back ();

@@ -576,6 +576,10 @@ carbonite::getrepairs (chordID start, int thresh, int count,
   if (succs.back ()->id () == host.x)
     nsuccs.pop_back ();
 
+  // Because all vnodes share a database, we only need to
+  // consider one database per physical host.
+  bhash<str> hosts;
+  vec<bool> treeskip;
   for (unsigned int i = 0; i < nsuccs.size (); i++) {
     str succtreepath = strbuf () << private_path << "/" 
       << host.vnode_num << "-"
@@ -589,13 +593,17 @@ carbonite::getrepairs (chordID start, int thresh, int count,
       (succtreepath.cstr (), /* join = */ false, /* ro = */ true);
     trees.push_back (t);
     lastread.push_back (start);
+
+    str host = strbuf () << nsuccs[i]->chordnode ().r;
+    treeskip.push_back (hosts[host]);
+    hosts.insert (host);
   }
   assert (treedone.size () == nsuccs.size ());
   
   while ((int) repairs.size () < count) {
     bool addedany = false;
     for (unsigned int i = 0; i < trees.size (); i++) {
-      if (treedone[i]) continue;
+      if (treedone[i] || treeskip[i]) continue;
       addedany = true;
       // Aim to read about one leaf page at a time.
       vec<chordID> keys = trees[i]->get_keyrange (lastread[i], stop, 64);
@@ -755,17 +763,29 @@ passingtone::process_neighbors (
     rngmax = ((rngmax >> 32) << 32) | 0xFFFFFFFF;
   }
 
-  // merkle_sync with succ and pred.  If any keys missing
-  // locally, fetch them.
+  // merkle_sync with first non-self succ and pred.
+  // If any keys missing locally, fetch them.
   BLOCK {
     // Sync the entire tree range using the current live tree.
-    sync->sync_with (succs[0], rngmin, rngmax,
+    size_t i = 0;
+    for (i = 0; i < succs.size (); i++) 
+      if (succs[i]->chordnode ().r.hostname != host.r.hostname ||
+	  succs[i]->chordnode ().r.port     != host.r.port)
+	break;
+    if (i != succs.size ())
+      sync->sync_with (succs[i], rngmin, rngmax,
 	ltree, 
-	wrap (this, &passingtone::handle_missing, succs[0], ltree),
+	wrap (this, &passingtone::handle_missing, succs[i], ltree),
 	@());
-    sync->sync_with (preds[0], rngmin, rngmax,
-	ltree, 
-	wrap (this, &passingtone::handle_missing, preds[0], ltree),
+
+    for (i = 0; i < preds.size (); i++) 
+      if (preds[i]->chordnode ().r.hostname != host.r.hostname ||
+	  preds[i]->chordnode ().r.port     != host.r.port)
+	break;
+    if (i != preds.size ())
+      sync->sync_with (preds[i], rngmin, rngmax,
+	ltree,
+	wrap (this, &passingtone::handle_missing, preds[i], ltree),
 	@());
   }
   cb ();

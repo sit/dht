@@ -127,20 +127,17 @@ dhash_impl::dhash_impl (ptr<vnode> node, str dbsock, str msock,
   ptr<chord_trigger_t> dhashtrigger = chord_trigger_t::alloc (
       wrap (this, &dhash_impl::srv_ready, t));
 
-  str dbname = strbuf () << host_node->my_ID () << ".c";
   srv = New refcounted<dhblock_chash_srv> (node, cli, msock,
-      dbsock, dbname, dhashtrigger);
+      dbsock, "chash.c", dhashtrigger);
   blocksrv.insert (DHASH_CONTENTHASH, srv);
 
-  dbname = strbuf () << host_node->my_ID () << ".k";
   srv = New refcounted<dhblock_keyhash_srv> (node, cli, msock,
-      dbsock, dbname,
+      dbsock, "keyhash.k",
       dhashtrigger);
   blocksrv.insert (DHASH_KEYHASH, srv);
 
-  dbname = strbuf () << host_node->my_ID () << ".n";
   srv = New refcounted<dhblock_noauth_srv> (node, cli, msock,
-      dbsock, dbname,
+      dbsock, "noauth.n",
       dhashtrigger);
   blocksrv.insert (DHASH_NOAUTH, srv);
 }
