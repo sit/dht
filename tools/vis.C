@@ -1,3 +1,6 @@
+#include <gtk/gtk.h>
+#include <gdk/gdk.h>
+
 #include "chord.h"
 #include "math.h"
 #include "rxx.h"

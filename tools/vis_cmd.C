@@ -1,3 +1,6 @@
+#include <gtk/gtk.h>
+#include <gdk/gdk.h>
+
 #include <async.h>
 #include <arpc.h>
 #include <aios.h>
