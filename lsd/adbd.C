@@ -559,28 +559,31 @@ dbns::del (const chordID &key, u_int32_t auxdata)
     return r;
   }
 
-  char *err = "";
-  do {
-    if (hasaux ()) {
-      err = "mtree->remove aux";
-      r = mtree->remove (key, auxdata, t);
-      if (r) break;
-    } else {
-      err = "mtree->remove";
-      r = mtree->remove (key, t);
-      if (r) break;
-    }
-    err = "metadatadb->del";
-    r = metadatadb->del (metadatadb, t, &skey, 0);
-    if (r) break;
-  } while (0);
-
-  int ret = 0;
+  r = metadatadb->del (metadatadb, t, &skey, 0);
   if (r) {
     if (r != DB_NOTFOUND)
-      warner ("dbns::remove", err, r);
+      warner ("dbns::remove", "metadatadb->del", r);
+    dbfe_txn_abort (dbe, t);
+    return r;
+  }
+
+  // Only attempt to update Merkle tree if object was present.
+  char *err = "";
+  if (hasaux ()) {
+    err = "mtree->remove aux";
+    r = mtree->remove (key, auxdata, t);
+  } else {
+    err = "mtree->remove";
+    r = mtree->remove (key, t);
+  }
+  int ret = 0;
+  if (r && r != DB_NOTFOUND) {
+    warner ("dbns::remove", err, r);
     ret = dbfe_txn_abort (dbe, t);
   } else {
+    // Ignore any NOTFOUND errors since the Merkle
+    // key may have been removed by expiration.
+    r = 0;
     ret = dbfe_txn_commit (dbe, t);
   }
   if (ret)
