@@ -4,7 +4,11 @@
 #include <dbfe.h>
 #include <adb_prot.h>
 
-static char *usage = "usage: dbdump [-t] dbhome\n";
+static char *usage = "usage: dbdump [-t|-m] dbhome\n";
+
+static DB_ENV* dbe = NULL;
+static DB *metadatadb = NULL;
+static DB *byexpiredb = NULL;
 
 // {{{ getexpire: Secondary key extractor for metadata
 static int
@@ -34,69 +38,73 @@ getexpire (DB *sdb, const DBT *pkey, const DBT *pdata, DBT *skey)
   return 0;
 }
 // }}}
-
-int
-main (int argc, char *argv[])
+// {{{ dumpmaster: Dump master metadata
+static int
+dumpmaster (void)
 {
-  if (argc != 2 && argc != 3)
-    fatal << usage;
-  
   int r;
-  DB_ENV* dbe = NULL;
-  DB *metadatadb = NULL;
-  DB *byexpiredb = NULL;
 
-  bool bytime = false;
-  char *path = argv[1];
+  adb_master_metadata_t mmd;
+  bzero (&mmd, sizeof (mmd));
+  DBT mkey, mdata;
+  bzero (&mkey, sizeof (mkey));
+  bzero (&mdata, sizeof (mdata));
 
-  if (!strcmp (argv[1], "-t")) {
-    path = argv[2];
-    bytime = true;
+  mkey.data = (void *) "MASTER_INFO";
+  mkey.size = strlen ("MASTER_INFO");
+  r = metadatadb->get (metadatadb, NULL, &mkey, &mdata, 0);
+  if (r) {
+    warn << "metadatadb->get " << db_strerror (r) << "\n";
+    return r;
   }
 
-  r = dbfe_initialize_dbenv (&dbe, path, /* join = */ true);
-  if (r)
-    fatal << "couldn't open dbenv: " << db_strerror (r) << "\n";
+  buf2xdr (mmd, mdata.data, mdata.size);
+  aout << "Master DB info:\n";
+  aout << "\t" << mmd.size << " bytes\n";
+  time_t t = mmd.expiration;
+  aout << "\tNext expiration at " << ctime (&t);
 
-  r = dbfe_opendb (dbe, &metadatadb, "metadatadb", DB_RDONLY);
-  if (r)
-    fatal << "couldn't open db: " << db_strerror (r) << "\n";
+  return 0;
+}
+// }}}
+// {{{ dumpall: Dump all db key metadata
+static int
+dumpall (bool bytime)
+{
+  adb_master_metadata_t mmd;
+  bzero (&mmd, sizeof (mmd));
 
-  r = dbfe_opendb (dbe, &byexpiredb, "byexpiredb", DB_RDONLY, 0, /* dups = */ true);
-  if (r)
-    fatal << "couldn't open expiredb: " << db_strerror (r) << "\n";
-  r = metadatadb->associate (metadatadb, NULL, byexpiredb, getexpire, DB_AUTO_COMMIT);
-  if (r)
-    fatal << "couldn't associate expiredb: " << db_strerror (r) << "\n";
+  DBT begin_time, key, data;
+  u_int64_t totalsz = 0;
+  unsigned keys = 0;
+
+  int r = 0;
 
   DBC *cursor;
   if (bytime) 
     r = byexpiredb->cursor (byexpiredb, NULL, &cursor, 0);
   else 
     r = metadatadb->cursor (metadatadb, NULL, &cursor, 0);
-  assert (r == 0);
-
-  DBT begin_time, key, data;
-  u_int64_t totalsz = 0;
-  unsigned keys = 0;
-
-  adb_master_metadata_t mmd;
-  bzero (&mmd, sizeof (mmd));
+  if (r) {
+    warn << "cursor error: " << r << " " << db_strerror (r) << "\n";
+    return r;
+  }
 
   for (int i = 0; ; i++) {
     bzero (&begin_time, sizeof (begin_time));
     bzero (&key, sizeof (key));
     bzero (&data, sizeof (data));
-    int err = 0;
     if (bytime)
-      err = cursor->c_pget (cursor, &begin_time, &key, &data, DB_NEXT);
+      r = cursor->c_pget (cursor, &begin_time, &key, &data, DB_NEXT);
     else 
-      err = cursor->c_get (cursor, &key, &data, DB_NEXT);
-    if (err == DB_NOTFOUND) {
+      r = cursor->c_get (cursor, &key, &data, DB_NEXT);
+    if (r == DB_NOTFOUND) {
       aout << "EOF.\n";
+      r = 0;
       break;
-    } else if (err) {
-      fatal << "err: " << err << " " << strerror (err) << "\n";
+    } else if (r) {
+      warn << "error: " << r << " " << db_strerror (r) << "\n";
+      break;
     }
     if (key.size != sha1::hashsize) {
       buf2xdr (mmd, data.data, data.size);
@@ -118,12 +126,66 @@ main (int argc, char *argv[])
   }
   cursor->c_close (cursor);
 
-  byexpiredb->close (byexpiredb, 0);
-  metadatadb->close (metadatadb, 0);
-  dbe->close (dbe, 0);
   aout << "total keys: " << keys << "\n";
   aout << "total bytes: " << totalsz << "\n";
   if (totalsz != mmd.size)
-    fatal << "Master metadata total bytes error: " << mmd.size << "\n";
+    warn << "Master metadata total bytes error: " << mmd.size << "\n";
+
+  return r;
+}
+// }}}
+
+int
+main (int argc, char *argv[])
+{
+  if (argc != 2 && argc != 3)
+    fatal << usage;
+  
+  int r;
+
+  bool bytime = false;
+  bool masteronly = false;
+  char *path = argv[1];
+
+  if (argv[1][0] == '-') {
+    if (!strcmp (argv[1], "-t")) {
+      path = argv[2];
+      bytime = true;
+    } else if (!strcmp (argv[1], "-m")) {
+      path = argv[2];
+      masteronly = true;
+    } else {
+      warn << usage;
+      fatal << "Unknown option: " << argv[1] << "\n";
+    }
+  }
+
+  r = dbfe_initialize_dbenv (&dbe, path, /* join = */ true);
+  if (r)
+    fatal << "couldn't open dbenv: " << db_strerror (r) << "\n";
+
+  r = dbfe_opendb (dbe, &metadatadb, "metadatadb", DB_RDONLY);
+  if (r)
+    fatal << "couldn't open db: " << db_strerror (r) << "\n";
+
+  r = dbfe_opendb (dbe, &byexpiredb, "byexpiredb", DB_RDONLY, 0, /* dups = */ true);
+  if (r)
+    fatal << "couldn't open expiredb: " << db_strerror (r) << "\n";
+  r = metadatadb->associate (metadatadb, NULL, byexpiredb, getexpire, DB_AUTO_COMMIT);
+  if (r)
+    fatal << "couldn't associate expiredb: " << db_strerror (r) << "\n";
+
+  if (masteronly)
+    r = dumpmaster ();
+  else
+    r = dumpall (bytime);
+
+  byexpiredb->close (byexpiredb, 0);
+  metadatadb->close (metadatadb, 0);
+  dbe->close (dbe, 0);
+
+  // Shell is backwards.
+  return (r != 0);
 }
 
+// vim: foldmethod=marker
