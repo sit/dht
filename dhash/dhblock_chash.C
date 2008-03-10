@@ -40,7 +40,10 @@ dhblock_chash::num_fetch ()
   static bool initialized = false;
   static int v = 0;
   if (!initialized) {
-    initialized = Configurator::only ().get_int ("chord.nsucc", v);
+    /* Use this for Carbonite */
+    // initialized = Configurator::only ().get_int ("chord.nsucc", v);
+    /* Use this for PassingTone */
+    initialized = Configurator::only ().get_int ("dhash.efrags", v);
     assert (initialized);
   }
   return v;

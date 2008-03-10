@@ -424,7 +424,7 @@ main (int argc, char **argv)
   bool do_daemonize = false;
   localdatapath = "./maintdata/";
   ctlsock = "/tmp/maint-sock";
-  maint_mode = MAINT_CARBONITE;
+  maint_mode = MAINT_PASSINGTONE;
   sync_mode = SYNC_MERKLE;
   
   while ((ch = getopt (argc, argv, "C:d:DL:m:s:t"))!=-1)

@@ -43,7 +43,7 @@ sub spawn {
 my $help = 0;
 my $root = "dhash-$ENV{USER}";
 my $userbindir = "";
-my $maintmode = "carbonite";
+my $maintmode = "passingtone";
 my $quota = 0;
 my $daemonize = 0;
 my $logdir = undef;

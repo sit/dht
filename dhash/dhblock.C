@@ -20,11 +20,11 @@ dhblock_config_init::dhblock_config_init ()
   /** MTU **/
   ok = ok && set_int ("dhash.mtu", 1210);
   /** Number of fragments to encode each block into */
-  ok = ok && set_int ("dhash.efrags", 14);
+  ok = ok && set_int ("dhash.efrags", 3);
   /** XXX Number of fragments needed to reconstruct a given block */
-  ok = ok && set_int ("dhash.dfrags", 7);
+  ok = ok && set_int ("dhash.dfrags", 1);
   /** XXX Number of replica for each mutable block **/
-  ok = ok && set_int ("dhash.replica", 5);
+  ok = ok && set_int ("dhash.replica", 3);
   assert (ok);
 #undef set_int
 }
