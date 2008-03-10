@@ -96,6 +96,8 @@ dhashcli_config_init::dhashcli_config_init ()
 
   /** Whether or not to order successors by expected latency */
   ok = ok && set_int ("dhashcli.order_successors", 1);
+  /** Default expiration time for objects */
+  ok = ok && set_int ("dhash.default_lifetime", -1);
 
   assert (ok);
 #undef set_int
