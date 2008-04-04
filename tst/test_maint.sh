@@ -295,10 +295,10 @@ sleep 120 # XXX wait longer?
 if [ $mode = "carbonite" ];
 then
     expect_norepairs || fail
-    check_counts $nreplicas exact && echo "OK"
+    check_counts $NREPLICAS exact && echo "OK"
 else
     expect_repairs || fail
-    check_counts $nreplicas && echo "OK"
+    check_counts $NREPLICAS "" && echo "OK"
 fi
 
 sleep 5
@@ -318,7 +318,7 @@ wait_stable && echo "OK" || fail
 
 echo "Waiting and checking after repair timers..."
 sleep 240
-check_counts $nreplicas && echo "OK" || echo "Blocks lost!"
+check_counts $NREPLICAS "" && echo "OK" || echo "Blocks lost!"
 expect_repairs || fail
 
 echo -n "Inserting $batchsize additional objects: "
@@ -337,10 +337,10 @@ sleep 180
 if [ $mode = "carbonite" ];
 then
     expect_norepairs || fail
-    check_counts $nreplicas exact && echo "OK"
+    check_counts $NREPLICAS exact && echo "OK"
 else
     expect_repairs || fail
-    check_counts $nreplicas && echo "OK"
+    check_counts $NREPLICAS "" && echo "OK"
 fi
 
 teardown
