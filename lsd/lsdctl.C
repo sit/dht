@@ -8,7 +8,7 @@
 bool opt_verbose;
 bool opt_quiet;
 int  opt_timeout (120);
-char *control_socket = "/tmp/lsdctl-sock";
+const char *control_socket = "/tmp/lsdctl-sock";
 
 /* Prototypes for table. */
 void lsdctl_help (int argc, char *argv[]);
@@ -397,7 +397,9 @@ int
 main (int argc, char *argv[])
 {
   setprogname (argv[0]);
-  putenv ("POSIXLY_CORRECT=1"); // Prevents Linux from reordering options
+  // Prevents Linux from reordering options
+  if (setenv ("POSIXLY_CORRECT", "1", 1) != 0)
+    fatal ("setenv: %m\n");
 
   int ch;
   while ((ch = getopt (argc, argv, "S:t:vq")) != -1)

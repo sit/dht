@@ -4,7 +4,7 @@
 int modlogger::logfd = 2;
 int modlogger::maxprio = modlogger::INFO;
 
-modlogger::modlogger (char *module, int p) : prio (p)
+modlogger::modlogger (const char *module, int p) : prio (p)
 {
   /* Don't expect to be outputting, so don't make syscall */
   if (prio > maxprio)

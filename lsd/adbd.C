@@ -423,7 +423,7 @@ dbns::insert (const chordID &key, DBT &data, u_int32_t auxdata, u_int32_t exptim
   DBT skey;
   id_to_dbt (key, &skey);
 
-  char *err = "";
+  const char *err = "";
   int ret;
   if (exptime > timenow + expire_buffer) {
     // Only add to Merkle tree if this object is worth repairing.
@@ -568,7 +568,7 @@ dbns::del (const chordID &key, u_int32_t auxdata)
   }
 
   // Only attempt to update Merkle tree if object was present.
-  char *err = "";
+  const char *err = "";
   if (hasaux ()) {
     err = "mtree->remove aux";
     r = mtree->remove (key, auxdata, t);
@@ -834,7 +834,7 @@ dbns::expire (u_int32_t limit, u_int32_t deadline)
     chordID id = dbt_to_id (key);
     warnx ("%d.%06d ", int (tsnow.tv_sec), int (tsnow.tv_nsec/1000))
       << name << ": Expiring " << id << "\n";
-    char *err = "";
+    const char *err = "";
     do {
       err = "mtree->remove";
       if (hasaux ()) {

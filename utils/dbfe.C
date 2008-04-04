@@ -62,7 +62,7 @@ dbGetImplInfo() {
 dbOptions::dbOptions()  {}
 
 int verifyOption (const char *optionSig) {
-  vec<char *> allowed = dbGetImplInfo()->supportedOptions;
+  vec<const char *> allowed = dbGetImplInfo()->supportedOptions;
   for (unsigned int i=0; i < allowed.size(); i++) 
     if (memcmp(allowed[i], optionSig, strlen(allowed[i])) == 0) return 1;
   return 0;

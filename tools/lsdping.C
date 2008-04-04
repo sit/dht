@@ -44,7 +44,7 @@ void doit (chord_node dst, int seqno) {
   }
 }
 
-static char *usage = "lsdping: [-n numpersecond] host port vnodenum";
+static const char *usage = "lsdping: [-n numpersecond] host port vnodenum";
 
 int
 main (int argc, char *argv[])

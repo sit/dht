@@ -12,7 +12,7 @@
 
 #include "rpclib.h"
 
-char *usage = "Usage: nodeq [-m] [-r] host port vnode\n";
+const char *usage = "Usage: nodeq [-m] [-r] host port vnode\n";
 
 int outstanding = 0;
 int errors = 0;

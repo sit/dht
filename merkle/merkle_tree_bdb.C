@@ -304,7 +304,7 @@ merkle_tree_bdb::init_db (bool ro)
   r = dbfe_txn_begin (dbe, &t);
 
   // BTree makes the most sense for a tree structure.
-  char *err = "";
+  const char *err = "";
   do {
     err = "nodedb->create";
     r = db_create (&nodedb, dbe, 0);

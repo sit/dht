@@ -14,9 +14,9 @@
 #include "maint_policy.h"
 
 // {{{ Globals
-static char *ctlsock;
-static char *logfname;
-static char *localdatapath;
+static const char *ctlsock;
+static const char *logfname;
+static const char *localdatapath;
 
 static vec<ptr<maintainer> > maintainers;
 
@@ -26,7 +26,7 @@ enum maint_mode_t {
 } maint_mode;
 struct maint_mode_desc {
   maint_mode_t m;
-  char *cmdline;
+  const char *cmdline;
   maintainer_producer_t producer;
 } maint_modes[] = {
   { MAINT_CARBONITE, "carbonite", 
@@ -41,7 +41,7 @@ enum sync_mode_t {
 } sync_mode;
 struct sync_mode_desc {
   sync_mode_t m;
-  char *cmdline;
+  const char *cmdline;
   syncer_producer_t producer;
 } sync_modes[] = {
   { SYNC_MERKLE, "merkle", &merkle_sync::produce_syncer }

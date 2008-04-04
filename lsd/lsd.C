@@ -92,8 +92,8 @@ enum routing_mode_t {
 
 struct routing_mode_desc {
   routing_mode_t m;
-  char *cmdline;
-  char *desc;
+  const char *cmdline;
+  const char *desc;
   vnode_producer_t producer;
 };					       
 

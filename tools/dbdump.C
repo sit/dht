@@ -4,7 +4,7 @@
 #include <dbfe.h>
 #include <adb_prot.h>
 
-static char *usage = "usage: dbdump [-t|-m] dbhome\n";
+static const char *usage = "usage: dbdump [-t|-m] dbhome\n";
 
 static DB_ENV* dbe = NULL;
 static DB *metadatadb = NULL;

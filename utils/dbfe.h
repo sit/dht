@@ -108,7 +108,7 @@ struct dbOptions {
 };
 
 struct dbImplInfo {
-  vec<char *> supportedOptions;
+  vec<const char *> supportedOptions;
 
   dbImplInfo() { };
 };

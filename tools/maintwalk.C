@@ -29,7 +29,7 @@ usage ()
 static chordID wellknown_ID = -1;
 // Sequential is what we believe is the correct sequencing of nodes
 static vec<chord_node> sequential;
-static char *localdatapath;
+static const char *localdatapath;
 static u_int64_t totalbytes = 0;
 static u_int64_t starttime = 0;
 

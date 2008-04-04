@@ -18,7 +18,7 @@ class modlogger : public strbuf {
     INFO  = 1,
     TRACE = 2
   };
-  explicit modlogger (char *module, int prio = INFO);
+  explicit modlogger (const char *module, int prio = INFO);
   ~modlogger ();
   const modlogger &operator () (const char *fmt, ...) const
     __attribute__ ((format (printf, 2, 3)));

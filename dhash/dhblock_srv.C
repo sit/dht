@@ -45,7 +45,7 @@ dhblock_srv::~dhblock_srv ()
 str
 dhblock_srv::prefix () const
 {
-  char *p = "unknown";
+  const char *p = "unknown";
   switch (ctype) {
     case DHASH_CONTENTHASH:
       p = "chash";
