@@ -39,7 +39,7 @@ SFS_SFS
 SFS_CFLAGS
 
 dnl setup BerkeleyDB
-SFS_SLEEPYCAT(4.5 4.4 4.3 4.2 4.0 4 3)
+SFS_SLEEPYCAT(4.6 4.5 4.4 4.3 4.2 4.0 4 3)
 AC_SUBST(DBLIB)
 AC_SUBST(DBDEPS)
 if test "${with_db}" != no; then
